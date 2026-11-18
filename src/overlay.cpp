@@ -1,5 +1,6 @@
 // Draws the ImGui overlay into the app's swapchain images right before present.
 #include "layer.h"
+#include "price_check.h"
 #include "wl_input.h"
 
 #include "imgui.h"
@@ -7,6 +8,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 
 struct OverlayImage {
@@ -40,8 +42,10 @@ struct OverlayDevice {
     VkRenderPass imgui_render_pass = VK_NULL_HANDLE;
 
     std::chrono::steady_clock::time_point last_frame = std::chrono::steady_clock::now();
-    bool visible = true;
-    int toggles = 0;
+    bool debug = getenv("POE_OVERLAY_DEBUG") != nullptr;
+    // Created with the device so the uinput keyboard has time to show up in
+    // the compositor before the first hotkey.
+    PriceCheck price_check;
 };
 
 namespace {
@@ -244,20 +248,17 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     WaylandInput* input = dev->instance->input.get();
     if (input) {
         input->poll();
-        int presses = input->take_hotkey_presses();
-        if (presses % 2) ov.visible = !ov.visible;
-        ov.toggles += presses;
+        ov.price_check.update(*input, now);
     }
 
     ImGui::NewFrame();
-    if (ov.visible) {
-        ImGui::SetNextWindowPos(ImVec2(40, 40), ImGuiCond_FirstUseEver);
+    ov.price_check.draw();
+    if (ov.debug) {
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 520, 40), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowBgAlpha(0.85f);
-        ImGui::Begin("PoE overlay prototype", nullptr,
+        ImGui::Begin("poe-overlay debug", nullptr,
                      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse |
                          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
-        ImGui::Text("Drawn inside the game's own frame.");
-        ImGui::Separator();
         ImGui::Text("Swapchain: %ux%u  format %d", sc.extent.width, sc.extent.height, sc.format);
         ImGui::Text("Frame: %.2f ms  (%.0f FPS)", 1000.0f * io.DeltaTime, io.Framerate);
         ImGui::Separator();
@@ -265,8 +266,8 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
             ImGui::Text("Input: Wayland (%s)", input->status());
             ImGui::Text("Keyboard focus: %s", input->focused() ? "yes" : "no");
             ImGui::Text("Last key: %u %s", input->last_key(), input->last_key_down() ? "down" : "up");
-            ImGui::Text("Hotkey presses: %d", ov.toggles);
-            ImGui::TextDisabled("Ctrl+D toggles this panel");
+            ImGui::Text("Clipboard: #%llu, %zu bytes", (unsigned long long)input->clipboard_seq(),
+                        input->clipboard_text().size());
         } else {
             ImGui::TextDisabled("Input: none (not a Wayland surface; X11 not implemented)");
         }

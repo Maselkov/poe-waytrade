@@ -1,0 +1,37 @@
+// Price-check flow: hotkey -> Ctrl+C -> wait for clipboard -> show the item.
+#pragma once
+
+#include "item_text.h"
+#include "uinput_kbd.h"
+
+#include <chrono>
+#include <cstdint>
+#include <optional>
+#include <string>
+
+class WaylandInput;
+
+class PriceCheck {
+public:
+    using Clock = std::chrono::steady_clock;
+
+    // Once per frame: update() before ImGui::NewFrame(), draw() inside it.
+    void update(WaylandInput& input, Clock::time_point now);
+    void draw();
+
+private:
+    void request_copy(WaylandInput& input);
+    void wait_for_clipboard(WaylandInput& input, Clock::time_point now);
+
+    UinputKeyboard keyboard_;
+    bool release_pending_ = false;  // keys go down one frame, up the next
+    bool we_pressed_ctrl_ = false;
+
+    bool waiting_ = false;
+    uint64_t seq_at_request_ = 0;
+    Clock::time_point deadline_;
+
+    bool visible_ = false;
+    std::optional<ParsedItem> item_;
+    std::string status_;
+};
