@@ -18,6 +18,14 @@ class PriceCheck {
 public:
     using Clock = std::chrono::steady_clock;
 
+    // How the panel behaves once open (modelled on Awakened PoE Trade):
+    //   Quick:  Ctrl+D. Closes when the mouse moves away, unless Ctrl is
+    //           held; moving onto the panel while holding Ctrl pins it.
+    //   Pinned: a quick panel the mouse moved onto. Closes when it leaves.
+    //   Locked: Ctrl+Alt+D. Stays until its close button or a click on the
+    //           game.
+    enum class Mode { Quick, Pinned, Locked };
+
     // Created with the game's device: wakes the daemon right away.
     PriceCheck();
 
@@ -27,6 +35,11 @@ public:
     // State for the UI. revision() changes whenever anything below does.
     uint64_t revision() const { return revision_; }
     bool visible() const { return visible_; }
+    Mode mode() const { return mode_; }
+    // Bumped each time the panel opens for a new check; with anchor(), where
+    // the cursor was (swapchain pixels), for placing the panel beside it.
+    uint64_t check_id() const { return check_id_; }
+    bool anchor(float* x, float* y) const;
     const std::optional<ParsedItem>& item() const { return item_; }
     const std::optional<PriceReply>& reply() const { return reply_; }
     const std::string& status() const { return status_; }  // error/progress text
@@ -38,8 +51,11 @@ public:
     void open_trade();
 
 private:
-    void request_copy(WaylandInput& input);
+    void request_copy(WaylandInput& input, Mode mode);
+    void begin_wait(WaylandInput& input, Mode mode, Clock::time_point deadline);
     void wait_for_clipboard(WaylandInput& input, Clock::time_point now);
+    void open();
+    void apply_closing_rules(WaylandInput& input);
     void set_visible(bool v);
     void changed() { revision_++; }
 
@@ -57,8 +73,18 @@ private:
     std::optional<PriceReply> reply_;
     std::string item_text_;  // as copied, for re-running trade searches
 
+    // The check being waited for: how to open, and where the cursor was.
+    Mode pending_mode_ = Mode::Quick;
+    bool pending_anchor_ = false;
+    float pending_x_ = 0, pending_y_ = 0;
+
     uint64_t revision_ = 0;
+    uint64_t check_id_ = 0;
+    Mode mode_ = Mode::Quick;
+    bool has_anchor_ = false;
+    float anchor_x_ = 0, anchor_y_ = 0;
     bool visible_ = false;
+    bool demo_ = false;  // POE_OVERLAY_DEMO_ITEM: stays open for design work
     std::optional<ParsedItem> item_;
     std::string status_;
 };

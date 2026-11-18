@@ -38,10 +38,12 @@ struct wl_pointer;
 struct wp_fractional_scale_manager_v1;
 struct wp_fractional_scale_v1;
 
+// The game sees every key too (it keeps keyboard focus), so hotkeys must be
+// combinations PoE doesn't use. That's also why there's no Esc to close.
 enum class Hotkey {
-    PriceCheck,  // Ctrl+D: we send Ctrl+C ourselves
-    CopySeen,    // Ctrl+C pressed by the user
-    Close,       // Esc
+    PriceCheck,        // Ctrl+D: quick look; we send Ctrl+C ourselves
+    PriceCheckLocked,  // Ctrl+Alt+D: a panel that stays until dismissed
+    CopySeen,          // Ctrl+C pressed by the user
 };
 
 // Positions are in swapchain pixels.
@@ -76,6 +78,10 @@ public:
     void set_cursor(const std::string& name);
     // Swapchain pixels per Wayland logical unit.
     double scale() const { return scale_; }
+    // The pointer over the game itself (not our panels): its position in
+    // swapchain pixels, if known, and clicks the game received.
+    bool game_pointer(float* x, float* y) const;
+    int take_game_clicks() { return std::exchange(game_clicks_, 0); }
 
     // Non-blocking: read and dispatch whatever is pending on our queue, and
     // continue any clipboard transfer in progress.
@@ -171,6 +177,10 @@ private:
     std::vector<InputRect> rects_;
     bool pointer_inside_ = false;
     std::vector<PointerEvent> pointer_events_;
+    bool pointer_on_game_ = false;
+    bool game_pointer_known_ = false;
+    float game_x_ = 0, game_y_ = 0;
+    int game_clicks_ = 0;
     uint32_t enter_serial_ = 0;
     struct wl_cursor_theme* cursor_theme_ = nullptr;
     wl_surface* cursor_surface_ = nullptr;

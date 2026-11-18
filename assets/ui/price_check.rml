@@ -53,7 +53,7 @@
         </div>
     </div>
 
-    <div class="hint">Esc closes</div>
+    <div class="hint" data-if="hint != ''">{{hint}}</div>
 </div>
 </body>
 </rml>

@@ -197,13 +197,12 @@ void WaylandInput::on_key(uint32_t key, uint32_t state) {
     bool already_held = held_.count(key);
     held_.insert(key);
     if (already_held) return;
+    bool alt = held_.count(KEY_LEFTALT) || held_.count(KEY_RIGHTALT);
     if (key == KEY_D && ctrl_held()) {
-        hotkeys_.push_back(Hotkey::PriceCheck);
-        poe_log("wayland input: hotkey Ctrl+D");
+        hotkeys_.push_back(alt ? Hotkey::PriceCheckLocked : Hotkey::PriceCheck);
+        poe_log("wayland input: hotkey Ctrl+%sD", alt ? "Alt+" : "");
     } else if (key == KEY_C && ctrl_held()) {
         hotkeys_.push_back(Hotkey::CopySeen);
-    } else if (key == KEY_ESC) {
-        hotkeys_.push_back(Hotkey::Close);
     }
 }
 

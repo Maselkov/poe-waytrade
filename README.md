@@ -5,10 +5,20 @@ A Vulkan layer that draws an RmlUi panel inside the game's own frames
 Wayland connection. Works with Path of Exile running under Proton as a
 **native Wayland** client.
 
-Hover an item and press **Ctrl+D**: the layer sends Ctrl+C, reads the item
-text PoE copies, shows it in a panel, and asks a small daemon for its
-poe.ninja price. Your own Ctrl+C on an item does the same. **Esc** closes the
-panel. PoE1 only for now.
+Hover an item and press a hotkey; the layer sends Ctrl+C, reads the item text
+PoE copies, and shows it in a panel beside the cursor with its price
+(poe.ninja, via a small daemon). PoE1 only for now. Modelled on Awakened PoE
+Trade:
+
+- **Ctrl+D**: a quick look. It closes as soon as you move the mouse away. To
+  use it (toggle trade filters, open the trade site), keep holding Ctrl and
+  move onto it; it then stays until the mouse leaves it.
+- **Ctrl+Alt+D**: a panel that stays open until you click its close button
+  or click anywhere in the game.
+- Your own Ctrl+C on an item opens a quick look too.
+
+The game keeps keyboard focus (the panel is part of its window), so the
+overlay never uses keys PoE does; in particular there's no Esc to close.
 
 Priced: currency, fragments, essences, divination cards, omens, oils,
 fossils, tattoos and other exchange items; uniques (incl. 5L/6L and
@@ -143,7 +153,7 @@ change; `POE_OVERLAY_DEMO_ITEM` opens the panel on start with that item text
 
 ## Known limitations / next steps
 
-- Hotkeys are hard-coded (Ctrl+D, Esc) and still reach the game too.
+- Hotkeys are hard-coded (Ctrl+D, Ctrl+Alt+D) and still reach the game too.
 - Mouse input under fractional scaling assumes the app renders at full
   resolution if it runs under Wine, at logical size otherwise;
   `POE_OVERLAY_SCALE` overrides the pixel-per-logical-unit ratio.

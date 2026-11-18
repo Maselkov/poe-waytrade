@@ -277,11 +277,29 @@ void WaylandInput::destroy_pointer_objects() {
 }
 
 // ---- pointer events --------------------------------------------------------
-// We see pointer events for every surface of the game's connection; only the
-// ones on our subsurface are ours.
+// We see pointer events for every surface of the game's connection: ours
+// (the panels) and the game's own, which we only watch, to know where the
+// cursor is and when the game gets clicked.
+
+bool WaylandInput::game_pointer(float* x, float* y) const {
+    if (!game_pointer_known_) return false;
+    *x = game_x_;
+    *y = game_y_;
+    return true;
+}
 
 void WaylandInput::on_pointer_enter(uint32_t serial, wl_surface* surface, double x, double y) {
-    if (!surface || surface != input_surface_) return;
+    if (!surface) return;
+    if (surface != input_surface_) {
+        // The game's surface. Positions are relative to whichever of its
+        // surfaces has the pointer; for a fullscreen game that's the one
+        // the swapchain covers.
+        pointer_on_game_ = true;
+        game_pointer_known_ = true;
+        game_x_ = float(x * scale_);
+        game_y_ = float(y * scale_);
+        return;
+    }
     pointer_inside_ = true;
     // The game's cursor doesn't apply over our surface; set our own.
     enter_serial_ = serial;
@@ -290,23 +308,35 @@ void WaylandInput::on_pointer_enter(uint32_t serial, wl_surface* surface, double
 }
 
 void WaylandInput::on_pointer_leave(wl_surface* surface) {
-    if (!pointer_inside_ || surface != input_surface_) return;
+    if (surface != input_surface_) {
+        pointer_on_game_ = false;
+        return;
+    }
+    if (!pointer_inside_) return;
     pointer_inside_ = false;
     pointer_events_.push_back({PointerEvent::Leave});
 }
 
 void WaylandInput::on_pointer_motion(double x, double y) {
-    if (pointer_inside_)
+    if (pointer_inside_) {
         pointer_events_.push_back({PointerEvent::Motion, float((x + sub_x_) * scale_), float((y + sub_y_) * scale_)});
+    } else if (pointer_on_game_) {
+        game_x_ = float(x * scale_);
+        game_y_ = float(y * scale_);
+    }
 }
 
 void WaylandInput::on_pointer_button(uint32_t button, uint32_t state) {
-    if (!pointer_inside_) return;
+    bool pressed = state == WL_POINTER_BUTTON_STATE_PRESSED;
+    if (!pointer_inside_) {
+        if (pointer_on_game_ && pressed) game_clicks_++;
+        return;
+    }
     int index = button == BTN_LEFT ? 0 : button == BTN_RIGHT ? 1 : button == BTN_MIDDLE ? 2 : -1;
     if (index < 0) return;
     PointerEvent ev{PointerEvent::Button};
     ev.button = index;
-    ev.down = state == WL_POINTER_BUTTON_STATE_PRESSED;
+    ev.down = pressed;
     pointer_events_.push_back(ev);
 }
 

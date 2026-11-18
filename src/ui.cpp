@@ -148,7 +148,7 @@ struct UiListing {
 struct Model {
     Rml::String name, base, subtitle, rarity;
     Rml::String state;  // status | prices | trade
-    Rml::String status, source, thin, total;
+    Rml::String status, source, thin, total, hint;
     bool status_error = false, searching = false, has_url = false;
     Rml::Vector<UiPrice> prices;
     Rml::Vector<UiFilter> filters;
@@ -187,6 +187,7 @@ struct OverlayUi::Impl {
     Rml::DataModelHandle handle;
     PriceCheck* price_check = nullptr;  // during update(), for event callbacks
     uint64_t revision = UINT64_MAX;
+    uint64_t placed_check = 0;
     bool debug = getenv("POE_OVERLAY_DEBUG") != nullptr;
     float ui_scale = 1.0f;
     int frame = 0;
@@ -199,6 +200,8 @@ struct OverlayUi::Impl {
     time_t dev_files_mtime() const;
     void sync(PriceCheck& pc);
     void sync_debug(WaylandInput* input, VkExtent2D extent);
+    void place(PriceCheck& pc, VkExtent2D extent);
+    bool keep_on_screen(VkExtent2D extent);
 };
 
 OverlayUi::OverlayUi(RmlRenderer* renderer) : impl_(std::make_unique<Impl>()) {
@@ -275,6 +278,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("source", &model.source);
     c.Bind("thin", &model.thin);
     c.Bind("total", &model.total);
+    c.Bind("hint", &model.hint);
     c.Bind("searching", &model.searching);
     c.Bind("has_url", &model.has_url);
     c.Bind("prices", &model.prices);
@@ -358,7 +362,11 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
         if (d.debug && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
     }
 
+    d.place(pc, extent);
     d.context->Update();
+    // Keeping the panel on screen needs its laid-out size; redo the layout
+    // if that moved it.
+    if (d.keep_on_screen(extent)) d.context->Update();
     if (input) input->set_cursor(d.system.cursor);
 }
 
@@ -385,6 +393,11 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     Model m;
     m.debug_lines = std::move(model.debug_lines);
     m.searching = pc.searching();
+    switch (pc.mode()) {
+    case PriceCheck::Mode::Quick: m.hint = "Hold Ctrl and move here to use filters"; break;
+    case PriceCheck::Mode::Pinned: break;
+    case PriceCheck::Mode::Locked: m.hint = "Click the game to close"; break;
+    }
     const auto& item = pc.item();
     const auto& reply = pc.reply();
 
@@ -447,6 +460,36 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
 
     model = std::move(m);
     handle.DirtyAllVariables();
+}
+
+// A new check opens the panel beside the cursor, on the side away from the
+// item (like Awakened PoE Trade), so it doesn't cover what you hovered.
+void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
+    if (pc.check_id() == placed_check) return;
+    placed_check = pc.check_id();
+    auto it = docs.find(kDocuments[0]);
+    float ax, ay;
+    if (it == docs.end() || !pc.anchor(&ax, &ay)) return;
+    float dp = context->GetDensityIndependentPixelRatio();
+    float width = 300 * dp, gap = 32 * dp;
+    float left = ax > extent.width / 2.0f ? ax - gap - width : ax + gap;
+    it->second->SetProperty(Rml::PropertyId::Left, Rml::Property(left, Rml::Unit::PX));
+    it->second->SetProperty(Rml::PropertyId::Top, Rml::Property(ay - 60 * dp, Rml::Unit::PX));
+}
+
+bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
+    auto it = docs.find(kDocuments[0]);
+    if (it == docs.end() || !it->second->IsVisible()) return false;
+    Rml::ElementDocument* doc = it->second;
+    float margin = 16 * context->GetDensityIndependentPixelRatio();
+    Rml::Vector2f pos = doc->GetAbsoluteOffset(Rml::BoxArea::Border);
+    Rml::Vector2f size = doc->GetBox().GetSize(Rml::BoxArea::Border);
+    float x = std::clamp(pos.x, margin, std::max(margin, extent.width - margin - size.x));
+    float y = std::clamp(pos.y, margin, std::max(margin, extent.height - margin - size.y));
+    if (std::abs(x - pos.x) < 0.5f && std::abs(y - pos.y) < 0.5f) return false;
+    doc->SetProperty(Rml::PropertyId::Left, Rml::Property(x, Rml::Unit::PX));
+    doc->SetProperty(Rml::PropertyId::Top, Rml::Property(y, Rml::Unit::PX));
+    return true;
 }
 
 void OverlayUi::Impl::sync_debug(WaylandInput* input, VkExtent2D extent) {

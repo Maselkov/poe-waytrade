@@ -11,6 +11,9 @@ namespace {
 
 // PoE copies the item within a frame or two; this is generous.
 constexpr auto kCopyTimeout = std::chrono::milliseconds(1000);
+// A quick panel closes once the mouse is this far (logical px) from where
+// the hotkey was pressed, unless Ctrl is held.
+constexpr float kQuickCloseDistance = 40.0f;
 
 }  // namespace
 
@@ -24,9 +27,17 @@ PriceCheck::PriceCheck() {
         item_ = parse_item_text(item_text_);
         status_ = item_ ? "" : std::string("POE_OVERLAY_DEMO_ITEM isn't PoE item text: ") + path;
         if (item_) daemon_.request(item_text_);
-        visible_ = true;
-        changed();
+        pending_mode_ = Mode::Locked;
+        demo_ = true;
+        open();
     }
+}
+
+bool PriceCheck::anchor(float* x, float* y) const {
+    if (!has_anchor_) return false;
+    *x = anchor_x_;
+    *y = anchor_y_;
+    return true;
 }
 
 void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
@@ -40,23 +51,24 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     for (Hotkey key : input.take_hotkeys()) {
         switch (key) {
         case Hotkey::PriceCheck:
-            request_copy(input);
+            request_copy(input, Mode::Quick);
+            break;
+        case Hotkey::PriceCheckLocked:
+            request_copy(input, Mode::Locked);
             break;
         case Hotkey::CopySeen:
-            // The user's own Ctrl+C (or the echo of ours) on an item.
-            if (!waiting_) {
-                waiting_ = true;
-                seq_at_request_ = input.clipboard_seq();
-            }
-            deadline_ = now + kCopyTimeout;
-            break;
-        case Hotkey::Close:
-            set_visible(false);
+            // The user's own Ctrl+C on an item, or the echo of ours (then
+            // we're already waiting and keep the hotkey's mode).
+            if (!waiting_)
+                begin_wait(input, Mode::Quick, now + kCopyTimeout);
+            else
+                deadline_ = now + kCopyTimeout;
             break;
         }
     }
 
     if (waiting_) wait_for_clipboard(input, now);
+    apply_closing_rules(input);
 
     PriceReply reply;
     if (daemon_.poll(&reply)) {
@@ -71,24 +83,56 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     if (opener_.poll(&reply) && reply.status != "ok") poe_log("open trade site: %s", reply.message.c_str());
 }
 
-void PriceCheck::request_copy(WaylandInput& input) {
+void PriceCheck::apply_closing_rules(WaylandInput& input) {
+    int game_clicks = input.take_game_clicks();
+    if (!visible_ || demo_) return;
+    switch (mode_) {
+    case Mode::Quick: {
+        if (input.pointer_inside()) {
+            mode_ = Mode::Pinned;
+            changed();
+            break;
+        }
+        float x, y;
+        if (!input.ctrl_held() && has_anchor_ && input.game_pointer(&x, &y)) {
+            float limit = kQuickCloseDistance * (float)input.scale();
+            float dx = x - anchor_x_, dy = y - anchor_y_;
+            if (dx * dx + dy * dy > limit * limit) set_visible(false);
+        }
+        break;
+    }
+    case Mode::Pinned:
+        if (!input.pointer_inside()) set_visible(false);
+        break;
+    case Mode::Locked:
+        if (game_clicks > 0) set_visible(false);
+        break;
+    }
+}
+
+void PriceCheck::request_copy(WaylandInput& input, Mode mode) {
     if (!keyboard_.ok()) {
         status_ = keyboard_.error() + ". Press Ctrl+C on the item instead.";
         item_.reset();
-        set_visible(true);
-        changed();
+        pending_mode_ = Mode::Locked;  // there's nothing to move toward
+        open();
         return;
     }
-    // The user is still holding Ctrl from Ctrl+D; only add our own if not.
+    // The user is still holding Ctrl from the hotkey; only add our own if not.
     we_pressed_ctrl_ = !input.ctrl_held();
     if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, true);
     keyboard_.key(KEY_C, true);
     keyboard_.sync();
     release_pending_ = true;
+    begin_wait(input, mode, Clock::now() + kCopyTimeout);
+}
 
+void PriceCheck::begin_wait(WaylandInput& input, Mode mode, Clock::time_point deadline) {
     waiting_ = true;
     seq_at_request_ = input.clipboard_seq();
-    deadline_ = Clock::now() + kCopyTimeout;
+    deadline_ = deadline;
+    pending_mode_ = mode;
+    pending_anchor_ = input.game_pointer(&pending_x_, &pending_y_);
 }
 
 void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) {
@@ -99,21 +143,33 @@ void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) 
         reply_.reset();
         item_text_ = input.clipboard_text();
         if (item_) daemon_.request(item_text_);
-        set_visible(true);
-        changed();
+        open();
     } else if (now > deadline_) {
         waiting_ = false;
         item_.reset();
         reply_.reset();
         status_ = "Nothing was copied. Is the cursor over an item?";
-        set_visible(true);
-        changed();
+        open();
     }
+}
+
+// Shows the panel for a new check, in the mode and at the place the hotkey
+// asked for.
+void PriceCheck::open() {
+    demo_ = demo_ && check_id_ == 0;  // a real check ends the demo
+    mode_ = pending_mode_;
+    has_anchor_ = pending_anchor_;
+    anchor_x_ = pending_x_;
+    anchor_y_ = pending_y_;
+    check_id_++;
+    visible_ = true;
+    changed();
 }
 
 void PriceCheck::set_visible(bool v) {
     if (visible_ == v) return;
     visible_ = v;
+    if (getenv("POE_OVERLAY_DEBUG")) poe_log("price check: %s (mode %d)", v ? "shown" : "hidden", (int)mode_);
     changed();
 }
 
