@@ -13,7 +13,8 @@
 namespace {
 
 constexpr char kSocketName[] = "poe-overlay";
-constexpr auto kTimeout = std::chrono::seconds(3);
+// A trade search can take a few seconds (browser start, two API requests).
+constexpr auto kTimeout = std::chrono::seconds(20);
 constexpr size_t kMaxReply = 64 * 1024;
 
 std::string frame(const std::string& body) {
@@ -45,11 +46,23 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "age") reply.age_minutes = atoi(f[1].c_str());
         else if (f[0] == "price" && f.size() >= 5)
             reply.prices.push_back({f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4]});
+        else if (f[0] == "filter" && f.size() >= 4)
+            reply.filters.push_back({atoi(f[1].c_str()), f[2] == "1", f[3]});
+        else if (f[0] == "listing" && f.size() >= 5)
+            reply.listings.push_back({f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]});
+        else if (f[0] == "total") reply.total = f[1];
+        else if (f[0] == "url") reply.url = f[1];
     }
     return reply;
 }
 
 }  // namespace
+
+void DaemonClient::request_trade(const std::vector<int>& enabled, const std::string& item_text) {
+    std::string indices;
+    for (int i : enabled) indices += (indices.empty() ? "" : ",") + std::to_string(i);
+    start("TRADE\n" + indices + "\n" + item_text);
+}
 
 void DaemonClient::start(const std::string& body) {
     close_socket();

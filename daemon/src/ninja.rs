@@ -187,8 +187,8 @@ pub fn fetch(league: &str) -> Result<PriceDb, String> {
     Ok(db)
 }
 
-/// Minimal query-string encoding; league names are plain words and spaces.
-fn encode(s: &str) -> String {
+/// Minimal URL encoding; league names are plain words and spaces.
+pub fn encode(s: &str) -> String {
     s.bytes()
         .map(|b| match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => (b as char).to_string(),

@@ -18,14 +18,28 @@
 //!   request:  "PING\n"   (sent by the layer at game start to wake us up)
 //!   response: status ready | loading
 //!
+//!   Rare/magic items get a trade site search instead of a poe.ninja price
+//!   (status "trade"), with their mods as toggleable filters:
+//!     filter   <index> <1|0 enabled> <label>
+//!     listing  <amount> <currency name> <chaos value|""> <seller>
+//!     total    <number of matches>
+//!     url      <the search on pathofexile.com>
+//!   request:  "TRADE\n" + comma-separated enabled filter indices + "\n" +
+//!             item text: the same search with only those filters.
+//!
+//!   request:  "OPEN\n" + url: open a pathofexile.com trade URL in the
+//!             user's browser (the layer can't, from inside the game).
+//!
 //! Normally started by systemd socket activation (poe-overlay-daemon.socket):
 //! systemd owns the socket, starts us on the first connection, and we exit
 //! after a while without requests. Run by hand, we bind the socket ourselves
 //! and stay up.
 
+mod cdp;
 mod item;
 mod lookup;
 mod ninja;
+mod trade;
 
 use std::fmt::Write as _;
 use std::io::{self, Read, Write};
@@ -47,6 +61,7 @@ struct State {
     db: RwLock<Option<Arc<ninja::PriceDb>>>,
     last_error: Mutex<Option<String>>,
     last_request: Mutex<Instant>,
+    trade: Mutex<trade::Trade>,
 }
 
 fn main() {
@@ -65,6 +80,7 @@ fn main() {
         db: RwLock::new(None),
         last_error: Mutex::new(None),
         last_request: Mutex::new(Instant::now()),
+        trade: Mutex::new(trade::Trade::new()),
     });
 
     let listener = match systemd_listener() {
@@ -96,6 +112,16 @@ fn main() {
 
     let refresher = state.clone();
     thread::spawn(move || refresh_loop(&refresher));
+    let trader = state.clone();
+    thread::spawn(move || {
+        loop {
+            thread::sleep(Duration::from_secs(60));
+            // A search in progress holds the lock; it's not idle then anyway.
+            if let Ok(mut t) = trader.trade.try_lock() {
+                t.close_if_idle();
+            }
+        }
+    });
 
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
@@ -178,7 +204,13 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
     let request = read_frame(&mut stream)?;
     *state.last_request.lock().unwrap() = Instant::now();
     let response = if let Some(text) = request.strip_prefix("PRICE\n") {
-        respond(state, text)
+        respond(state, text, None)
+    } else if let Some(rest) = request.strip_prefix("TRADE\n") {
+        let (indices, text) = rest.split_once('\n').unwrap_or((rest, ""));
+        let enabled: Vec<usize> = indices.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+        respond(state, text, Some(&enabled))
+    } else if let Some(url) = request.strip_prefix("OPEN\n") {
+        open_trade_url(url.trim())
     } else if request == "PING\n" {
         let ready = state.db.read().unwrap().is_some();
         format!("status\t{}\n", if ready { "ready" } else { "loading" })
@@ -188,7 +220,41 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
     write_frame(&mut stream, &response)
 }
 
-fn respond(state: &State, text: &str) -> String {
+/// Only trade search URLs, so a local client can't make us open anything.
+fn open_trade_url(url: &str) -> String {
+    if !url.starts_with("https://www.pathofexile.com/trade/search/") || url.contains(char::is_whitespace) {
+        return "status\tbad_request\nmessage\tNot a trade search URL\n".to_string();
+    }
+    match std::process::Command::new("xdg-open").arg(url).spawn() {
+        Ok(_) => "status\tok\n".to_string(),
+        Err(e) => format!("status\terror\nmessage\txdg-open: {}\n", clean(&e.to_string())),
+    }
+}
+
+fn trade_response(state: &State, item: &item::Item, enabled: Option<&[usize]>, db: &ninja::PriceDb) -> String {
+    let mut out = String::new();
+    let title = item.name.clone().unwrap_or_else(|| item.base.clone());
+    match state.trade.lock().unwrap().search(item, enabled, &db.league, db) {
+        Ok(r) => {
+            let _ = writeln!(out, "status\ttrade\ntitle\t{}", clean(&title));
+            for (i, (f, on)) in r.filters.iter().zip(&r.enabled).enumerate() {
+                let _ = writeln!(out, "filter\t{i}\t{}\t{}", *on as u8, clean(&f.label));
+            }
+            for l in &r.listings {
+                let chaos = l.chaos.map(|c| format!("{c:.2}")).unwrap_or_default();
+                let _ = writeln!(out, "listing\t{}\t{}\t{chaos}\t{}", l.amount, clean(&l.currency), clean(&l.account));
+            }
+            let _ = writeln!(out, "total\t{}\nurl\t{}", r.total, clean(&r.url));
+        }
+        Err(e) => {
+            eprintln!("trade: {e}");
+            let _ = writeln!(out, "status\terror\ntitle\t{}\nmessage\t{}", clean(&title), clean(&e));
+        }
+    }
+    out
+}
+
+fn respond(state: &State, text: &str, trade_filters: Option<&[usize]>) -> String {
     let mut out = String::new();
     let Some(item) = item::parse(text) else {
         return "status\tbad_request\nmessage\tNot PoE item text\n".to_string();
@@ -202,7 +268,23 @@ fn respond(state: &State, text: &str) -> String {
         return format!("status\t{status}\nmessage\t{}\n", clean(&message));
     };
 
-    match lookup::lookup(&db, &item) {
+    if trade_filters.is_some() {
+        out = trade_response(state, &item, trade_filters, &db);
+    } else {
+        match lookup::lookup(&db, &item) {
+            lookup::Outcome::Unsupported(_) if trade::searchable(&item) => {
+                out = trade_response(state, &item, None, &db);
+            }
+            outcome => write_lookup(&mut out, outcome),
+        }
+    }
+    let _ = writeln!(out, "league\t{}", clean(&db.league));
+    let _ = writeln!(out, "age\t{}", db.fetched_at.elapsed().as_secs() / 60);
+    out
+}
+
+fn write_lookup(out: &mut String, outcome: lookup::Outcome) {
+    match outcome {
         lookup::Outcome::Found { title, prices } => {
             let _ = writeln!(out, "status\tok\ntitle\t{}", clean(&title));
             for p in prices {
@@ -223,9 +305,6 @@ fn respond(state: &State, text: &str) -> String {
             let _ = writeln!(out, "status\tunsupported\nmessage\t{}", clean(&m));
         }
     }
-    let _ = writeln!(out, "league\t{}", clean(&db.league));
-    let _ = writeln!(out, "age\t{}", db.fetched_at.elapsed().as_secs() / 60);
-    out
 }
 
 /// Fields can't contain the protocol's separators.

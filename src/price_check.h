@@ -28,6 +28,7 @@ private:
     void request_copy(WaylandInput& input);
     void wait_for_clipboard(WaylandInput& input, Clock::time_point now);
     void draw_prices();
+    void draw_trade();
 
     UinputKeyboard keyboard_;
     bool release_pending_ = false;  // keys go down one frame, up the next
@@ -38,8 +39,10 @@ private:
     Clock::time_point deadline_;
 
     DaemonClient daemon_;
-    DaemonClient wake_;  // reply ignored
+    DaemonClient wake_;    // reply ignored
+    DaemonClient opener_;  // "open on trade site"; reply ignored
     std::optional<PriceReply> reply_;
+    std::string item_text_;  // as copied, for re-running trade searches
 
     bool visible_ = false;
     std::optional<ParsedItem> item_;

@@ -13,7 +13,12 @@ panel. PoE1 only for now.
 Priced: currency, fragments, essences, divination cards, omens, oils,
 fossils, tattoos and other exchange items; uniques (incl. 5L/6L and
 unidentified); skill gems (level/quality/corruption); maps, invitations,
-beasts. Rare and magic items need a trade search, which isn't implemented.
+beasts.
+
+Rare and magic items get a search on the official trade site instead: their
+mods become filters (minimum at 85% of your rolls, resistances as totals)
+that you can toggle with the mouse, and the cheapest online listings show in
+the panel, with a button to open the same search in your browser.
 
 ## How it works
 
@@ -54,6 +59,16 @@ beasts. Rare and magic items need a trade search, which isn't implemented.
   It's socket-activated: systemd owns `@poe-overlay`, starts the daemon on
   the first connection and the daemon exits after 30 minutes idle. The layer
   pings it when the game starts, so prices are loaded by the first lookup.
+- Trade search (`daemon/src/trade.rs`, `daemon/src/cdp.rs`): pathofexile.com
+  is behind Cloudflare, which refuses plain HTTP clients. Like Awakened PoE
+  Trade (Electron's Chromium), the daemon uses a real browser: a headless
+  Chromium/Chrome, as-is with its own user agent, driven over the DevTools
+  pipe, making same-origin `fetch()` calls from a page on the site. It starts
+  on the first rare price check and closes after 10 minutes unused. Mod
+  lines map to trade stat ids by their text with numbers replaced by `#`
+  (stat list cached daily in `~/.cache/poe-overlay`). The daemon follows
+  GGG's `X-Rate-Limit-*` headers and refuses requests that would hit a limit
+  rather than risk an IP timeout.
 
 The `.so` exports only the three loader entry points and links libstdc++
 statically, so its ImGui can't clash with another one in the process
@@ -118,7 +133,8 @@ draws, but hotkeys and the clipboard are not implemented for X11 yet.
 - Only one device gets the overlay (ImGui's Vulkan backend is global).
 - sRGB swapchains render ImGui colours slightly off (no gamma handling).
 - Scarabs, incubators and influenced/ilvl base types aren't priced yet.
-- Next: trade API search for rares (mapping mod text to trade stat IDs).
+- Trade search: no ilvl, influence, socket or corruption filters yet, and
+  every matched mod starts enabled (untick some if there are no results).
 
 ## License note
 

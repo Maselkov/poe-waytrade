@@ -15,6 +15,54 @@ pub struct Item {
     pub links: u32,
     pub map_tier: Option<u32>,
     pub stack_size: Option<u32>,
+    pub item_level: Option<u32>,
+    /// Lines after the "Item Level:" section: enchants, implicits, explicits,
+    /// plus some non-mod lines that simply won't match any trade stat.
+    pub mods: Vec<ModLine>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ModKind {
+    Explicit,
+    Implicit,
+    Crafted,
+    Fractured,
+    Enchant,
+}
+
+impl ModKind {
+    /// The trade API's stat group id.
+    pub fn trade_group(self) -> &'static str {
+        match self {
+            ModKind::Explicit => "explicit",
+            ModKind::Implicit => "implicit",
+            ModKind::Crafted => "crafted",
+            ModKind::Fractured => "fractured",
+            ModKind::Enchant => "enchant",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ModLine {
+    pub kind: ModKind,
+    /// The mod text without its "(implicit)"-style marker.
+    pub text: String,
+}
+
+fn mod_line(line: &str) -> ModLine {
+    const MARKERS: &[(&str, ModKind)] = &[
+        (" (implicit)", ModKind::Implicit),
+        (" (crafted)", ModKind::Crafted),
+        (" (fractured)", ModKind::Fractured),
+        (" (enchant)", ModKind::Enchant),
+    ];
+    for (marker, kind) in MARKERS {
+        if let Some(text) = line.strip_suffix(marker) {
+            return ModLine { kind: *kind, text: text.to_string() };
+        }
+    }
+    ModLine { kind: ModKind::Explicit, text: line.to_string() }
 }
 
 pub fn parse(text: &str) -> Option<Item> {
@@ -49,6 +97,16 @@ pub fn parse(text: &str) -> Option<Item> {
     }
     if item.rarity.is_empty() {
         return None;
+    }
+
+    let mut after_item_level = false;
+    for section in sections.iter().skip(1) {
+        if after_item_level {
+            item.mods.extend(section.iter().map(|l| mod_line(l)));
+        } else if let Some(v) = section.iter().find_map(|l| l.strip_prefix("Item Level: ")) {
+            item.item_level = leading_number(v);
+            after_item_level = true;
+        }
     }
 
     for line in sections.iter().skip(1).flatten() {
@@ -124,6 +182,27 @@ mod tests {
         let item = parse(text).unwrap();
         assert_eq!(item.base, "Chaos Orb");
         assert_eq!(item.stack_size, Some(1234));
+    }
+
+    #[test]
+    fn rare_mods() {
+        let text = "Item Class: Rings\nRarity: Rare\nDoom Loop\nSapphire Ring\n--------\n\
+                    Requirements:\nLevel: 40\n--------\nItem Level: 84\n--------\n\
+                    +25% to Cold Resistance (implicit)\n--------\n+60 to maximum Life\n\
+                    +30% to Fire Resistance\n+12% to Cold Resistance (crafted)\n--------\nCorrupted\n";
+        let item = parse(text).unwrap();
+        assert_eq!(item.item_level, Some(84));
+        let mods: Vec<_> = item.mods.iter().map(|m| (m.kind, m.text.as_str())).collect();
+        assert_eq!(
+            mods,
+            vec![
+                (ModKind::Implicit, "+25% to Cold Resistance"),
+                (ModKind::Explicit, "+60 to maximum Life"),
+                (ModKind::Explicit, "+30% to Fire Resistance"),
+                (ModKind::Crafted, "+12% to Cold Resistance"),
+                (ModKind::Explicit, "Corrupted"),
+            ]
+        );
     }
 
     #[test]

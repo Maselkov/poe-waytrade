@@ -55,8 +55,15 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     if (waiting_) wait_for_clipboard(input, now);
 
     PriceReply reply;
-    if (daemon_.poll(&reply)) reply_ = std::move(reply);
+    if (daemon_.poll(&reply)) {
+        // A failed re-search (e.g. rate limited) keeps the filters on screen.
+        if (reply.status == "error" && reply_ && reply_->status == "trade")
+            reply_->message = reply.message;
+        else
+            reply_ = std::move(reply);
+    }
     if (wake_.poll(&reply) && reply.status == "error") poe_log("daemon wake-up: %s", reply.message.c_str());
+    if (opener_.poll(&reply) && reply.status != "ok") poe_log("open trade site: %s", reply.message.c_str());
 }
 
 void PriceCheck::request_copy(WaylandInput& input) {
@@ -85,7 +92,8 @@ void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) 
         status_ = item_ ? "" : "Copied text isn't a PoE item";
         visible_ = true;
         reply_.reset();
-        if (item_) daemon_.request(input.clipboard_text());
+        item_text_ = input.clipboard_text();
+        if (item_) daemon_.request(item_text_);
     } else if (now > deadline_) {
         waiting_ = false;
         item_.reset();
@@ -109,12 +117,18 @@ void PriceCheck::draw() {
         if (!item_->name.empty()) ImGui::TextColored(color, "%s", item_->name.c_str());
         ImGui::TextColored(color, "%s", item_->base.c_str());
         ImGui::TextDisabled("%s | %s", item_->item_class.c_str(), item_->rarity.c_str());
-        for (const auto& section : item_->sections) {
+        if (reply_ && reply_->status == "trade") {
+            // The filters list the mods; no need for the raw text too.
             ImGui::Separator();
-            for (const auto& line : section) ImGui::TextUnformatted(line.c_str());
+            draw_trade();
+        } else {
+            for (const auto& section : item_->sections) {
+                ImGui::Separator();
+                for (const auto& line : section) ImGui::TextUnformatted(line.c_str());
+            }
+            ImGui::Separator();
+            draw_prices();
         }
-        ImGui::Separator();
-        draw_prices();
     }
     if (!status_.empty()) ImGui::TextDisabled("%s", status_.c_str());
     ImGui::TextDisabled("Esc closes");
@@ -153,4 +167,44 @@ void PriceCheck::draw_prices() {
     }
     if (!reply_->league.empty())
         ImGui::TextDisabled("poe.ninja | %s | %d min old", reply_->league.c_str(), reply_->age_minutes);
+}
+
+void PriceCheck::draw_trade() {
+    bool changed = false;
+    for (TradeFilter& f : reply_->filters) {
+        ImGui::PushID(f.index);
+        changed |= ImGui::Checkbox(f.label.c_str(), &f.enabled);
+        ImGui::PopID();
+    }
+    if (changed) {
+        std::vector<int> enabled;
+        for (const TradeFilter& f : reply_->filters)
+            if (f.enabled) enabled.push_back(f.index);
+        reply_->message.clear();
+        daemon_.request_trade(enabled, item_text_);
+    }
+
+    ImGui::Separator();
+    if (daemon_.busy()) ImGui::TextDisabled("Searching...");
+    if (!reply_->message.empty()) ImGui::TextColored(ImVec4(1, 0.5f, 0.4f, 1), "%s", reply_->message.c_str());
+
+    if (reply_->listings.empty()) {
+        ImGui::TextDisabled("No listings");
+    } else if (ImGui::BeginTable("listings", 2, ImGuiTableFlags_SizingFixedFit)) {
+        for (const TradeListing& l : reply_->listings) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.4f, 1), "%s %s", l.amount.c_str(), l.currency.c_str());
+            if (l.chaos >= 0 && l.currency != "Chaos Orb") {
+                ImGui::SameLine();
+                ImGui::TextDisabled("(%.0fc)", l.chaos);
+            }
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("%s", l.seller.c_str());
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::TextDisabled("%s matches online | %s", reply_->total.c_str(), reply_->league.c_str());
+    if (!reply_->url.empty() && ImGui::Button("Open on trade site")) opener_.open_url(reply_->url);
 }
