@@ -4,6 +4,7 @@ project(poe_overlay C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if(NOT CMAKE_BUILD_TYPE)
@@ -32,34 +33,56 @@ foreach(xml staging/fractional-scale/fractional-scale-v1.xml)
   list(APPEND PROTOCOL_SOURCES ${header} ${code})
 endforeach()
 
-set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
+# SPIR-V for the UI renderer, as comma-separated words to #include.
+find_program(GLSLC glslc REQUIRED)
+set(SHADER_DIR ${CMAKE_BINARY_DIR}/shaders)
+set(SHADER_OUTPUTS)
+foreach(shader rml.vert rml.frag)
+  set(out ${SHADER_DIR}/${shader}.inc)
+  add_custom_command(
+    OUTPUT ${out}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_DIR}
+    COMMAND ${GLSLC} -O -mfmt=num -o ${out} ${CMAKE_SOURCE_DIR}/src/shaders/${shader}
+    DEPENDS ${CMAKE_SOURCE_DIR}/src/shaders/${shader})
+  list(APPEND SHADER_OUTPUTS ${out})
+endforeach()
+
+# RmlUi core (third_party/rmlui, 6.3), built static with the FreeType font
+# engine. Its own CMake setup wants samples and installs headers, so it's
+# built from here instead.
+pkg_check_modules(FREETYPE REQUIRED IMPORTED_TARGET freetype2)
+file(GLOB_RECURSE RMLUI_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/third_party/rmlui/Source/Core/*.cpp)
+add_library(rmlui_core STATIC ${RMLUI_SOURCES})
+target_include_directories(rmlui_core PUBLIC ${CMAKE_SOURCE_DIR}/third_party/rmlui/Include)
+target_compile_definitions(rmlui_core PUBLIC RMLUI_STATIC_LIB
+                           PRIVATE RMLUI_FONT_ENGINE_FREETYPE RMLUI_VERSION="6.3")
+target_link_libraries(rmlui_core PRIVATE PkgConfig::FREETYPE)
 
 add_library(VkLayer_poe_overlay SHARED
   src/layer.cpp
   src/overlay.cpp
+  src/rml_renderer.cpp
+  src/ui.cpp
+  src/assets.c
   src/wl_input.cpp
   src/wl_pointer.cpp
   src/uinput_kbd.cpp
   src/item_text.cpp
   src/price_check.cpp
   src/daemon_client.cpp
-  ${IMGUI_DIR}/imgui.cpp
-  ${IMGUI_DIR}/imgui_draw.cpp
-  ${IMGUI_DIR}/imgui_tables.cpp
-  ${IMGUI_DIR}/imgui_widgets.cpp
-  ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
   ${PROTOCOL_SOURCES}
+  ${SHADER_OUTPUTS}
 )
-target_include_directories(VkLayer_poe_overlay PRIVATE ${IMGUI_DIR} ${VULKAN_INCLUDE_DIR} ${PROTOCOL_DIR})
-target_compile_definitions(VkLayer_poe_overlay PRIVATE
-  VK_NO_PROTOTYPES
-  IMGUI_IMPL_VULKAN_NO_PROTOTYPES
-  IMGUI_DISABLE_DEMO_WINDOWS
-  IMGUI_DISABLE_DEBUG_TOOLS
-)
-target_link_libraries(VkLayer_poe_overlay PRIVATE PkgConfig::WAYLAND)
+target_include_directories(VkLayer_poe_overlay PRIVATE ${VULKAN_INCLUDE_DIR} ${PROTOCOL_DIR} ${SHADER_DIR})
+target_compile_definitions(VkLayer_poe_overlay PRIVATE VK_NO_PROTOTYPES VK_USE_PLATFORM_WAYLAND_KHR)
+# Fonts and UI documents are built in with #embed (C23).
+set_source_files_properties(src/assets.c PROPERTIES
+  COMPILE_OPTIONS "-std=gnu23;--embed-dir=${CMAKE_SOURCE_DIR}/assets"
+  OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/assets/ui/theme.rcss;${CMAKE_SOURCE_DIR}/assets/ui/price_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/debug.rml")
+pkg_check_modules(WAYLAND_CURSOR REQUIRED IMPORTED_TARGET wayland-cursor)
+target_link_libraries(VkLayer_poe_overlay PRIVATE PkgConfig::WAYLAND PkgConfig::WAYLAND_CURSOR rmlui_core)
 # The layer is loaded into the game (inside Steam's runtime container), so keep
-# its dependencies minimal and don't leak symbols like ImGui's into the process.
+# its dependencies minimal and don't leak symbols like RmlUi's into the process.
 target_link_options(VkLayer_poe_overlay PRIVATE
   -static-libstdc++ -static-libgcc
   -Wl,--exclude-libs,ALL

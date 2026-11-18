@@ -1,6 +1,6 @@
 # poe-overlay (prototype)
 
-A Vulkan layer that draws a Dear ImGui panel inside the game's own frames
+A Vulkan layer that draws an RmlUi panel inside the game's own frames
 (MangoHud-style) and reads hotkeys and the clipboard from the game's own
 Wayland connection. Works with Path of Exile running under Proton as a
 **native Wayland** client.
@@ -26,7 +26,7 @@ the panel, with a button to open the same search in your browser.
   instance/device creation, `vkGetDeviceQueue*`, swapchain create/destroy,
   `vkQueuePresentKHR`, and `vkCreateWaylandSurfaceKHR`/`vkDestroySurfaceKHR`.
 - `src/overlay.cpp`: on each present, records a render pass (load op LOAD)
-  over the swapchain image, draws ImGui, waits on the app's semaphores and
+  over the swapchain image, draws the UI, waits on the app's semaphores and
   hands present our own semaphore instead.
 - `src/wl_input.cpp`: takes the `wl_display` the app passed to
   `vkCreateWaylandSurfaceKHR`, binds its own `wl_seat`/`wl_keyboard` on a
@@ -45,10 +45,18 @@ the panel, with a button to open the same search in your browser.
   after a Ctrl+C/Ctrl+D count, so stale clipboard contents never pop up.
   The item text then goes to the daemon via `src/daemon_client.cpp`, which
   also never blocks the frame.
+- `src/ui.cpp`, `src/rml_renderer.cpp`, `assets/ui/`: the UI. RmlUi
+  documents (`.rml`) styled by `theme.rcss`, bound to a data model that
+  mirrors the price check's state, drawn by our own small Vulkan renderer
+  (which also linearises colours for sRGB swapchains). Fonts and UI files
+  are built into the `.so` with `#embed`, since the layer can't see host
+  paths from inside Steam's container. `theme.rcss` starts with
+  `@define $name value;` lines (RCSS has no variables; the loader
+  substitutes them), so the palette, accent included, lives in one place.
 - `src/wl_pointer.cpp`: mouse input. Pointer events go to the surface under
   the cursor, so the layer attaches a transparent subsurface of its own to
   the game's surface, sized to the visible panels, with an input region
-  covering just them: clicks there reach ImGui and never the game. With no
+  covering just them: clicks there reach the UI and never the game. With no
   panel visible it's unmapped.
 - `daemon/` (Rust): `poe-overlay-daemon` listens on the abstract Unix socket
   `@poe-overlay` (reachable from inside Steam's runtime container, since
@@ -71,7 +79,7 @@ the panel, with a button to open the same search in your browser.
   rather than risk an IP timeout.
 
 The `.so` exports only the three loader entry points and links libstdc++
-statically, so its ImGui can't clash with another one in the process
+statically, so its RmlUi can't clash with another UI library in the process
 (e.g. MangoHud's).
 
 ## Build and test
@@ -122,6 +130,17 @@ draws, but hotkeys and the clipboard are not implemented for X11 yet.
 
 `POE_OVERLAY_DEBUG=1` adds a debug window (focus, last key, clipboard state).
 
+Working on the UI without the game:
+
+```bash
+POE_OVERLAY_UI_DIR=$PWD/assets POE_OVERLAY_DEMO_ITEM=item.txt \
+  VK_ADD_IMPLICIT_LAYER_PATH=$PWD/build/layer ENABLE_POE_OVERLAY=1 vkcube --wsi wayland
+```
+
+`POE_OVERLAY_UI_DIR` loads `ui/*` from disk and reloads them when they
+change; `POE_OVERLAY_DEMO_ITEM` opens the panel on start with that item text
+(as copied from the game). `POE_OVERLAY_UI_SCALE` scales the whole UI.
+
 ## Known limitations / next steps
 
 - Hotkeys are hard-coded (Ctrl+D, Esc) and still reach the game too.
@@ -130,12 +149,13 @@ draws, but hotkeys and the clipboard are not implemented for X11 yet.
   `POE_OVERLAY_SCALE` overrides the pixel-per-logical-unit ratio.
 - No advanced copy (Ctrl+Alt+C) yet, so mod tiers/ranges aren't available.
 - No X11 input path (would be `XQueryKeymap` polling like MangoHud).
-- Only one device gets the overlay (ImGui's Vulkan backend is global).
-- sRGB swapchains render ImGui colours slightly off (no gamma handling).
+- Only one device gets the overlay (RmlUi is a process-wide singleton).
+- HDR (10-bit/PQ) swapchains aren't colour-corrected yet; sRGB ones are.
 - Scarabs, incubators and influenced/ilvl base types aren't priced yet.
 - Trade search: no ilvl, influence, socket or corruption filters yet, and
   every matched mod starts enabled (untick some if there are no results).
 
 ## License note
 
-`third_party/imgui` is Dear ImGui v1.93.0 (MIT).
+`third_party/rmlui` is RmlUi 6.3 core (MIT). `assets/fonts` has Inter and
+Cinzel, both under the SIL Open Font License (licence files alongside).

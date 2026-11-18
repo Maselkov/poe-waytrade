@@ -1,17 +1,12 @@
-// Draws the ImGui overlay into the app's swapchain images right before present.
+// Draws the overlay UI into the app's swapchain images right before present.
 #include "layer.h"
 #include "price_check.h"
+#include "rml_renderer.h"
+#include "ui.h"
 #include "wl_input.h"
 
-#include "imgui.h"
-#include "imgui_internal.h"
-#include "backends/imgui_impl_vulkan.h"
-
 #include <atomic>
-#include <cfloat>
 #include <chrono>
-#include <cmath>
-#include <cstdlib>
 #include <cstring>
 
 struct OverlayImage {
@@ -39,23 +34,22 @@ struct OverlayDevice {
     std::mutex lock;
     std::vector<std::unique_ptr<OverlaySwapchain>> swapchains;
 
-    ImGuiContext* ctx = nullptr;
-    bool imgui_ready = false;
-    VkFormat imgui_format = VK_FORMAT_UNDEFINED;
-    VkRenderPass imgui_render_pass = VK_NULL_HANDLE;
+    // The UI is created on first present, once a queue and format are known.
+    // ui is destroyed before renderer: shutting RmlUi down releases textures.
+    std::unique_ptr<RmlRenderer> renderer;
+    std::unique_ptr<OverlayUi> ui;
+    VkRenderPass ui_render_pass = VK_NULL_HANDLE;
+    VkFormat ui_format = VK_FORMAT_UNDEFINED;
+    bool ui_failed = false;
 
-    std::chrono::steady_clock::time_point last_frame = std::chrono::steady_clock::now();
-    bool debug = getenv("POE_OVERLAY_DEBUG") != nullptr;
     // Created with the device so the uinput keyboard has time to show up in
     // the compositor before the first hotkey.
     PriceCheck price_check;
-    int test_clicks = 0;
 };
 
 namespace {
 
-// ImGui's Vulkan backend keeps its function pointers in globals, so the
-// overlay can only be bound to one device at a time.
+// RmlUi is a process-wide singleton, so the overlay is bound to one device.
 std::atomic<DeviceData*> g_overlay_device{nullptr};
 
 #define VK_CHECK(expr)                                                  \
@@ -66,27 +60,6 @@ std::atomic<DeviceData*> g_overlay_device{nullptr};
             return false;                                               \
         }                                                               \
     } while (0)
-
-// Command buffers we allocate bypass the loader trampoline, so the loader's
-// dispatch pointer has to be patched in by hand.
-VKAPI_ATTR VkResult VKAPI_CALL AllocateCommandBuffersFixup(VkDevice device,
-                                                           const VkCommandBufferAllocateInfo* info,
-                                                           VkCommandBuffer* out) {
-    DeviceData* dev = g_overlay_device.load();
-    VkResult res = dev->AllocateCommandBuffers(device, info, out);
-    if (res == VK_SUCCESS && dev->set_loader_data) {
-        for (uint32_t i = 0; i < info->commandBufferCount; i++)
-            dev->set_loader_data(device, out[i]);
-    }
-    return res;
-}
-
-PFN_vkVoidFunction imgui_loader(const char* name, void* user) {
-    auto* dev = static_cast<DeviceData*>(user);
-    if (!strcmp(name, "vkAllocateCommandBuffers")) return (PFN_vkVoidFunction)&AllocateCommandBuffersFixup;
-    if (auto fn = dev->next_gdpa(dev->device, name)) return fn;
-    return dev->instance->next_gipa(dev->instance->instance, name);
-}
 
 VkRenderPass create_render_pass(DeviceData* dev, VkFormat format) {
     VkAttachmentDescription att = {};
@@ -181,7 +154,7 @@ bool setup_swapchain(DeviceData* dev, OverlaySwapchain& sc, uint32_t family) {
         aci.commandPool = sc.pool;
         aci.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         aci.commandBufferCount = 1;
-        VK_CHECK(AllocateCommandBuffersFixup(dev->device, &aci, &img.cmd));
+        VK_CHECK(overlay_allocate_command_buffers(dev, &aci, &img.cmd));
 
         VkFenceCreateInfo fnci = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
         fnci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -195,120 +168,61 @@ bool setup_swapchain(DeviceData* dev, OverlaySwapchain& sc, uint32_t family) {
     return true;
 }
 
-void shutdown_imgui(DeviceData* dev, OverlayDevice& ov) {
-    if (!ov.imgui_ready) return;
-    ImGui::SetCurrentContext(ov.ctx);
-    dev->DeviceWaitIdle(dev->device);
-    ImGui_ImplVulkan_Shutdown();
-    dev->DestroyRenderPass(dev->device, ov.imgui_render_pass, nullptr);
-    ov.imgui_render_pass = VK_NULL_HANDLE;
-    ov.imgui_ready = false;
+void shutdown_ui(DeviceData* dev, OverlayDevice& ov) {
+    ov.ui.reset();
+    ov.renderer.reset();  // waits for the device to go idle
+    if (ov.ui_render_pass) dev->DestroyRenderPass(dev->device, ov.ui_render_pass, nullptr);
+    ov.ui_render_pass = VK_NULL_HANDLE;
+    ov.ui_format = VK_FORMAT_UNDEFINED;
 }
 
-bool init_imgui(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, VkQueue queue, uint32_t family) {
-    ImGui::SetCurrentContext(ov.ctx);
+bool init_ui(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, VkQueue queue, uint32_t family) {
+    if (ov.ui_failed) return false;
+    if (!ov.renderer) {
+        ov.renderer = std::make_unique<RmlRenderer>(dev, queue, family);
+        if (!ov.renderer->ok()) {
+            poe_log("ui: renderer setup failed");
+            ov.renderer.reset();
+            ov.ui_failed = true;
+            return false;
+        }
+    }
     // The pipeline is tied to a render pass format; rebuild if it changed.
-    if (ov.imgui_ready && ov.imgui_format == sc.format) return true;
-    shutdown_imgui(dev, ov);
-
-    if (!ImGui_ImplVulkan_LoadFunctions(dev->instance->api_version, imgui_loader, dev)) {
-        poe_log("ImGui_ImplVulkan_LoadFunctions failed");
-        return false;
+    if (ov.ui_format != sc.format) {
+        VkRenderPass rp = create_render_pass(dev, sc.format);
+        if (!rp || !ov.renderer->set_target(rp, sc.format)) {
+            if (rp) dev->DestroyRenderPass(dev->device, rp, nullptr);
+            ov.ui_failed = true;
+            return false;
+        }
+        if (ov.ui_render_pass) dev->DestroyRenderPass(dev->device, ov.ui_render_pass, nullptr);
+        ov.ui_render_pass = rp;
+        ov.ui_format = sc.format;
     }
-
-    ov.imgui_render_pass = create_render_pass(dev, sc.format);
-    if (!ov.imgui_render_pass) return false;
-
-    ImGui_ImplVulkan_InitInfo info = {};
-    info.ApiVersion = dev->instance->api_version;
-    info.Instance = dev->instance->instance;
-    info.PhysicalDevice = dev->physical_device;
-    info.Device = dev->device;
-    info.QueueFamily = family;
-    info.Queue = queue;
-    info.DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE;
-    info.MinImageCount = sc.min_images < 2 ? 2 : sc.min_images;
-    info.ImageCount = (uint32_t)sc.images.size();
-    info.PipelineInfoMain.RenderPass = ov.imgui_render_pass;
-    info.PipelineInfoMain.Subpass = 0;
-    info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-    if (!ImGui_ImplVulkan_Init(&info)) {
-        poe_log("ImGui_ImplVulkan_Init failed");
-        return false;
+    if (!ov.ui) {
+        ov.ui = std::make_unique<OverlayUi>(ov.renderer.get());
+        if (!ov.ui->ok()) {
+            poe_log("ui: RmlUi setup failed");
+            ov.ui_failed = true;
+            return false;
+        }
+        poe_log("ui: ready");
     }
-    ov.imgui_format = sc.format;
-    ov.imgui_ready = true;
     return true;
 }
 
-// Screen rects of this frame's visible top-level ImGui windows: where the
-// mouse should go to us rather than the game.
-std::vector<InputRect> panel_rects() {
-    std::vector<InputRect> rects;
-    for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows) {
-        if (!w->Active || w->Hidden || (w->Flags & ImGuiWindowFlags_ChildWindow)) continue;
-        rects.push_back({(int)w->Pos.x, (int)w->Pos.y, (int)ceilf(w->Size.x), (int)ceilf(w->Size.y)});
-    }
-    return rects;
-}
-
 void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
-    ImGuiIO& io = ImGui::GetIO();
-    auto now = std::chrono::steady_clock::now();
-    float dt = std::chrono::duration<float>(now - ov.last_frame).count();
-    ov.last_frame = now;
-    io.DeltaTime = dt > 0.0f ? dt : 1.0f / 60.0f;
-    io.DisplaySize = ImVec2((float)sc.extent.width, (float)sc.extent.height);
-
     WaylandInput* input = dev->instance->input.get();
     if (input) {
         input->poll();
-        ov.price_check.update(*input, now);
-        for (const PointerEvent& ev : input->take_pointer_events()) {
-            switch (ev.type) {
-            case PointerEvent::Motion: io.AddMousePosEvent(ev.x, ev.y); break;
-            case PointerEvent::Leave: io.AddMousePosEvent(-FLT_MAX, -FLT_MAX); break;
-            case PointerEvent::Button: io.AddMouseButtonEvent(ev.button, ev.down); break;
-            case PointerEvent::Wheel: io.AddMouseWheelEvent(0, ev.wheel); break;
-            }
-        }
-        // The compositor cursor is hidden over our panels; draw ImGui's.
-        io.MouseDrawCursor = input->pointer_inside();
+        ov.price_check.update(*input, std::chrono::steady_clock::now());
     }
-
-    ImGui::NewFrame();
-    ov.price_check.draw();
-    if (ov.debug) {
-        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 520, 40), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowBgAlpha(0.85f);
-        ImGui::Begin("poe-overlay debug", nullptr,
-                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse |
-                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
-        ImGui::Text("Swapchain: %ux%u  format %d", sc.extent.width, sc.extent.height, sc.format);
-        ImGui::Text("Frame: %.2f ms  (%.0f FPS)", 1000.0f * io.DeltaTime, io.Framerate);
-        ImGui::Separator();
-        if (input) {
-            ImGui::Text("Input: Wayland (%s)", input->status());
-            ImGui::Text("Keyboard focus: %s", input->focused() ? "yes" : "no");
-            ImGui::Text("Last key: %u %s", input->last_key(), input->last_key_down() ? "down" : "up");
-            ImGui::Text("Clipboard: #%llu, %zu bytes", (unsigned long long)input->clipboard_seq(),
-                        input->clipboard_text().size());
-            ImGui::Text("Pointer over overlay: %s  (scale %.3f)", input->pointer_inside() ? "yes" : "no",
-                        input->scale());
-            if (ImGui::Button("Test click")) ov.test_clicks++;
-            ImGui::SameLine();
-            ImGui::Text("clicked %d times", ov.test_clicks);
-        } else {
-            ImGui::TextDisabled("Input: none (not a Wayland surface; X11 not implemented)");
-        }
-        ImGui::End();
-    }
-    ImGui::Render();
-
-    if (input) input->set_input_rects(panel_rects(), (int)sc.extent.width, (int)sc.extent.height);
+    ov.renderer->begin_frame();
+    ov.ui->update(ov.price_check, input, sc.extent);
+    if (input) input->set_input_rects(ov.ui->input_rects(), (int)sc.extent.width, (int)sc.extent.height);
 }
 
-bool record_and_submit(DeviceData* dev, OverlaySwapchain& sc, uint32_t index, VkQueue queue,
+bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, uint32_t index, VkQueue queue,
                        const VkSemaphore* waits, uint32_t wait_count) {
     OverlayImage& img = sc.images[index];
     VK_CHECK(dev->WaitForFences(dev->device, 1, &img.fence, VK_TRUE, UINT64_MAX));
@@ -324,7 +238,8 @@ bool record_and_submit(DeviceData* dev, OverlaySwapchain& sc, uint32_t index, Vk
     rbi.framebuffer = img.framebuffer;
     rbi.renderArea.extent = sc.extent;
     dev->CmdBeginRenderPass(img.cmd, &rbi, VK_SUBPASS_CONTENTS_INLINE);
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), img.cmd);
+    ov.renderer->begin_render(img.cmd, sc.extent);
+    ov.ui->render();
     dev->CmdEndRenderPass(img.cmd);
     VK_CHECK(dev->EndCommandBuffer(img.cmd));
 
@@ -352,6 +267,15 @@ OverlaySwapchain* find_swapchain(OverlayDevice& ov, VkSwapchainKHR handle) {
 DeviceData::DeviceData() = default;
 DeviceData::~DeviceData() = default;
 
+VkResult overlay_allocate_command_buffers(DeviceData* dev, const VkCommandBufferAllocateInfo* info,
+                                          VkCommandBuffer* out) {
+    VkResult res = dev->AllocateCommandBuffers(dev->device, info, out);
+    if (res == VK_SUCCESS && dev->set_loader_data) {
+        for (uint32_t i = 0; i < info->commandBufferCount; i++) dev->set_loader_data(dev->device, out[i]);
+    }
+    return res;
+}
+
 void overlay_attach(DeviceData* dev) {
     DeviceData* expected = nullptr;
     if (!g_overlay_device.compare_exchange_strong(expected, dev)) {
@@ -359,13 +283,6 @@ void overlay_attach(DeviceData* dev) {
         return;
     }
     dev->overlay = std::make_unique<OverlayDevice>();
-    IMGUI_CHECKVERSION();
-    dev->overlay->ctx = ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr;
-    io.LogFilename = nullptr;
-    ImGui::StyleColorsDark();
-    ImGui::GetStyle().FontScaleMain = 1.5f;
     poe_log("overlay attached to device %p", (void*)dev->device);
 }
 
@@ -419,7 +336,7 @@ VkResult overlay_present(DeviceData* dev, VkQueue queue, const VkPresentInfoKHR*
         }
         targets.emplace_back(sc, info->pImageIndices[i]);
     }
-    if (targets.empty() || !init_imgui(dev, ov, *targets[0].first, queue, family))
+    if (targets.empty() || !init_ui(dev, ov, *targets[0].first, queue, family))
         return dev->QueuePresentKHR(queue, info);
 
     // Pass 2: build one UI frame, draw it into each image, chain semaphores.
@@ -430,7 +347,7 @@ VkResult overlay_present(DeviceData* dev, VkQueue queue, const VkPresentInfoKHR*
     for (auto& [sc, index] : targets) {
         const VkSemaphore* waits = consumed_app_waits ? nullptr : info->pWaitSemaphores;
         uint32_t wait_count = consumed_app_waits ? 0 : info->waitSemaphoreCount;
-        if (!record_and_submit(dev, *sc, index, queue, waits, wait_count)) continue;
+        if (!record_and_submit(dev, ov, *sc, index, queue, waits, wait_count)) continue;
         consumed_app_waits = true;
         signals.push_back(sc->images[index].done);
     }
@@ -449,9 +366,8 @@ void overlay_device_destroyed(DeviceData* dev) {
         std::lock_guard lk(ov.lock);
         for (auto& sc : ov.swapchains) destroy_swapchain_resources(dev, *sc);
         ov.swapchains.clear();
-        shutdown_imgui(dev, ov);
+        shutdown_ui(dev, ov);
     }
-    ImGui::DestroyContext(ov.ctx);
     dev->overlay.reset();
     g_overlay_device.store(nullptr);
 }

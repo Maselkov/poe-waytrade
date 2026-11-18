@@ -20,6 +20,7 @@ struct ParsedItem {
     std::string rarity;
     std::string name;  // empty when the item has only a base type line
     std::string base;
+    std::string item_level;  // empty if the item has none
     std::vector<std::vector<std::string>> sections;  // after the header
 };
 

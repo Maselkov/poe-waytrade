@@ -1,0 +1,16 @@
+<rml>
+<head>
+    <title>Debug</title>
+    <link type="text/rcss" href="theme.rcss"/>
+</head>
+<body id="debug" data-model="ui">
+<div id="panel">
+    <handle id="head" move_target="#document">
+        <div class="base currency">poe-overlay debug</div>
+    </handle>
+    <div class="section">
+        <div class="line" data-for="line : debug_lines">{{line}}</div>
+    </div>
+</div>
+</body>
+</rml>

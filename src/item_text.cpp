@@ -40,6 +40,9 @@ std::optional<ParsedItem> parse_item_text(std::string_view text) {
         item.base = names[0];
     }
     sections.erase(sections.begin());
+    for (const auto& section : sections)
+        for (const std::string& line : section)
+            if (item.item_level.empty()) take_prefix(line, "Item Level: ", &item.item_level);
     item.sections = std::move(sections);
     return item;
 }

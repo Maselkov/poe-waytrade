@@ -1,7 +1,6 @@
 // Shared state for the layer: per-instance and per-device dispatch data.
 #pragma once
 
-#define VK_USE_PLATFORM_WAYLAND_KHR
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_layer.h>
 
@@ -18,6 +17,7 @@ struct OverlayDevice;
 #define POE_INSTANCE_FUNCS(X) \
     X(DestroyInstance)                        \
     X(GetPhysicalDeviceQueueFamilyProperties) \
+    X(GetPhysicalDeviceMemoryProperties)      \
     X(CreateWaylandSurfaceKHR)                \
     X(DestroySurfaceKHR)
 
@@ -33,7 +33,23 @@ struct OverlayDevice;
     X(BeginCommandBuffer) X(EndCommandBuffer) X(ResetCommandBuffer)                \
     X(CmdBeginRenderPass) X(CmdEndRenderPass)                                      \
     X(CreateFence) X(DestroyFence) X(WaitForFences) X(ResetFences)                 \
-    X(CreateSemaphore) X(DestroySemaphore)
+    X(CreateSemaphore) X(DestroySemaphore)                                         \
+    /* UI renderer (rml_renderer.cpp) */                                           \
+    X(QueueWaitIdle)                                                               \
+    X(CreateBuffer) X(DestroyBuffer) X(GetBufferMemoryRequirements)                \
+    X(BindBufferMemory) X(AllocateMemory) X(FreeMemory) X(MapMemory)               \
+    X(CreateImage) X(DestroyImage) X(GetImageMemoryRequirements) X(BindImageMemory)\
+    X(CreateSampler) X(DestroySampler)                                             \
+    X(CreateDescriptorSetLayout) X(DestroyDescriptorSetLayout)                     \
+    X(CreateDescriptorPool) X(DestroyDescriptorPool)                               \
+    X(AllocateDescriptorSets) X(FreeDescriptorSets) X(UpdateDescriptorSets)        \
+    X(CreatePipelineLayout) X(DestroyPipelineLayout)                               \
+    X(CreateShaderModule) X(DestroyShaderModule)                                   \
+    X(CreateGraphicsPipelines) X(DestroyPipeline)                                  \
+    X(CmdBindPipeline) X(CmdBindVertexBuffers) X(CmdBindIndexBuffer)               \
+    X(CmdBindDescriptorSets) X(CmdPushConstants) X(CmdSetViewport)                 \
+    X(CmdSetScissor) X(CmdDrawIndexed) X(CmdCopyBufferToImage)                     \
+    X(CmdPipelineBarrier)
 
 struct InstanceData {
     VkInstance instance = VK_NULL_HANDLE;
@@ -64,7 +80,7 @@ struct DeviceData {
     std::mutex queue_lock;
     std::unordered_map<VkQueue, uint32_t> queue_family;  // queue -> family index
 
-    // Only one device gets an overlay (ImGui's Vulkan backend is global).
+    // Only one device gets an overlay (RmlUi is a process-wide singleton).
     std::unique_ptr<OverlayDevice> overlay;
 
     DeviceData();
@@ -72,6 +88,10 @@ struct DeviceData {
 };
 
 // overlay.cpp
+// vkAllocateCommandBuffers for our own command buffers: they bypass the
+// loader trampoline, so its dispatch pointer gets patched in.
+VkResult overlay_allocate_command_buffers(DeviceData* dev, const VkCommandBufferAllocateInfo* info,
+                                          VkCommandBuffer* out);
 void overlay_attach(DeviceData* dev);
 void overlay_swapchain_created(DeviceData* dev, VkSwapchainKHR sc, const VkSwapchainCreateInfoKHR* info);
 void overlay_swapchain_destroyed(DeviceData* dev, VkSwapchainKHR sc);

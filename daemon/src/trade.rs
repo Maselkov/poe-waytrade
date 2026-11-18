@@ -28,7 +28,8 @@ pub struct Listing {
     pub amount: f64,
     pub currency: String,
     pub chaos: Option<f64>,
-    pub account: String,
+    /// "2m", "3h", "5d" since listed; empty if unknown.
+    pub age: String,
 }
 
 pub struct TradeResult {
@@ -137,7 +138,7 @@ impl Trade {
                     amount,
                     currency: name,
                     chaos,
-                    account: listing["account"]["name"].as_str().unwrap_or("").to_string(),
+                    age: listing["indexed"].as_str().and_then(listing_age).unwrap_or_default(),
                 });
             }
         }
@@ -230,6 +231,33 @@ fn cache_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".cache"));
     base.join("poe-overlay")
+}
+
+/// "2026-11-18T22:01:33Z" -> how long ago, as "2m" / "3h" / "5d".
+fn listing_age(indexed: &str) -> Option<String> {
+    let then = parse_utc(indexed)?;
+    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).ok()?.as_secs() as i64;
+    let minutes = (now - then).max(0) / 60;
+    Some(match minutes {
+        m if m < 60 => format!("{m}m"),
+        m if m < 48 * 60 => format!("{}h", m / 60),
+        m => format!("{}d", m / (24 * 60)),
+    })
+}
+
+/// Seconds since the epoch for an ISO 8601 UTC timestamp.
+fn parse_utc(s: &str) -> Option<i64> {
+    let num = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
+    let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    let (h, mi, sec) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    // Days from civil date (Howard Hinnant's algorithm).
+    let y = if mo <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if mo > 2 { mo - 3 } else { mo + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146097 + doe - 719468;
+    Some(days * 86400 + h * 3600 + mi * 60 + sec)
 }
 
 // ---- mods -> trade filters -------------------------------------------------
@@ -500,6 +528,13 @@ mod tests {
             ("Adds # to # Physical Damage to Attacks".into(), vec![5.0, 10.0])
         );
         assert_eq!(templatize("0.8% of Physical Attack Damage Leeched as Life").1, vec![0.8]);
+    }
+
+    #[test]
+    fn timestamps() {
+        assert_eq!(parse_utc("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(parse_utc("2026-11-18T22:01:33Z"), Some(1795039293));
+        assert_eq!(parse_utc("nonsense"), None);
     }
 
     #[test]

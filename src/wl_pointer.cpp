@@ -24,6 +24,7 @@
 #include <cstring>
 
 #include <wayland-client.h>
+#include <wayland-cursor.h>
 #include "fractional-scale-v1-client-protocol.h"
 
 namespace {
@@ -225,7 +226,43 @@ bool WaylandInput::ensure_buffer(int w, int h) {
     return true;
 }
 
+void WaylandInput::set_cursor(const std::string& name) {
+    cursor_ = name;
+    if (pointer_inside_ && cursor_ != applied_cursor_) apply_cursor();
+}
+
+void WaylandInput::apply_cursor() {
+    applied_cursor_ = cursor_;
+    if (!pointer_ || !compositor_ || !shm_) return;
+    if (!cursor_theme_) {
+        const char* size = getenv("XCURSOR_SIZE");
+        cursor_theme_ = wl_cursor_theme_load(getenv("XCURSOR_THEME"), size ? atoi(size) : 24, shm_);
+        if (!cursor_theme_) return;
+    }
+    // CSS names first, then the X11 names older themes use.
+    std::vector<const char*> names;
+    if (cursor_ == "move") names = {"move", "fleur", "grabbing"};
+    else if (cursor_ == "pointer") names = {"pointer", "hand2", "pointing_hand"};
+    else if (!cursor_.empty()) names = {cursor_.c_str()};
+    names.insert(names.end(), {"default", "left_ptr"});
+
+    wl_cursor* cursor = nullptr;
+    for (const char* n : names)
+        if ((cursor = wl_cursor_theme_get_cursor(cursor_theme_, n))) break;
+    if (!cursor || cursor->image_count == 0) return;
+    wl_cursor_image* image = cursor->images[0];
+
+    if (!cursor_surface_) cursor_surface_ = wl_compositor_create_surface(compositor_);
+    wl_surface_attach(cursor_surface_, wl_cursor_image_get_buffer(image), 0, 0);
+    wl_surface_damage(cursor_surface_, 0, 0, image->width, image->height);
+    wl_surface_commit(cursor_surface_);
+    wl_pointer_set_cursor(pointer_, enter_serial_, cursor_surface_, image->hotspot_x, image->hotspot_y);
+    wl_display_flush(display_);
+}
+
 void WaylandInput::destroy_pointer_objects() {
+    if (cursor_surface_) wl_surface_destroy(cursor_surface_);
+    if (cursor_theme_) wl_cursor_theme_destroy(cursor_theme_);
     if (buffer_) wl_buffer_destroy(buffer_);
     if (shm_pool_) wl_shm_pool_destroy(shm_pool_);
     if (shm_fd_ >= 0) close(shm_fd_);
@@ -246,8 +283,9 @@ void WaylandInput::destroy_pointer_objects() {
 void WaylandInput::on_pointer_enter(uint32_t serial, wl_surface* surface, double x, double y) {
     if (!surface || surface != input_surface_) return;
     pointer_inside_ = true;
-    // Hide the compositor cursor here; ImGui draws its own while inside.
-    wl_pointer_set_cursor(pointer_, serial, nullptr, 0, 0);
+    // The game's cursor doesn't apply over our surface; set our own.
+    enter_serial_ = serial;
+    apply_cursor();
     pointer_events_.push_back({PointerEvent::Motion, float((x + sub_x_) * scale_), float((y + sub_y_) * scale_)});
 }
 

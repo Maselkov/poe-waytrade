@@ -18,13 +18,14 @@ struct TradeFilter {
     int index = 0;
     bool enabled = false;
     std::string label;
+    std::string min;  // empty if none
 };
 
 struct TradeListing {
     std::string amount;
     std::string currency;
     double chaos = -1;  // < 0: unknown
-    std::string seller;
+    std::string age;    // "2m", "3h", "5d"; empty if unknown
 };
 
 struct PriceReply {

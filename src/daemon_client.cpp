@@ -47,7 +47,7 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "price" && f.size() >= 5)
             reply.prices.push_back({f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4]});
         else if (f[0] == "filter" && f.size() >= 4)
-            reply.filters.push_back({atoi(f[1].c_str()), f[2] == "1", f[3]});
+            reply.filters.push_back({atoi(f[1].c_str()), f[2] == "1", f[3], f.size() >= 5 ? f[4] : ""});
         else if (f[0] == "listing" && f.size() >= 5)
             reply.listings.push_back({f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]});
         else if (f[0] == "total") reply.total = f[1];

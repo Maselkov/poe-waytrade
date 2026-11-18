@@ -1,13 +1,13 @@
 # Builds from the local checkout this file lives in.
 #   cd packaging/arch && makepkg -si
 pkgname=poe-overlay
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=1
 pkgdesc="In-game Vulkan price-check overlay for Path of Exile on Wayland"
 arch=('x86_64')
 license=('unknown')
-depends=('vulkan-icd-loader' 'wayland' 'gcc-libs' 'glibc')
-makedepends=('cmake' 'ninja' 'vulkan-headers' 'wayland-protocols' 'cargo')
+depends=('vulkan-icd-loader' 'wayland' 'freetype2' 'gcc-libs' 'glibc')
+makedepends=('cmake' 'ninja' 'vulkan-headers' 'wayland-protocols' 'shaderc' 'cargo')
 optdepends=('chromium: trade search for rare items (or google-chrome)'
             'xdg-utils: open trade searches in your browser')
 install=poe-overlay.install

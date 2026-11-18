@@ -71,6 +71,9 @@ public:
     void set_input_rects(const std::vector<InputRect>& rects, int width, int height);
     std::vector<PointerEvent> take_pointer_events() { return std::exchange(pointer_events_, {}); }
     bool pointer_inside() const { return pointer_inside_; }
+    // Cursor shown over the overlay panels: a CSS cursor name from RmlUi
+    // ("" = default), looked up in the user's cursor theme.
+    void set_cursor(const std::string& name);
     // Swapchain pixels per Wayland logical unit.
     double scale() const { return scale_; }
 
@@ -112,6 +115,7 @@ private:
     void init_scale_policy();
     void bind_pointer_globals(wl_registry* reg, uint32_t name, const char* iface, uint32_t version);
     void update_pointer(bool has_pointer);
+    void apply_cursor();
     bool ensure_buffer(int w, int h);
     void destroy_pointer_objects();
 
@@ -167,4 +171,9 @@ private:
     std::vector<InputRect> rects_;
     bool pointer_inside_ = false;
     std::vector<PointerEvent> pointer_events_;
+    uint32_t enter_serial_ = 0;
+    struct wl_cursor_theme* cursor_theme_ = nullptr;
+    wl_surface* cursor_surface_ = nullptr;
+    std::string cursor_;          // wanted
+    std::string applied_cursor_;  // set since the last pointer enter
 };

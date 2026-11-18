@@ -20,8 +20,8 @@
 //!
 //!   Rare/magic items get a trade site search instead of a poe.ninja price
 //!   (status "trade"), with their mods as toggleable filters:
-//!     filter   <index> <1|0 enabled> <label>
-//!     listing  <amount> <currency name> <chaos value|""> <seller>
+//!     filter   <index> <1|0 enabled> <label> <minimum|"">
+//!     listing  <amount> <currency name> <chaos value|""> <age, e.g. "5m"|"">
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
 //!   request:  "TRADE\n" + comma-separated enabled filter indices + "\n" +
@@ -238,11 +238,12 @@ fn trade_response(state: &State, item: &item::Item, enabled: Option<&[usize]>, d
         Ok(r) => {
             let _ = writeln!(out, "status\ttrade\ntitle\t{}", clean(&title));
             for (i, (f, on)) in r.filters.iter().zip(&r.enabled).enumerate() {
-                let _ = writeln!(out, "filter\t{i}\t{}\t{}", *on as u8, clean(&f.label));
+                let min = f.min.map(|m| m.to_string()).unwrap_or_default();
+                let _ = writeln!(out, "filter\t{i}\t{}\t{}\t{min}", *on as u8, clean(&f.label));
             }
             for l in &r.listings {
                 let chaos = l.chaos.map(|c| format!("{c:.2}")).unwrap_or_default();
-                let _ = writeln!(out, "listing\t{}\t{}\t{chaos}\t{}", l.amount, clean(&l.currency), clean(&l.account));
+                let _ = writeln!(out, "listing\t{}\t{}\t{chaos}\t{}", l.amount, clean(&l.currency), l.age);
             }
             let _ = writeln!(out, "total\t{}\nurl\t{}", r.total, clean(&r.url));
         }

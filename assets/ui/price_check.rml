@@ -1,0 +1,59 @@
+<rml>
+<head>
+    <title>Price check</title>
+    <link type="text/rcss" href="theme.rcss"/>
+</head>
+<body data-model="ui">
+<div id="panel">
+    <handle id="head" move_target="#document">
+        <div id="close" data-event-click="close">×</div>
+        <div data-if="name != ''" data-attr-class="'title ' + rarity">{{name}}</div>
+        <div data-attr-class="(name != '' ? 'base ' : 'title ') + rarity">{{base}}</div>
+        <div class="subtitle" data-if="subtitle != ''">{{subtitle}}</div>
+    </handle>
+
+    <div class="status" data-if="state == 'status'" data-class-error="status_error">{{status}}</div>
+
+    <div class="section" data-if="state == 'prices'">
+        <div data-for="p : prices" data-attr-class="prices.size > 1 ? 'price compact' : 'price'">
+            <span class="label" data-if="p.label != ''">{{p.label}}</span>
+            <span class="main">{{p.main}}</span>
+            <span class="sub" data-if="p.sub != ''">{{p.sub}}</span>
+        </div>
+        <div class="meta">
+            <span class="tag" data-if="thin != ''">{{thin}}</span>
+            <span>{{source}}</span>
+        </div>
+    </div>
+
+    <div data-if="state == 'trade'">
+        <div class="filters">
+            <div data-for="f : filters" data-attr-class="f.enabled ? 'filter' : 'filter off'"
+                 data-event-click="toggle_filter(f.index)">
+                <div class="switch"><div class="knob"/></div>
+                <div class="mod">{{f.label}}</div>
+                <div class="min" data-if="f.min != ''">{{f.min}}+</div>
+            </div>
+        </div>
+        <div class="results">
+            <div class="results-head">
+                <span>Cheapest of {{total}} online</span>
+                <span>{{searching ? 'Searching…' : source}}</span>
+            </div>
+            <div class="error" data-if="status != ''">{{status}}</div>
+            <div class="listing" data-for="l : listings">
+                <div class="coin"/>
+                <div class="amount">{{l.price}} <span class="sub">{{l.sub}}</span></div>
+                <div class="age">{{l.age}}</div>
+            </div>
+            <div class="empty" data-if="listings.size == 0 &amp;&amp; !searching">No listings. Turn off a filter to widen the search.</div>
+            <div class="actions" data-if="has_url">
+                <div class="button" data-event-click="open_trade">Open on trade site</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hint">Esc closes</div>
+</div>
+</body>
+</rml>

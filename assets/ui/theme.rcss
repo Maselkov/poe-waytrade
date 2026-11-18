@@ -1,0 +1,152 @@
+/* Theme for the overlay. `@define $name value;` lines are substituted by
+   the loader (RCSS has no variables). Edit live with POE_OVERLAY_UI_DIR. */
+
+@define $accent #5b4fb0;
+@define $accent-text #e4e0fa;
+@define $panel #111317;
+@define $panel-border #262a31;
+@define $divider #1f232a;
+@define $text #d7dae0;
+@define $text-strong #f3f4f6;
+@define $text-muted #8b919c;
+@define $text-faint #5d636e;
+@define $chip #1b1f26;
+@define $off #2c313a;
+@define $price #f0d68a;
+@define $mod #aab8ff;
+@define $warn-bg #2a1f12;
+@define $warn #e2a35a;
+@define $error #f0857a;
+
+@define $normal #c8c8c8;
+@define $magic #8888ff;
+@define $rare #ffff77;
+@define $unique #d0743a;
+@define $gem #1ba29b;
+@define $currency #c8bfa8;
+@define $card #c8c8c8;
+
+body, div, span, handle { display: block; }
+span { display: inline; }
+
+body {
+    position: absolute;
+    left: 40dp;
+    top: 40dp;
+    width: 300dp;
+    font-family: Inter;
+    font-size: 12dp;
+    color: $text;
+}
+
+#panel {
+    background-color: $panel;
+    border: 1dp $panel-border;
+    border-radius: 12dp;
+}
+
+/* Header: the item, PoE-tooltip style. Dragging it moves the panel. */
+#head {
+    position: relative;
+    padding: 12dp 28dp 10dp;
+    text-align: center;
+    border-bottom: 1dp $divider;
+    cursor: move;
+}
+#close {
+    position: absolute;
+    right: 8dp;
+    top: 6dp;
+    width: 20dp;
+    height: 20dp;
+    line-height: 20dp;
+    text-align: center;
+    font-size: 15dp;
+    color: $text-faint;
+    border-radius: 6dp;
+    cursor: pointer;
+}
+#close:hover { color: $text-strong; background-color: $chip; }
+
+.title { font-family: Cinzel; font-size: 17dp; letter-spacing: 0.5dp; }
+.base { font-family: Cinzel; font-size: 13dp; }
+.subtitle { font-size: 11dp; color: $text-muted; margin-top: 3dp; }
+
+.normal { color: $normal; }
+.magic { color: $magic; }
+.rare { color: $rare; }
+.unique { color: $unique; }
+.gem { color: $gem; }
+.currency { color: $currency; }
+.card { color: $card; }
+
+.section { padding: 8dp 14dp 12dp; }
+.status { padding: 12dp 14dp; color: $text-muted; text-align: center; }
+.error { color: $error; }
+
+/* poe.ninja prices */
+.price { display: flex; align-items: baseline; justify-content: center; padding: 3dp 0; }
+.price .label { color: $text-muted; margin-right: 8dp; }
+.price .main { font-size: 22dp; font-weight: 500; color: $price; }
+.price.compact .main { font-size: 15dp; }
+.price .sub { font-size: 12dp; color: $text-muted; margin-left: 8dp; }
+.meta { display: flex; justify-content: center; margin-top: 6dp; font-size: 11dp; color: $text-faint; }
+.tag { background-color: $warn-bg; color: $warn; border-radius: 6dp; padding: 2dp 8dp; margin-right: 8dp; }
+
+/* Trade filters */
+.filters { padding: 6dp 14dp; }
+.filter { display: flex; align-items: center; padding: 5dp 0; cursor: pointer; }
+.switch {
+    width: 26dp;
+    height: 15dp;
+    border-radius: 8dp;
+    background-color: $accent;
+    margin-right: 8dp;
+    flex-shrink: 0;
+    transition: background-color 0.12s cubic-out;
+}
+.knob {
+    width: 11dp;
+    height: 11dp;
+    margin: 2dp 0 0 13dp;
+    border-radius: 6dp;
+    background-color: $accent-text;
+    transition: margin-left background-color 0.12s cubic-out;
+}
+.filter.off .switch { background-color: $off; }
+.filter.off .knob { margin-left: 2dp; background-color: #6b707a; }
+.mod { flex: 1; color: $mod; }
+.filter.off .mod { color: $text-muted; }
+.min { background-color: $chip; border-radius: 6dp; padding: 2dp 8dp; color: $text-strong; margin-left: 8dp; }
+.filter.off .min { background-color: transparent; color: $text-faint; }
+
+/* Trade results */
+.results { border-top: 1dp $divider; padding: 8dp 14dp 12dp; }
+.results-head { display: flex; justify-content: space-between; font-size: 11dp; color: $text-muted; margin-bottom: 4dp; }
+.listing { display: flex; align-items: center; padding: 5dp 0; }
+.coin { width: 12dp; height: 12dp; border-radius: 6dp; background-color: #c9a24f; margin-right: 8dp; flex-shrink: 0; }
+.amount { flex: 1; color: $price; font-weight: 500; }
+.amount .sub { color: $text-muted; font-weight: 400; }
+.age { color: $text-faint; }
+.empty { color: $text-muted; padding: 6dp 0; }
+
+.actions { display: flex; margin-top: 8dp; }
+.button {
+    flex: 1;
+    text-align: center;
+    border-radius: 8dp;
+    padding: 6dp;
+    font-weight: 500;
+    background-color: $accent;
+    color: $accent-text;
+    cursor: pointer;
+    transition: background-color 0.1s linear-out;
+}
+.button:hover { background-color: #6a5ec4; }
+.button:active { background-color: #4d4296; }
+
+.hint { text-align: center; font-size: 10dp; color: $text-faint; padding: 0 0 8dp; }
+
+/* Debug panel */
+#debug { left: auto; right: 40dp; width: 340dp; }
+#debug .line { padding: 1dp 14dp; font-size: 11dp; }
