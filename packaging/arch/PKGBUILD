@@ -1,23 +1,40 @@
 # Builds from the local checkout this file lives in.
 #   cd packaging/arch && makepkg -si
 pkgname=poe-overlay
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
-pkgdesc="In-game Vulkan overlay prototype for Path of Exile (Wayland hotkeys)"
+pkgdesc="In-game Vulkan price-check overlay for Path of Exile on Wayland"
 arch=('x86_64')
 license=('unknown')
-depends=('vulkan-icd-loader' 'wayland')
-makedepends=('cmake' 'ninja' 'vulkan-headers')
+depends=('vulkan-icd-loader' 'wayland' 'gcc-libs' 'glibc')
+makedepends=('cmake' 'ninja' 'vulkan-headers' 'cargo')
+install=poe-overlay.install
 
 _srcroot="$(realpath "$startdir/../..")"
+
+prepare() {
+  cargo fetch --locked --manifest-path "$_srcroot/daemon/Cargo.toml" \
+    --target "$(rustc -vV | sed -n 's/host: //p')"
+}
 
 build() {
   cmake -S "$_srcroot" -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=None \
     -DCMAKE_INSTALL_PREFIX=/usr
   cmake --build build
+
+  export CARGO_TARGET_DIR="$srcdir/target"
+  cargo build --frozen --release --manifest-path "$_srcroot/daemon/Cargo.toml"
+}
+
+check() {
+  export CARGO_TARGET_DIR="$srcdir/target"
+  cargo test --frozen --release --manifest-path "$_srcroot/daemon/Cargo.toml"
 }
 
 package() {
   DESTDIR="$pkgdir" cmake --install build
+  install -Dm755 "$srcdir/target/release/poe-overlay-daemon" "$pkgdir/usr/bin/poe-overlay-daemon"
+  install -Dm644 "$_srcroot/packaging/poe-overlay-daemon.service" \
+    "$pkgdir/usr/lib/systemd/user/poe-overlay-daemon.service"
 }

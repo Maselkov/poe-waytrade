@@ -1,0 +1,12 @@
+[Unit]
+Description=Price lookups for the poe-overlay Vulkan layer
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/poe-overlay-daemon
+Restart=on-failure
+# Pin a league instead of following poe.ninja's current one:
+# Environment=POE_LEAGUE=Standard
+
+[Install]
+WantedBy=default.target

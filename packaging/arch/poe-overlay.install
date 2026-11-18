@@ -1,0 +1,9 @@
+post_install() {
+  echo "Start the price daemon for your user with:"
+  echo "  systemctl --user enable --now poe-overlay-daemon"
+}
+
+post_upgrade() {
+  echo "Restart the price daemon to pick up the new version:"
+  echo "  systemctl --user restart poe-overlay-daemon"
+}

@@ -1,0 +1,124 @@
+#include "daemon_client.h"
+
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+
+namespace {
+
+constexpr char kSocketName[] = "poe-overlay";
+constexpr auto kTimeout = std::chrono::seconds(3);
+constexpr size_t kMaxReply = 64 * 1024;
+
+std::string frame(const std::string& body) {
+    uint32_t len = (uint32_t)body.size();
+    std::string out(reinterpret_cast<const char*>(&len), 4);  // little-endian on x86
+    return out + body;
+}
+
+std::vector<std::string> split(const std::string& s, char sep) {
+    std::vector<std::string> parts;
+    size_t start = 0;
+    for (;;) {
+        size_t end = s.find(sep, start);
+        parts.push_back(s.substr(start, end - start));
+        if (end == std::string::npos) return parts;
+        start = end + 1;
+    }
+}
+
+PriceReply parse_reply(const std::string& body) {
+    PriceReply reply;
+    for (const std::string& line : split(body, '\n')) {
+        std::vector<std::string> f = split(line, '\t');
+        if (f.size() < 2) continue;
+        if (f[0] == "status") reply.status = f[1];
+        else if (f[0] == "message") reply.message = f[1];
+        else if (f[0] == "title") reply.title = f[1];
+        else if (f[0] == "league") reply.league = f[1];
+        else if (f[0] == "age") reply.age_minutes = atoi(f[1].c_str());
+        else if (f[0] == "price" && f.size() >= 5)
+            reply.prices.push_back({f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4]});
+    }
+    return reply;
+}
+
+}  // namespace
+
+void DaemonClient::request(const std::string& item_text) {
+    close_socket();
+    out_buf_ = frame("PRICE\n" + item_text);
+    out_sent_ = 0;
+    in_buf_.clear();
+    deadline_ = std::chrono::steady_clock::now() + kTimeout;
+
+    fd_ = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    if (fd_ < 0) return;  // poll() reports it
+
+    // Abstract address: leading NUL, no terminator, length covers the name.
+    sockaddr_un addr = {};
+    addr.sun_family = AF_UNIX;
+    memcpy(addr.sun_path + 1, kSocketName, sizeof(kSocketName) - 1);
+    socklen_t len = offsetof(sockaddr_un, sun_path) + 1 + sizeof(kSocketName) - 1;
+    if (connect(fd_, reinterpret_cast<sockaddr*>(&addr), len) != 0 && errno != EAGAIN &&
+        errno != EINPROGRESS) {
+        close_socket();
+    }
+}
+
+bool DaemonClient::poll(PriceReply* out) {
+    if (out_buf_.empty()) return false;  // no request pending
+    if (fd_ < 0) return fail(out, "Price daemon isn't running (systemctl --user start poe-overlay-daemon)");
+    if (std::chrono::steady_clock::now() > deadline_) return fail(out, "Price daemon didn't answer");
+
+    while (out_sent_ < out_buf_.size()) {
+        ssize_t n = send(fd_, out_buf_.data() + out_sent_, out_buf_.size() - out_sent_, MSG_NOSIGNAL);
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EINTR) return false;
+            return fail(out, std::string("Price daemon: ") + strerror(errno));
+        }
+        out_sent_ += n;
+    }
+
+    char chunk[4096];
+    for (;;) {
+        ssize_t n = recv(fd_, chunk, sizeof(chunk), 0);
+        if (n > 0) {
+            in_buf_.append(chunk, n);
+            if (in_buf_.size() > kMaxReply + 4) return fail(out, "Price daemon reply too large");
+            continue;
+        }
+        if (n < 0 && (errno == EAGAIN || errno == EINTR)) break;
+        break;  // EOF or error: check below whether the reply is complete
+    }
+
+    if (in_buf_.size() < 4) return false;
+    uint32_t len;
+    memcpy(&len, in_buf_.data(), 4);
+    if (in_buf_.size() < 4 + (size_t)len) return false;
+
+    *out = parse_reply(in_buf_.substr(4, len));
+    close_socket();
+    out_buf_.clear();
+    return true;
+}
+
+bool DaemonClient::fail(PriceReply* out, const std::string& message) {
+    *out = PriceReply{};
+    out->status = "error";
+    out->message = message;
+    close_socket();
+    out_buf_.clear();
+    return true;
+}
+
+void DaemonClient::close_socket() {
+    if (fd_ >= 0) close(fd_);
+    fd_ = -1;
+}

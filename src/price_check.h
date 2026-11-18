@@ -1,6 +1,8 @@
-// Price-check flow: hotkey -> Ctrl+C -> wait for clipboard -> show the item.
+// Price-check flow: hotkey -> Ctrl+C -> wait for clipboard -> show the item
+// -> ask the daemon for prices.
 #pragma once
 
+#include "daemon_client.h"
 #include "item_text.h"
 #include "uinput_kbd.h"
 
@@ -22,6 +24,7 @@ public:
 private:
     void request_copy(WaylandInput& input);
     void wait_for_clipboard(WaylandInput& input, Clock::time_point now);
+    void draw_prices();
 
     UinputKeyboard keyboard_;
     bool release_pending_ = false;  // keys go down one frame, up the next
@@ -30,6 +33,9 @@ private:
     bool waiting_ = false;
     uint64_t seq_at_request_ = 0;
     Clock::time_point deadline_;
+
+    DaemonClient daemon_;
+    std::optional<PriceReply> reply_;
 
     bool visible_ = false;
     std::optional<ParsedItem> item_;

@@ -6,6 +6,9 @@
 
 #include <linux/input-event-codes.h>
 
+#include <cstdio>
+#include <cstdlib>
+
 namespace {
 
 // PoE copies the item within a frame or two; this is generous.
@@ -50,6 +53,9 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     }
 
     if (waiting_) wait_for_clipboard(input, now);
+
+    PriceReply reply;
+    if (daemon_.poll(&reply)) reply_ = std::move(reply);
 }
 
 void PriceCheck::request_copy(WaylandInput& input) {
@@ -77,6 +83,8 @@ void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) 
         item_ = parse_item_text(input.clipboard_text());
         status_ = item_ ? "" : "Copied text isn't a PoE item";
         visible_ = true;
+        reply_.reset();
+        if (item_) daemon_.request(input.clipboard_text());
     } else if (now > deadline_) {
         waiting_ = false;
         item_.reset();
@@ -105,11 +113,43 @@ void PriceCheck::draw() {
             for (const auto& line : section) ImGui::TextUnformatted(line.c_str());
         }
         ImGui::Separator();
-        ImGui::TextDisabled("Prices: not implemented yet");
+        draw_prices();
     }
     if (!status_.empty()) ImGui::TextDisabled("%s", status_.c_str());
     ImGui::TextDisabled("Esc closes");
 
     ImGui::PopTextWrapPos();
     ImGui::End();
+}
+
+void PriceCheck::draw_prices() {
+    if (!reply_) {
+        ImGui::TextDisabled(daemon_.busy() ? "Checking price..." : "No price");
+        return;
+    }
+    if (reply_->status != "ok") {
+        ImGui::TextDisabled("%s", reply_->message.empty() ? reply_->status.c_str() : reply_->message.c_str());
+    }
+    for (const PriceLine& p : reply_->prices) {
+        char value[64];
+        if (p.divine >= 1.0)
+            snprintf(value, sizeof(value), "%.1f div  (%.0fc)", p.divine, p.chaos);
+        else
+            snprintf(value, sizeof(value), p.chaos < 10 ? "%.1fc" : "%.0fc", p.chaos);
+
+        if (!p.label.empty()) {
+            ImGui::TextUnformatted(p.label.c_str());
+            ImGui::SameLine();
+        }
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.4f, 1), "%s", value);
+        if (!p.listings.empty()) {
+            ImGui::SameLine();
+            // Few listings: poe.ninja's number is a guess at best.
+            bool thin = atoi(p.listings.c_str()) < 5;
+            ImGui::TextColored(thin ? ImVec4(1, 0.5f, 0.4f, 1) : ImVec4(0.6f, 0.6f, 0.6f, 1), "%s listed",
+                               p.listings.c_str());
+        }
+    }
+    if (!reply_->league.empty())
+        ImGui::TextDisabled("poe.ninja | %s | %d min old", reply_->league.c_str(), reply_->age_minutes);
 }
