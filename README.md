@@ -6,7 +6,7 @@ Wayland connection. Works with Path of Exile running under Proton as a
 **native Wayland** client.
 
 Hover an item and press a hotkey; the layer sends Ctrl+C, reads the item text
-PoE copies, and shows it in a panel beside the cursor with its price
+PoE copies, and shows it in a panel with its price
 (poe.ninja, via a small daemon). PoE1 only for now. Modelled on Awakened PoE
 Trade:
 
@@ -16,6 +16,9 @@ Trade:
 - **Ctrl+Alt+D**: a panel that stays open until you click its close button
   or click anywhere in the game.
 - Your own Ctrl+C on an item opens a quick look too.
+- Like APT, the panel sits right next to PoE's inventory when you check an
+  item there (or next to the stash for items on the left half of the
+  screen). PoE's side panels are 986/1600 of the window height wide.
 
 The game keeps keyboard focus (the panel is part of its window), so the
 overlay never uses keys PoE does; in particular there's no Esc to close.

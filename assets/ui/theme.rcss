@@ -45,13 +45,12 @@ body {
     border-radius: 12dp;
 }
 
-/* Header: the item, PoE-tooltip style. Dragging it moves the panel. */
+/* Header: the item, PoE-tooltip style. */
 #head {
     position: relative;
     padding: 12dp 28dp 10dp;
     text-align: center;
     border-bottom: 1dp $divider;
-    cursor: move;
 }
 #close {
     position: absolute;

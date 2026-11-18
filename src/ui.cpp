@@ -462,19 +462,21 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     handle.DirtyAllVariables();
 }
 
-// A new check opens the panel beside the cursor, on the side away from the
-// item (like Awakened PoE Trade), so it doesn't cover what you hovered.
+// Like Awakened PoE Trade: an item checked in the inventory (right half)
+// gets the panel right against the inventory's left edge, one in the stash
+// (left half) right against the stash's right edge. PoE's side panels are
+// 986/1600 of the window height wide.
 void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
     if (pc.check_id() == placed_check) return;
     placed_check = pc.check_id();
     auto it = docs.find(kDocuments[0]);
     float ax, ay;
     if (it == docs.end() || !pc.anchor(&ax, &ay)) return;
-    float dp = context->GetDensityIndependentPixelRatio();
-    float width = 300 * dp, gap = 32 * dp;
-    float left = ax > extent.width / 2.0f ? ax - gap - width : ax + gap;
+    float panel = extent.height * 986.0f / 1600.0f;
+    float width = 300 * context->GetDensityIndependentPixelRatio();
+    float left = ax > extent.width / 2.0f ? extent.width - panel - width : panel;
     it->second->SetProperty(Rml::PropertyId::Left, Rml::Property(left, Rml::Unit::PX));
-    it->second->SetProperty(Rml::PropertyId::Top, Rml::Property(ay - 60 * dp, Rml::Unit::PX));
+    it->second->SetProperty(Rml::PropertyId::Top, Rml::Property(extent.height * 0.08f, Rml::Unit::PX));
 }
 
 bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
