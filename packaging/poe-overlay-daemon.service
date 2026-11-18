@@ -1,12 +1,11 @@
 [Unit]
 Description=Price lookups for the poe-overlay Vulkan layer
+Requires=poe-overlay-daemon.socket
 After=network-online.target
 
+# Started on demand by poe-overlay-daemon.socket; exits after 30 min idle.
 [Service]
 ExecStart=/usr/bin/poe-overlay-daemon
 Restart=on-failure
 # Pin a league instead of following poe.ninja's current one:
 # Environment=POE_LEAGUE=Standard
-
-[Install]
-WantedBy=default.target

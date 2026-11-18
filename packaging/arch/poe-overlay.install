@@ -1,9 +1,25 @@
+# The price daemon is socket-activated: enabling the socket for every user
+# means nothing has to be started by hand, and nothing runs until the game
+# asks for a price.
+
 post_install() {
-  echo "Start the price daemon for your user with:"
-  echo "  systemctl --user enable --now poe-overlay-daemon"
+  systemctl --global enable poe-overlay-daemon.socket
+  echo "The price daemon starts automatically from your next login."
+  echo "To use it right away:  systemctl --user start poe-overlay-daemon.socket"
 }
 
 post_upgrade() {
-  echo "Restart the price daemon to pick up the new version:"
-  echo "  systemctl --user restart poe-overlay-daemon"
+  systemctl --global enable poe-overlay-daemon.socket
+  if [ "$(vercmp "$2" 0.3.1)" -lt 0 ]; then
+    echo "The daemon is now socket-activated. Switch over with:"
+    echo "  systemctl --user disable --now poe-overlay-daemon.service"
+    echo "  systemctl --user start poe-overlay-daemon.socket"
+  else
+    echo "Restart the price daemon to pick up the new version:"
+    echo "  systemctl --user stop poe-overlay-daemon.service"
+  fi
+}
+
+pre_remove() {
+  systemctl --global disable poe-overlay-daemon.socket
 }

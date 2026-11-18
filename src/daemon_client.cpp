@@ -51,9 +51,9 @@ PriceReply parse_reply(const std::string& body) {
 
 }  // namespace
 
-void DaemonClient::request(const std::string& item_text) {
+void DaemonClient::start(const std::string& body) {
     close_socket();
-    out_buf_ = frame("PRICE\n" + item_text);
+    out_buf_ = frame(body);
     out_sent_ = 0;
     in_buf_.clear();
     deadline_ = std::chrono::steady_clock::now() + kTimeout;
@@ -74,7 +74,7 @@ void DaemonClient::request(const std::string& item_text) {
 
 bool DaemonClient::poll(PriceReply* out) {
     if (out_buf_.empty()) return false;  // no request pending
-    if (fd_ < 0) return fail(out, "Price daemon isn't running (systemctl --user start poe-overlay-daemon)");
+    if (fd_ < 0) return fail(out, "Price daemon isn't running (systemctl --user start poe-overlay-daemon.socket)");
     if (std::chrono::steady_clock::now() > deadline_) return fail(out, "Price daemon didn't answer");
 
     while (out_sent_ < out_buf_.size()) {

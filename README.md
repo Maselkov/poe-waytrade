@@ -46,6 +46,9 @@ beasts. Rare and magic items need a trade search, which isn't implemented.
   `SO_PEERCRED`). It loads poe.ninja's PoE1 data for the current league at
   start and every 15 minutes, so lookups never wait on the network. The
   protocol is described at the top of `daemon/src/main.rs`.
+  It's socket-activated: systemd owns `@poe-overlay`, starts the daemon on
+  the first connection and the daemon exits after 30 minutes idle. The layer
+  pings it when the game starts, so prices are loaded by the first lookup.
 
 The `.so` exports only the three loader entry points and links libstdc++
 statically, so its ImGui can't clash with another one in the process
@@ -75,14 +78,16 @@ cargo run --release -- query item.txt            # ask a running daemon
 
 ```bash
 cd packaging/arch && makepkg -si
-systemctl --user enable --now poe-overlay-daemon
 ```
 
 This installs the layer (`/usr/lib/libVkLayer_poe_overlay.so` plus a manifest
 in `/usr/share/vulkan/implicit_layer.d/`), `/usr/bin/poe-overlay-daemon` and
-its systemd user unit; remove with `pacman -R poe-overlay`. The daemon
-follows poe.ninja's current softcore league; set `POE_LEAGUE` in the unit
-(`systemctl --user edit poe-overlay-daemon`) to pin one.
+its systemd user socket + service, and enables the socket for all users
+(`systemctl --global`), so there is nothing to start by hand from the next
+login on (`systemctl --user start poe-overlay-daemon.socket` for the current
+one). Remove with `pacman -R poe-overlay`. The daemon follows poe.ninja's
+current softcore league; set `POE_LEAGUE` in the service
+(`systemctl --user edit poe-overlay-daemon.service`) to pin one.
 
 ## Use with Path of Exile
 

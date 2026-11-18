@@ -17,6 +17,9 @@ class PriceCheck {
 public:
     using Clock = std::chrono::steady_clock;
 
+    // Created with the game's device: wakes the daemon right away.
+    PriceCheck() { wake_.ping(); }
+
     // Once per frame: update() before ImGui::NewFrame(), draw() inside it.
     void update(WaylandInput& input, Clock::time_point now);
     void draw();
@@ -35,6 +38,7 @@ private:
     Clock::time_point deadline_;
 
     DaemonClient daemon_;
+    DaemonClient wake_;  // reply ignored
     std::optional<PriceReply> reply_;
 
     bool visible_ = false;

@@ -56,6 +56,7 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
 
     PriceReply reply;
     if (daemon_.poll(&reply)) reply_ = std::move(reply);
+    if (wake_.poll(&reply) && reply.status == "error") poe_log("daemon wake-up: %s", reply.message.c_str());
 }
 
 void PriceCheck::request_copy(WaylandInput& input) {

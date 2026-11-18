@@ -1,0 +1,9 @@
+[Unit]
+Description=Socket for poe-overlay price lookups
+
+[Socket]
+# Abstract socket: reachable from inside Steam's runtime container.
+ListenStream=@poe-overlay
+
+[Install]
+WantedBy=sockets.target

@@ -27,8 +27,11 @@ class DaemonClient {
 public:
     ~DaemonClient() { close_socket(); }
 
-    // Starts a lookup, dropping any request still in flight.
-    void request(const std::string& item_text);
+    // Start a request, dropping any still in flight: a price lookup, or a
+    // ping that just makes systemd start the daemon so prices are loaded by
+    // the first lookup.
+    void request(const std::string& item_text) { start("PRICE\n" + item_text); }
+    void ping() { start("PING\n"); }
     bool busy() const { return fd_ >= 0; }
 
     // Advances I/O. Returns true exactly once per request, when *out holds
@@ -36,6 +39,7 @@ public:
     bool poll(PriceReply* out);
 
 private:
+    void start(const std::string& body);
     bool fail(PriceReply* out, const std::string& message);
     void close_socket();
 

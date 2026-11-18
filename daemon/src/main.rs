@@ -14,6 +14,14 @@
 //!     price    <label> <chaos> <divine> <listings|"">  (status ok, 1+)
 //!     league   <name>
 //!     age      <minutes since prices were fetched>
+//!
+//!   request:  "PING\n"   (sent by the layer at game start to wake us up)
+//!   response: status ready | loading
+//!
+//! Normally started by systemd socket activation (poe-overlay-daemon.socket):
+//! systemd owns the socket, starts us on the first connection, and we exit
+//! after a while without requests. Run by hand, we bind the socket ourselves
+//! and stay up.
 
 mod item;
 mod lookup;
@@ -21,21 +29,24 @@ mod ninja;
 
 use std::fmt::Write as _;
 use std::io::{self, Read, Write};
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::linux::net::SocketAddrExt;
 use std::os::unix::net::{SocketAddr, UnixListener, UnixStream};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const SOCKET_NAME: &[u8] = b"poe-overlay";
 const MAX_FRAME: usize = 256 * 1024;
 const REFRESH: Duration = Duration::from_secs(15 * 60);
 const RETRY: Duration = Duration::from_secs(60);
+/// When socket-activated, exit after this long without requests.
+const DEFAULT_IDLE: Duration = Duration::from_secs(30 * 60);
 
 struct State {
     db: RwLock<Option<Arc<ninja::PriceDb>>>,
     last_error: Mutex<Option<String>>,
+    last_request: Mutex<Instant>,
 }
 
 fn main() {
@@ -50,20 +61,42 @@ fn main() {
         });
     }
 
-    let addr = SocketAddr::from_abstract_name(SOCKET_NAME).expect("socket name");
-    let listener = match UnixListener::bind_addr(&addr) {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("can't listen on @poe-overlay ({e}); is another daemon running?");
-            std::process::exit(1);
+    let state = Arc::new(State {
+        db: RwLock::new(None),
+        last_error: Mutex::new(None),
+        last_request: Mutex::new(Instant::now()),
+    });
+
+    let listener = match systemd_listener() {
+        Some(l) => {
+            let idle = std::env::var("POE_OVERLAY_IDLE_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .map(Duration::from_secs)
+                .unwrap_or(DEFAULT_IDLE);
+            let watched = state.clone();
+            thread::spawn(move || exit_when_idle(&watched, idle));
+            eprintln!("socket-activated; exiting after {}s idle", idle.as_secs());
+            l
+        }
+        None => {
+            let addr = SocketAddr::from_abstract_name(SOCKET_NAME).expect("socket name");
+            match UnixListener::bind_addr(&addr) {
+                Ok(l) => {
+                    eprintln!("listening on @poe-overlay");
+                    l
+                }
+                Err(e) => {
+                    eprintln!("can't listen on @poe-overlay ({e}); is another daemon running?");
+                    std::process::exit(1);
+                }
+            }
         }
     };
 
-    let state = Arc::new(State { db: RwLock::new(None), last_error: Mutex::new(None) });
     let refresher = state.clone();
     thread::spawn(move || refresh_loop(&refresher));
 
-    eprintln!("listening on @poe-overlay");
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
         let state = state.clone();
@@ -72,6 +105,36 @@ fn main() {
                 eprintln!("client: {e}");
             }
         });
+    }
+}
+
+/// The listening socket systemd passed us (sd_listen_fds convention: fd 3),
+/// if we were socket-activated.
+fn systemd_listener() -> Option<UnixListener> {
+    let pid: u32 = std::env::var("LISTEN_PID").ok()?.parse().ok()?;
+    let fds: u32 = std::env::var("LISTEN_FDS").ok()?.parse().ok()?;
+    if pid != std::process::id() || fds < 1 {
+        return None;
+    }
+    // SAFETY: single-threaded at this point; children shouldn't inherit these.
+    unsafe {
+        std::env::remove_var("LISTEN_PID");
+        std::env::remove_var("LISTEN_FDS");
+        std::env::remove_var("LISTEN_FDNAMES");
+    }
+    // SAFETY: systemd hands us fd 3 and nothing else owns it.
+    Some(unsafe { UnixListener::from_raw_fd(3) })
+}
+
+/// Exiting is safe: systemd keeps the socket open, queues new connections,
+/// and starts us again for the next one.
+fn exit_when_idle(state: &State, idle: Duration) {
+    loop {
+        thread::sleep(Duration::from_secs(10).min(idle));
+        if state.last_request.lock().unwrap().elapsed() >= idle {
+            eprintln!("no requests for {}s, exiting", idle.as_secs());
+            std::process::exit(0);
+        }
     }
 }
 
@@ -113,9 +176,14 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
 
     let request = read_frame(&mut stream)?;
-    let response = match request.strip_prefix("PRICE\n") {
-        Some(text) => respond(state, text),
-        None => "status\tbad_request\nmessage\tUnknown request\n".to_string(),
+    *state.last_request.lock().unwrap() = Instant::now();
+    let response = if let Some(text) = request.strip_prefix("PRICE\n") {
+        respond(state, text)
+    } else if request == "PING\n" {
+        let ready = state.db.read().unwrap().is_some();
+        format!("status\t{}\n", if ready { "ready" } else { "loading" })
+    } else {
+        "status\tbad_request\nmessage\tUnknown request\n".to_string()
     };
     write_frame(&mut stream, &response)
 }
