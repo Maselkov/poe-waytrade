@@ -293,7 +293,8 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
             ImGui::Text("Last key: %u %s", input->last_key(), input->last_key_down() ? "down" : "up");
             ImGui::Text("Clipboard: #%llu, %zu bytes", (unsigned long long)input->clipboard_seq(),
                         input->clipboard_text().size());
-            ImGui::Text("Pointer over overlay: %s", input->pointer_inside() ? "yes" : "no");
+            ImGui::Text("Pointer over overlay: %s  (scale %.3f)", input->pointer_inside() ? "yes" : "no",
+                        input->scale());
             if (ImGui::Button("Test click")) ov.test_clicks++;
             ImGui::SameLine();
             ImGui::Text("clicked %d times", ov.test_clicks);

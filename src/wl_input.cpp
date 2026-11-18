@@ -86,6 +86,7 @@ const wl_data_device_listener data_device_listener = {
 }  // namespace
 
 WaylandInput::WaylandInput(wl_display* display, wl_surface* parent) : display_(display), parent_(parent) {
+    init_scale_policy();
     queue_ = wl_display_create_queue(display_);
     // Requests made through the wrapper put their new objects on our queue,
     // so the app's own event dispatching never sees them.

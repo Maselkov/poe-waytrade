@@ -35,6 +35,8 @@ struct wl_shm;
 struct wl_shm_pool;
 struct wl_buffer;
 struct wl_pointer;
+struct wp_fractional_scale_manager_v1;
+struct wp_fractional_scale_v1;
 
 enum class Hotkey {
     PriceCheck,  // Ctrl+D: we send Ctrl+C ourselves
@@ -42,7 +44,7 @@ enum class Hotkey {
     Close,       // Esc
 };
 
-// Positions are in swapchain pixels (assumes a compositor scale of 1).
+// Positions are in swapchain pixels.
 struct PointerEvent {
     enum Type { Motion, Leave, Button, Wheel } type;
     float x = 0, y = 0;  // Motion
@@ -69,6 +71,8 @@ public:
     void set_input_rects(const std::vector<InputRect>& rects, int width, int height);
     std::vector<PointerEvent> take_pointer_events() { return std::exchange(pointer_events_, {}); }
     bool pointer_inside() const { return pointer_inside_; }
+    // Swapchain pixels per Wayland logical unit.
+    double scale() const { return scale_; }
 
     // Non-blocking: read and dispatch whatever is pending on our queue, and
     // continue any clipboard transfer in progress.
@@ -101,9 +105,11 @@ public:
     void on_pointer_motion(double x, double y);
     void on_pointer_button(uint32_t button, uint32_t state);
     void on_pointer_axis(uint32_t axis, double value);
+    void on_preferred_scale(uint32_t scale_120);
 
 private:
     // wl_pointer.cpp
+    void init_scale_policy();
     void bind_pointer_globals(wl_registry* reg, uint32_t name, const char* iface, uint32_t version);
     void update_pointer(bool has_pointer);
     bool ensure_buffer(int w, int h);
@@ -152,7 +158,12 @@ private:
     wl_buffer* buffer_ = nullptr;
     int buffer_w_ = 0, buffer_h_ = 0;
     bool mapped_ = false;
-    int sub_x_ = 0, sub_y_ = 0;  // subsurface position on the game surface
+    int sub_x_ = 0, sub_y_ = 0;  // subsurface position on the game surface (logical)
+    // Swapchain pixels vs. logical units: see init_scale_policy().
+    double scale_ = 1.0;
+    bool follow_fractional_scale_ = false;
+    wp_fractional_scale_manager_v1* fractional_manager_ = nullptr;
+    wp_fractional_scale_v1* fractional_scale_ = nullptr;
     std::vector<InputRect> rects_;
     bool pointer_inside_ = false;
     std::vector<PointerEvent> pointer_events_;

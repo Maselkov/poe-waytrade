@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(poe_overlay CXX)
+project(poe_overlay C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,6 +13,24 @@ endif()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
 find_path(VULKAN_INCLUDE_DIR vulkan/vk_layer.h REQUIRED)
+
+# Client code for Wayland protocols outside the core one.
+pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
+set(PROTOCOL_DIR ${CMAKE_BINARY_DIR}/protocols)
+set(PROTOCOL_SOURCES)
+foreach(xml staging/fractional-scale/fractional-scale-v1.xml)
+  get_filename_component(name ${xml} NAME_WE)
+  set(header ${PROTOCOL_DIR}/${name}-client-protocol.h)
+  set(code ${PROTOCOL_DIR}/${name}-protocol.c)
+  add_custom_command(
+    OUTPUT ${header} ${code}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTOCOL_DIR}
+    COMMAND ${WAYLAND_SCANNER} client-header ${WAYLAND_PROTOCOLS_DIR}/${xml} ${header}
+    COMMAND ${WAYLAND_SCANNER} private-code ${WAYLAND_PROTOCOLS_DIR}/${xml} ${code}
+    DEPENDS ${WAYLAND_PROTOCOLS_DIR}/${xml})
+  list(APPEND PROTOCOL_SOURCES ${header} ${code})
+endforeach()
 
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
 
@@ -30,8 +48,9 @@ add_library(VkLayer_poe_overlay SHARED
   ${IMGUI_DIR}/imgui_tables.cpp
   ${IMGUI_DIR}/imgui_widgets.cpp
   ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+  ${PROTOCOL_SOURCES}
 )
-target_include_directories(VkLayer_poe_overlay PRIVATE ${IMGUI_DIR} ${VULKAN_INCLUDE_DIR})
+target_include_directories(VkLayer_poe_overlay PRIVATE ${IMGUI_DIR} ${VULKAN_INCLUDE_DIR} ${PROTOCOL_DIR})
 target_compile_definitions(VkLayer_poe_overlay PRIVATE
   VK_NO_PROTOTYPES
   IMGUI_IMPL_VULKAN_NO_PROTOTYPES

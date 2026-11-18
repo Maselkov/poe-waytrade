@@ -110,7 +110,9 @@ draws, but hotkeys and the clipboard are not implemented for X11 yet.
 ## Known limitations / next steps
 
 - Hotkeys are hard-coded (Ctrl+D, Esc) and still reach the game too.
-- Mouse input assumes a compositor scale of 1 (no HiDPI/fractional scaling).
+- Mouse input under fractional scaling assumes the app renders at full
+  resolution if it runs under Wine, at logical size otherwise;
+  `POE_OVERLAY_SCALE` overrides the pixel-per-logical-unit ratio.
 - No advanced copy (Ctrl+Alt+C) yet, so mod tiers/ranges aren't available.
 - No X11 input path (would be `XQueryKeymap` polling like MangoHud).
 - Only one device gets the overlay (ImGui's Vulkan backend is global).

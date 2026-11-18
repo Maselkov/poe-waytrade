@@ -4,6 +4,11 @@
 // its input region covers exactly the panels, so the compositor routes
 // pointer events there to us instead of the game. With no panel visible it
 // is unmapped, which also leaves direct scanout of a fullscreen game alone.
+//
+// The overlay works in swapchain pixels, Wayland in logical units. With
+// fractional scaling the two differ for apps that render at full resolution
+// and let the compositor scale down (Wine does), so everything sent to or
+// received from the compositor is converted by scale_.
 #include "wl_input.h"
 #include "layer.h"
 
@@ -14,9 +19,12 @@
 #include <algorithm>
 #include <cerrno>
 #include <climits>
+#include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 #include <wayland-client.h>
+#include "fractional-scale-v1-client-protocol.h"
 
 namespace {
 
@@ -57,12 +65,43 @@ const wl_pointer_listener pointer_listener = {
     .axis_discrete = ptr_axis_discrete,
 };
 
+void preferred_scale(void* data, wp_fractional_scale_v1*, uint32_t scale_120) {
+    self(data)->on_preferred_scale(scale_120);
+}
+const wp_fractional_scale_v1_listener fractional_scale_listener = {.preferred_scale = preferred_scale};
+
 int round_up(int v) { return (v + kBufferStep - 1) / kBufferStep * kBufferStep; }
 
 }  // namespace
 
+// We can't see the game surface's logical size, so the pixel/logical ratio
+// is inferred: Wine renders at the output's full resolution, so the ratio is
+// the compositor's fractional scale for our surface (which sits on the same
+// output). Apps that render at logical size (e.g. vkcube) have a ratio of 1.
+// POE_OVERLAY_SCALE overrides both.
+void WaylandInput::init_scale_policy() {
+    if (const char* s = getenv("POE_OVERLAY_SCALE")) {
+        double v = atof(s);
+        scale_ = v > 0 ? v : 1.0;
+        poe_log("wayland input: scale %.3f (POE_OVERLAY_SCALE)", scale_);
+        return;
+    }
+    follow_fractional_scale_ = getenv("WINEPREFIX") || getenv("WINELOADER") || getenv("WINEDLLPATH");
+}
+
+void WaylandInput::on_preferred_scale(uint32_t scale_120) {
+    double s = scale_120 / 120.0;
+    if (s <= 0 || s == scale_) return;
+    scale_ = s;
+    rects_.clear();  // re-place the subsurface next frame
+    poe_log("wayland input: scale %.3f (compositor)", scale_);
+}
+
 void WaylandInput::bind_pointer_globals(wl_registry* reg, uint32_t name, const char* iface, uint32_t version) {
-    if (!compositor_ && !strcmp(iface, wl_compositor_interface.name)) {
+    if (!fractional_manager_ && !strcmp(iface, wp_fractional_scale_manager_v1_interface.name)) {
+        fractional_manager_ = static_cast<wp_fractional_scale_manager_v1*>(
+            wl_registry_bind(reg, name, &wp_fractional_scale_manager_v1_interface, 1));
+    } else if (!compositor_ && !strcmp(iface, wl_compositor_interface.name)) {
         compositor_ = static_cast<wl_compositor*>(
             wl_registry_bind(reg, name, &wl_compositor_interface, std::min(version, 4u)));
     } else if (!subcompositor_ && !strcmp(iface, wl_subcompositor_interface.name)) {
@@ -105,15 +144,25 @@ void WaylandInput::set_input_rects(const std::vector<InputRect>& rects, int widt
         input_subsurface_ = wl_subcompositor_get_subsurface(subcompositor_, input_surface_, parent_);
         // Apply our commits right away instead of with the game's next one.
         wl_subsurface_set_desync(input_subsurface_);
+        if (follow_fractional_scale_ && fractional_manager_) {
+            fractional_scale_ = wp_fractional_scale_manager_v1_get_fractional_scale(fractional_manager_, input_surface_);
+            wp_fractional_scale_v1_add_listener(fractional_scale_, &fractional_scale_listener, this);
+        }
         poe_log("wayland input: input subsurface created");
     }
 
+    // Everything below is in logical units.
+    auto lo = [this](int px) { return (int)floor(px / scale_); };
+    auto hi = [this](int px) { return (int)ceil(px / scale_); };
+    width = lo(width);
+    height = lo(height);
+
     int x0 = INT_MAX, y0 = INT_MAX, x1 = INT_MIN, y1 = INT_MIN;
     for (const InputRect& r : rects) {
-        x0 = std::min(x0, r.x - kMargin);
-        y0 = std::min(y0, r.y - kMargin);
-        x1 = std::max(x1, r.x + r.w + kMargin);
-        y1 = std::max(y1, r.y + r.h + kMargin);
+        x0 = std::min(x0, lo(r.x) - kMargin);
+        y0 = std::min(y0, lo(r.y) - kMargin);
+        x1 = std::max(x1, hi(r.x + r.w) + kMargin);
+        y1 = std::max(y1, hi(r.y + r.h) + kMargin);
     }
     x0 = std::max(x0, 0);
     y0 = std::max(y0, 0);
@@ -131,8 +180,10 @@ void WaylandInput::set_input_rects(const std::vector<InputRect>& rects, int widt
     }
 
     wl_region* region = wl_compositor_create_region(compositor_);
-    for (const InputRect& r : rects)
-        wl_region_add(region, r.x - kMargin - x0, r.y - kMargin - y0, r.w + 2 * kMargin, r.h + 2 * kMargin);
+    for (const InputRect& r : rects) {
+        int rx = lo(r.x) - kMargin, ry = lo(r.y) - kMargin;
+        wl_region_add(region, rx - x0, ry - y0, hi(r.x + r.w) + kMargin - rx, hi(r.y + r.h) + kMargin - ry);
+    }
     wl_surface_set_input_region(input_surface_, region);
     wl_region_destroy(region);
 
@@ -178,6 +229,8 @@ void WaylandInput::destroy_pointer_objects() {
     if (buffer_) wl_buffer_destroy(buffer_);
     if (shm_pool_) wl_shm_pool_destroy(shm_pool_);
     if (shm_fd_ >= 0) close(shm_fd_);
+    if (fractional_scale_) wp_fractional_scale_v1_destroy(fractional_scale_);
+    if (fractional_manager_) wp_fractional_scale_manager_v1_destroy(fractional_manager_);
     if (input_subsurface_) wl_subsurface_destroy(input_subsurface_);
     if (input_surface_) wl_surface_destroy(input_surface_);
     if (pointer_) wl_pointer_release(pointer_);
@@ -195,7 +248,7 @@ void WaylandInput::on_pointer_enter(uint32_t serial, wl_surface* surface, double
     pointer_inside_ = true;
     // Hide the compositor cursor here; ImGui draws its own while inside.
     wl_pointer_set_cursor(pointer_, serial, nullptr, 0, 0);
-    pointer_events_.push_back({PointerEvent::Motion, float(x + sub_x_), float(y + sub_y_)});
+    pointer_events_.push_back({PointerEvent::Motion, float((x + sub_x_) * scale_), float((y + sub_y_) * scale_)});
 }
 
 void WaylandInput::on_pointer_leave(wl_surface* surface) {
@@ -205,7 +258,8 @@ void WaylandInput::on_pointer_leave(wl_surface* surface) {
 }
 
 void WaylandInput::on_pointer_motion(double x, double y) {
-    if (pointer_inside_) pointer_events_.push_back({PointerEvent::Motion, float(x + sub_x_), float(y + sub_y_)});
+    if (pointer_inside_)
+        pointer_events_.push_back({PointerEvent::Motion, float((x + sub_x_) * scale_), float((y + sub_y_) * scale_)});
 }
 
 void WaylandInput::on_pointer_button(uint32_t button, uint32_t state) {

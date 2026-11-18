@@ -2,12 +2,12 @@
 #   cd packaging/arch && makepkg -si
 pkgname=poe-overlay
 pkgver=0.4.0
-pkgrel=1
+pkgrel=2
 pkgdesc="In-game Vulkan price-check overlay for Path of Exile on Wayland"
 arch=('x86_64')
 license=('unknown')
 depends=('vulkan-icd-loader' 'wayland' 'gcc-libs' 'glibc')
-makedepends=('cmake' 'ninja' 'vulkan-headers' 'cargo')
+makedepends=('cmake' 'ninja' 'vulkan-headers' 'wayland-protocols' 'cargo')
 install=poe-overlay.install
 
 _srcroot="$(realpath "$startdir/../..")"
