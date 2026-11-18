@@ -116,7 +116,7 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateWaylandSurfaceKHR(VkInstance instance,
     if (res == VK_SUCCESS && !data->input) {
         // Piggyback on the app's own Wayland connection: binding our own
         // wl_keyboard there gets us key events whenever the game has focus.
-        data->input = std::make_unique<WaylandInput>(ci->display);
+        data->input = std::make_unique<WaylandInput>(ci->display, ci->surface);
         data->input_surface = *out;
     }
     return res;

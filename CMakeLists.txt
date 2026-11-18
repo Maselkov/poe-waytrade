@@ -20,6 +20,7 @@ add_library(VkLayer_poe_overlay SHARED
   src/layer.cpp
   src/overlay.cpp
   src/wl_input.cpp
+  src/wl_pointer.cpp
   src/uinput_kbd.cpp
   src/item_text.cpp
   src/price_check.cpp

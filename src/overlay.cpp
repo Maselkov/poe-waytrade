@@ -4,10 +4,13 @@
 #include "wl_input.h"
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "backends/imgui_impl_vulkan.h"
 
 #include <atomic>
+#include <cfloat>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -46,6 +49,7 @@ struct OverlayDevice {
     // Created with the device so the uinput keyboard has time to show up in
     // the compositor before the first hotkey.
     PriceCheck price_check;
+    int test_clicks = 0;
 };
 
 namespace {
@@ -237,6 +241,17 @@ bool init_imgui(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, VkQueu
     return true;
 }
 
+// Screen rects of this frame's visible top-level ImGui windows: where the
+// mouse should go to us rather than the game.
+std::vector<InputRect> panel_rects() {
+    std::vector<InputRect> rects;
+    for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows) {
+        if (!w->Active || w->Hidden || (w->Flags & ImGuiWindowFlags_ChildWindow)) continue;
+        rects.push_back({(int)w->Pos.x, (int)w->Pos.y, (int)ceilf(w->Size.x), (int)ceilf(w->Size.y)});
+    }
+    return rects;
+}
+
 void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     ImGuiIO& io = ImGui::GetIO();
     auto now = std::chrono::steady_clock::now();
@@ -249,6 +264,16 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     if (input) {
         input->poll();
         ov.price_check.update(*input, now);
+        for (const PointerEvent& ev : input->take_pointer_events()) {
+            switch (ev.type) {
+            case PointerEvent::Motion: io.AddMousePosEvent(ev.x, ev.y); break;
+            case PointerEvent::Leave: io.AddMousePosEvent(-FLT_MAX, -FLT_MAX); break;
+            case PointerEvent::Button: io.AddMouseButtonEvent(ev.button, ev.down); break;
+            case PointerEvent::Wheel: io.AddMouseWheelEvent(0, ev.wheel); break;
+            }
+        }
+        // The compositor cursor is hidden over our panels; draw ImGui's.
+        io.MouseDrawCursor = input->pointer_inside();
     }
 
     ImGui::NewFrame();
@@ -268,12 +293,18 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
             ImGui::Text("Last key: %u %s", input->last_key(), input->last_key_down() ? "down" : "up");
             ImGui::Text("Clipboard: #%llu, %zu bytes", (unsigned long long)input->clipboard_seq(),
                         input->clipboard_text().size());
+            ImGui::Text("Pointer over overlay: %s", input->pointer_inside() ? "yes" : "no");
+            if (ImGui::Button("Test click")) ov.test_clicks++;
+            ImGui::SameLine();
+            ImGui::Text("clicked %d times", ov.test_clicks);
         } else {
             ImGui::TextDisabled("Input: none (not a Wayland surface; X11 not implemented)");
         }
         ImGui::End();
     }
     ImGui::Render();
+
+    if (input) input->set_input_rects(panel_rects(), (int)sc.extent.width, (int)sc.extent.height);
 }
 
 bool record_and_submit(DeviceData* dev, OverlaySwapchain& sc, uint32_t index, VkQueue queue,

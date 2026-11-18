@@ -85,7 +85,7 @@ const wl_data_device_listener data_device_listener = {
 
 }  // namespace
 
-WaylandInput::WaylandInput(wl_display* display) : display_(display) {
+WaylandInput::WaylandInput(wl_display* display, wl_surface* parent) : display_(display), parent_(parent) {
     queue_ = wl_display_create_queue(display_);
     // Requests made through the wrapper put their new objects on our queue,
     // so the app's own event dispatching never sees them.
@@ -99,6 +99,7 @@ WaylandInput::WaylandInput(wl_display* display) : display_(display) {
 }
 
 WaylandInput::~WaylandInput() {
+    destroy_pointer_objects();
     cancel_receive();
     for (auto& [offer, mime] : offers_) wl_data_offer_destroy(offer);
     if (data_device_) wl_data_device_destroy(data_device_);
@@ -140,6 +141,8 @@ void WaylandInput::on_global(wl_registry* reg, uint32_t name, const char* iface,
     } else if (!data_manager_ && !strcmp(iface, wl_data_device_manager_interface.name)) {
         data_manager_ = static_cast<wl_data_device_manager*>(
             wl_registry_bind(reg, name, &wl_data_device_manager_interface, std::min(version, 3u)));
+    } else {
+        bind_pointer_globals(reg, name, iface, version);
     }
     maybe_create_data_device();
 }
@@ -152,6 +155,7 @@ void WaylandInput::maybe_create_data_device() {
 }
 
 void WaylandInput::on_seat_caps(uint32_t caps) {
+    update_pointer(caps & WL_SEAT_CAPABILITY_POINTER);
     bool has_kb = caps & WL_SEAT_CAPABILITY_KEYBOARD;
     if (has_kb && !keyboard_) {
         keyboard_ = wl_seat_get_keyboard(seat_);

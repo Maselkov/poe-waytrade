@@ -1,10 +1,15 @@
-// Keyboard and clipboard from the app's own Wayland connection.
+// Keyboard, clipboard and mouse from the app's own Wayland connection.
 //
 // The compositor sends wl_keyboard events and clipboard (selection) offers to
 // every object of the focused client, so binding our own wl_seat, wl_keyboard
 // and wl_data_device on the game's wl_display (on a private event queue)
 // lets us see keys and copied text while the game has focus, without hooking
 // Wine or reading /dev/input.
+//
+// Mouse input works differently (wl_pointer.cpp): pointer events go to the
+// surface under the cursor, so we put a transparent subsurface of our own
+// over the game's surface, with its input region covering just the overlay
+// panels. Clicks there reach us and never the game.
 #pragma once
 
 #include <cstdint>
@@ -22,6 +27,14 @@ struct wl_keyboard;
 struct wl_data_device_manager;
 struct wl_data_device;
 struct wl_data_offer;
+struct wl_surface;
+struct wl_subsurface;
+struct wl_compositor;
+struct wl_subcompositor;
+struct wl_shm;
+struct wl_shm_pool;
+struct wl_buffer;
+struct wl_pointer;
 
 enum class Hotkey {
     PriceCheck,  // Ctrl+D: we send Ctrl+C ourselves
@@ -29,10 +42,33 @@ enum class Hotkey {
     Close,       // Esc
 };
 
+// Positions are in swapchain pixels (assumes a compositor scale of 1).
+struct PointerEvent {
+    enum Type { Motion, Leave, Button, Wheel } type;
+    float x = 0, y = 0;  // Motion
+    int button = 0;      // Button: 0 left, 1 right, 2 middle
+    bool down = false;   // Button
+    float wheel = 0;     // Wheel: positive scrolls up
+};
+
+struct InputRect {
+    int x, y, w, h;  // swapchain pixels
+    bool operator==(const InputRect&) const = default;
+};
+
 class WaylandInput {
 public:
-    explicit WaylandInput(wl_display* display);
+    // `parent` is the game's surface (from vkCreateWaylandSurfaceKHR); our
+    // input subsurface is attached to it.
+    WaylandInput(wl_display* display, wl_surface* parent);
     ~WaylandInput();
+
+    // Clicks inside these rects go to us instead of the game; empty = none
+    // (the subsurface is unmapped). `width`/`height` is the game surface's
+    // size: the subsurface must not stick out of it, or the window grows.
+    void set_input_rects(const std::vector<InputRect>& rects, int width, int height);
+    std::vector<PointerEvent> take_pointer_events() { return std::exchange(pointer_events_, {}); }
+    bool pointer_inside() const { return pointer_inside_; }
 
     // Non-blocking: read and dispatch whatever is pending on our queue, and
     // continue any clipboard transfer in progress.
@@ -60,8 +96,19 @@ public:
     void on_dnd_enter(wl_data_offer* offer);
     void on_dnd_leave();
     void on_selection(wl_data_offer* offer);
+    void on_pointer_enter(uint32_t serial, wl_surface* surface, double x, double y);
+    void on_pointer_leave(wl_surface* surface);
+    void on_pointer_motion(double x, double y);
+    void on_pointer_button(uint32_t button, uint32_t state);
+    void on_pointer_axis(uint32_t axis, double value);
 
 private:
+    // wl_pointer.cpp
+    void bind_pointer_globals(wl_registry* reg, uint32_t name, const char* iface, uint32_t version);
+    void update_pointer(bool has_pointer);
+    bool ensure_buffer(int w, int h);
+    void destroy_pointer_objects();
+
     void maybe_create_data_device();
     void destroy_offer(wl_data_offer* offer);
     void start_receive(wl_data_offer* offer);
@@ -90,4 +137,23 @@ private:
     std::string receive_buf_;
     std::string clipboard_text_;
     uint64_t clipboard_seq_ = 0;
+
+    // Mouse: our input-only subsurface over the game's surface.
+    wl_surface* parent_ = nullptr;
+    wl_compositor* compositor_ = nullptr;
+    wl_subcompositor* subcompositor_ = nullptr;
+    wl_shm* shm_ = nullptr;
+    wl_pointer* pointer_ = nullptr;
+    wl_surface* input_surface_ = nullptr;
+    wl_subsurface* input_subsurface_ = nullptr;
+    int shm_fd_ = -1;
+    size_t shm_size_ = 0;
+    wl_shm_pool* shm_pool_ = nullptr;
+    wl_buffer* buffer_ = nullptr;
+    int buffer_w_ = 0, buffer_h_ = 0;
+    bool mapped_ = false;
+    int sub_x_ = 0, sub_y_ = 0;  // subsurface position on the game surface
+    std::vector<InputRect> rects_;
+    bool pointer_inside_ = false;
+    std::vector<PointerEvent> pointer_events_;
 };

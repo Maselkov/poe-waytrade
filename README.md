@@ -40,6 +40,11 @@ beasts. Rare and magic items need a trade search, which isn't implemented.
   after a Ctrl+C/Ctrl+D count, so stale clipboard contents never pop up.
   The item text then goes to the daemon via `src/daemon_client.cpp`, which
   also never blocks the frame.
+- `src/wl_pointer.cpp`: mouse input. Pointer events go to the surface under
+  the cursor, so the layer attaches a transparent subsurface of its own to
+  the game's surface, sized to the visible panels, with an input region
+  covering just them: clicks there reach ImGui and never the game. With no
+  panel visible it's unmapped.
 - `daemon/` (Rust): `poe-overlay-daemon` listens on the abstract Unix socket
   `@poe-overlay` (reachable from inside Steam's runtime container, since
   abstract sockets ignore mount namespaces; other users are rejected via
@@ -105,7 +110,7 @@ draws, but hotkeys and the clipboard are not implemented for X11 yet.
 ## Known limitations / next steps
 
 - Hotkeys are hard-coded (Ctrl+D, Esc) and still reach the game too.
-- No mouse input; the panel is display-only.
+- Mouse input assumes a compositor scale of 1 (no HiDPI/fractional scaling).
 - No advanced copy (Ctrl+Alt+C) yet, so mod tiers/ranges aren't available.
 - No X11 input path (would be `XQueryKeymap` polling like MangoHud).
 - Only one device gets the overlay (ImGui's Vulkan backend is global).

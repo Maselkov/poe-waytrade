@@ -99,7 +99,7 @@ void PriceCheck::draw() {
 
     ImGui::SetNextWindowPos(ImVec2(40, 40), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.9f);
-    ImGui::Begin("Price check", nullptr,
+    ImGui::Begin("Price check", &visible_,
                  ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse |
                      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
     ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28);
