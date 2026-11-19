@@ -20,7 +20,8 @@
 //!
 //!   Rare/magic items get trade site search filters instead of a poe.ninja
 //!   price (status "trade"); so do identified uniques, with their poe.ninja
-//!   "price" lines too (if found) and filters only for mods that roll.
+//!   "price" lines too (if found) and filters only for mods that roll, and
+//!   Viscera limbs, with theirs and a filter (with a maximum) per implicit.
 //!   Nothing is searched until the layer asks:
 //!     filter   <index> <1|0 enabled> <label> <minimum|""> <slider low>
 //!              <slider high> <step> <1|0 max roll> <weapon|base|armour|sockets|total|enchant|
@@ -450,7 +451,12 @@ fn trade_response(
         let chosen = search.and_then(|s| s.enabled.iter().find(|c| c.index == i));
         let on = search.map_or(f.default_on, |_| chosen.is_some());
         let min = chosen.and_then(|c| c.min).or(f.min).map(trade::trim_number).unwrap_or_default();
-        let max = chosen.and_then(|c| c.max).map(trade::trim_number).unwrap_or_default();
+        // Once searched, an empty maximum is the user's: don't put it back.
+        let max = match search {
+            Some(_) => chosen.and_then(|c| c.max),
+            None => f.max,
+        };
+        let max = max.map(trade::trim_number).unwrap_or_default();
         let (lo, hi) = f
             .slider
             .map_or((String::new(), String::new()), |(lo, hi)| (trade::trim_number(lo), trade::trim_number(hi)));
@@ -544,9 +550,9 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
         return format!("status\t{status}\nmessage\t{}\n", clean(&message));
     };
 
-    if item.rarity == "Unique" && trade::searchable(&item) {
-        // Identified uniques: trade filters for their rolls, with the
-        // poe.ninja price (which ignores rolls) alongside.
+    if (item.rarity == "Unique" || item.class == "Viscera") && trade::searchable(&item) {
+        // Identified uniques and Viscera limbs: trade filters for their
+        // rolls, with the poe.ninja price (which ignores rolls) alongside.
         out = trade_response(state, &item, trade_search, preset, Some(&db));
         if out.starts_with("status\ttrade")
             && let lookup::Outcome::Found { prices, .. } = lookup::lookup(&db, &item)

@@ -86,6 +86,9 @@ pub struct Filter {
     pub tier: Option<u32>,
     /// The item's own value, marked on the slider.
     pub roll: Option<f64>,
+    /// Default maximum. Only Viscera have one: their tiers share a trade
+    /// base, so a limb's implicit is capped at its tier's best roll.
+    pub max: Option<f64>,
 }
 
 impl Filter {
@@ -99,7 +102,19 @@ impl Filter {
         section: Section,
     ) -> Filter {
         let (min, slider, step, max_roll) = defaults(value, bounds, false);
-        Filter { label, target, min, slider, step, max_roll, default_on: on, section, tier: None, roll: Some(value) }
+        Filter {
+            label,
+            target,
+            min,
+            slider,
+            step,
+            max_roll,
+            default_on: on,
+            section,
+            tier: None,
+            roll: Some(value),
+            max: None,
+        }
     }
 
     /// A unique's rolled mod, unticked. Like APT, the minimum is the roll
@@ -338,8 +353,22 @@ pub fn searchable(item: &Item) -> bool {
         "Normal" => !item.mods.is_empty() || base_preset_available(item),
         // Identified uniques: searched by name, with their rolls.
         "Unique" => item.name.is_some() && !item.mods.is_empty(),
-        _ => false,
+        // Wickerman limbs have no rarity: searched by base and implicits.
+        _ => item.class == "Viscera" && !item.mods.is_empty(),
     }
+}
+
+/// The base type the trade site knows. Viscera tiers share one:
+/// "Lesser Brute's Arm" and "Greater Brute's Arm" are both "Brute's Arm".
+fn trade_base(item: &Item) -> &str {
+    if item.class == "Viscera" {
+        for tier in ["Lesser ", "Greater "] {
+            if let Some(base) = item.base.strip_prefix(tier) {
+                return base;
+            }
+        }
+    }
+    &item.base
 }
 
 impl Trade {
@@ -911,6 +940,7 @@ fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
                 default_on: false,
                 section: Section::Weapon,
                 tier: None,
+                max: None,
                 roll: Some(crit),
             });
         }
@@ -1033,6 +1063,7 @@ fn map_filters(item: &Item) -> Vec<Filter> {
         default_on: true,
         section: Section::Map,
         tier: None,
+        max: None,
         roll: None,
     };
     if item.base.starts_with("Blight-ravaged") {
@@ -1110,6 +1141,30 @@ fn mod_filter(m: &ModLine, data: &TradeData, local: bool, on: bool, section: Sec
     Some(filter)
 }
 
+/// A limb is its implicits: each one ticked. Advanced copy heads them
+/// "{ Implicit Modifier }" without an "(implicit)" marker, so they're read
+/// as implicits whatever the parser made of them. With a roll range, the
+/// maximum is the tier's best roll: "Lesser", plain and "Greater" limbs
+/// share a trade base, and a Lesser arm's +15 Strength shouldn't be
+/// compared with a plain arm's +29.
+fn viscera_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
+    item.mods
+        .iter()
+        .filter_map(|m| {
+            let m = ModLine { kind: ModKind::Implicit, ..m.clone() };
+            let mut filter = mod_filter(&m, data, false, true, Section::Mod)?;
+            let (_, values) = templatize(&m.text);
+            if let Some((_, Some((lo, hi)))) = mod_value(&values, &m.ranges)
+                && hi > lo
+                && filter.roll.is_some_and(|r| r > 0.0)
+            {
+                filter.max = Some(hi);
+            }
+            Some(filter)
+        })
+        .collect()
+}
+
 fn has_local_mods(item: &Item) -> bool {
     category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."))
 }
@@ -1128,6 +1183,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         default_on: true,
         section: Section::Base,
         tier: None,
+        max: None,
         roll: None,
     };
     filters.extend(socket_filters(item));
@@ -1145,6 +1201,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             default_on: crafting_value(item),
             section: Section::Base,
             tier: None,
+            max: None,
             roll: Some(ilvl as f64),
         });
     }
@@ -1192,6 +1249,9 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     }
     if item.rarity == "Unique" {
         return unique_filters(item, data);
+    }
+    if item.class == "Viscera" {
+        return viscera_filters(item, data);
     }
     if preset == Preset::Base {
         return base_filters(item, data);
@@ -1423,7 +1483,7 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
             Some((c, _)) if !options.base_only && options.preset == Preset::Normal => {
                 q["filters"]["type_filters"]["filters"]["category"] = json!({ "option": c })
             }
-            _ => q["type"] = json!(item.base),
+            _ => q["type"] = json!(trade_base(item)),
         }
     }
     match options.corrupted {
@@ -1982,6 +2042,52 @@ mod tests {
             "icon path: {:?}",
             data.images.get("divine")
         );
+    }
+
+    #[test]
+    fn viscera_by_base_and_implicits() {
+        let data = real_data();
+        let limb = |base: &str, implicit: &str| {
+            crate::item::parse(&format!(
+                "Item Class: Viscera\n{base}\n--------\nUpper Limb\n--------\nItem Level: 29\n--------\n\
+                 {{ Implicit Modifier }}\n{implicit}\n--------\n\
+                 Take this to the Wickerman in a town or hideout to attach it.\n"
+            ))
+            .unwrap()
+        };
+        let lesser = limb("Lesser Brute's Arm", "+15(10-15) to Strength");
+        assert!(searchable(&lesser));
+        assert!(!base_preset_available(&lesser));
+        let filters = build_filters(&lesser, &data, Preset::Normal);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.min, f.max, f.default_on, f.section)).collect();
+        // A top roll: exactly it, capped at the tier's best.
+        assert_eq!(got, vec![("+15 to Strength", Some(15.0), Some(15.0), true, Section::Implicit)]);
+
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, f.max))).collect();
+        let options = SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Normal };
+        let q = query(&lesser, &filters, &chosen, options);
+        // The trade site only knows the base without its tier.
+        assert_eq!(q["query"]["type"], "Brute's Arm");
+        assert!(q["query"]["filters"]["type_filters"]["filters"]["category"].is_null());
+        let stat = &q["query"]["stats"][0]["filters"][0];
+        assert_eq!(stat["id"], data.stats[&("implicit".to_string(), "+# to Strength".to_string())].as_str());
+        assert_eq!(stat["value"]["min"], 15.0);
+        assert_eq!(stat["value"]["max"], 15.0);
+
+        let plain = limb("Brute's Arm", "+22(20-29) to Strength");
+        let f = &build_filters(&plain, &data, Preset::Normal)[0];
+        assert_eq!((f.min, f.max), (Some(19.0), Some(29.0)));
+        assert_eq!(query(&plain, &[], &[], options)["query"]["type"], "Brute's Arm");
+
+        // Plain Ctrl+C: no range, so no maximum; the note isn't a stat.
+        let unranged = crate::item::parse(
+            "Item Class: Viscera\nLesser Brute's Arm\n--------\nUpper Limb\n--------\nItem Level: 29\n--------\n\
+             +15 to Strength\n--------\nTake this to the Wickerman in a town or hideout to attach it.\n",
+        )
+        .unwrap();
+        let filters = build_filters(&unranged, &data, Preset::Normal);
+        assert_eq!(filters.len(), 1);
+        assert_eq!((filters[0].min, filters[0].max), (Some(13.0), None));
     }
 
     #[test]
