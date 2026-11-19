@@ -15,6 +15,8 @@ constexpr auto kCopyTimeout = std::chrono::milliseconds(1000);
 // A quick panel closes once the mouse is this far (logical px) from where
 // the hotkey was pressed, unless Ctrl is held.
 constexpr float kQuickCloseDistance = 40.0f;
+// A pinned panel closes once the pointer has been off it this long.
+constexpr auto kPinnedLeaveGrace = std::chrono::milliseconds(250);
 
 }  // namespace
 
@@ -74,7 +76,7 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     }
 
     if (waiting_) wait_for_clipboard(input, now);
-    apply_closing_rules(input);
+    apply_closing_rules(input, now);
 
     PriceReply reply;
     if (daemon_.poll(&reply)) {
@@ -96,13 +98,14 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     }
 }
 
-void PriceCheck::apply_closing_rules(WaylandInput& input) {
+void PriceCheck::apply_closing_rules(WaylandInput& input, Clock::time_point now) {
     int game_clicks = input.take_game_clicks();
     if (!visible_ || demo_) return;
     switch (mode_) {
     case Mode::Quick: {
         if (input.pointer_inside()) {
             mode_ = Mode::Pinned;
+            left_panel_at_.reset();
             changed();
             break;
         }
@@ -115,7 +118,13 @@ void PriceCheck::apply_closing_rules(WaylandInput& input) {
         break;
     }
     case Mode::Pinned:
-        if (!input.pointer_inside()) set_visible(false);
+        if (input.pointer_inside()) {
+            left_panel_at_.reset();
+        } else if (!left_panel_at_) {
+            left_panel_at_ = now;
+        } else if (now - *left_panel_at_ > kPinnedLeaveGrace) {
+            set_visible(false);
+        }
         break;
     case Mode::Locked:
         if (game_clicks > 0) set_visible(false);

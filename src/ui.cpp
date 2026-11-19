@@ -474,7 +474,9 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     m.closable = pc.mode() == PriceCheck::Mode::Locked;
     switch (pc.mode()) {
     case PriceCheck::Mode::Quick: m.hint = "Hold Ctrl and move here to use filters"; break;
-    case PriceCheck::Mode::Pinned: break;
+    // Same line count as in Quick, so pinning doesn't resize the panel
+    // (and pull it out from under the pointer).
+    case PriceCheck::Mode::Pinned: m.hint = "Move away to close"; break;
     case PriceCheck::Mode::Locked: if (map) m.hint = "Click a mod to mark it"; break;
     }
     const auto& item = pc.item();

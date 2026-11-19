@@ -70,7 +70,7 @@ private:
     void begin_wait(WaylandInput& input, Mode mode, Purpose purpose, Clock::time_point deadline);
     void wait_for_clipboard(WaylandInput& input, Clock::time_point now);
     void open();
-    void apply_closing_rules(WaylandInput& input);
+    void apply_closing_rules(WaylandInput& input, Clock::time_point now);
     void set_visible(bool v);
     void changed() { revision_++; }
 
@@ -106,6 +106,9 @@ private:
     bool visible_ = false;
     bool stale_ = false;
     bool demo_ = false;  // POE_OVERLAY_DEMO_ITEM: stays open for design work
+    // When the pointer left a pinned panel; it closes once that's long enough
+    // ago, so slipping over the edge or the panel resizing doesn't close it.
+    std::optional<Clock::time_point> left_panel_at_;
     std::optional<ParsedItem> item_;
     std::string status_;
 };
