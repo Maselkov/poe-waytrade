@@ -1,0 +1,16 @@
+{
+ "economyLeagues": [
+  {
+   "name": "Covens"
+  },
+  {
+   "name": "Hardcore Covens"
+  },
+  {
+   "name": "Standard"
+  },
+  {
+   "name": "Hardcore"
+  }
+ ]
+}

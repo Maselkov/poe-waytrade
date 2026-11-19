@@ -1,0 +1,92 @@
+{
+ "core": {
+  "items": [
+   {
+    "id": "chaos",
+    "name": "Chaos Orb",
+    "category": "Currency",
+    "detailsId": "chaos-orb"
+   },
+   {
+    "id": "divine",
+    "name": "Divine Orb",
+    "category": "Currency",
+    "detailsId": "divine-orb"
+   }
+  ],
+  "rates": {
+   "divine": 0.004481
+  },
+  "primary": "chaos",
+  "secondary": "divine"
+ },
+ "lines": [
+  {
+   "id": "chaos",
+   "primaryValue": 1,
+   "volumePrimaryValue": 13036175,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 223.2
+  },
+  {
+   "id": "divine",
+   "primaryValue": 223.2,
+   "volumePrimaryValue": 13036175,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 0.004481
+  },
+  {
+   "id": "alch",
+   "primaryValue": 0.04846,
+   "volumePrimaryValue": 10416,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 20.64
+  },
+  {
+   "id": "exalted",
+   "primaryValue": 0.7987,
+   "volumePrimaryValue": 89525,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 1.25
+  },
+  {
+   "id": "mirror",
+   "primaryValue": 90938,
+   "volumePrimaryValue": 3213140,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 0.002454
+  }
+ ],
+ "items": [
+  {
+   "id": "chaos",
+   "name": "Chaos Orb",
+   "category": "Currency",
+   "detailsId": "chaos-orb"
+  },
+  {
+   "id": "divine",
+   "name": "Divine Orb",
+   "category": "Currency",
+   "detailsId": "divine-orb"
+  },
+  {
+   "id": "alch",
+   "name": "Orb of Alchemy",
+   "category": "Currency",
+   "detailsId": "orb-of-alchemy"
+  },
+  {
+   "id": "exalted",
+   "name": "Exalted Orb",
+   "category": "Currency",
+   "detailsId": "exalted-orb"
+  },
+  {
+   "id": "mirror",
+   "name": "Mirror of Kalandra",
+   "category": "Currency",
+   "detailsId": "mirror-of-kalandra"
+  }
+ ]
+}

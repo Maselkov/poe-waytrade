@@ -149,3 +149,153 @@ fn best_gem<'a>(lines: &'a [ItemLine], item: &Item) -> Option<&'a ItemLine> {
         if q <= item.quality { (0, item.quality - q) } else { (1, q - item.quality) }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::item::parse;
+    use crate::ninja::tests::{fixture_db, fixture_lines};
+    use serde_json::Value;
+
+    /// (label, chaos) of a found price list.
+    fn prices(outcome: Outcome) -> Vec<(String, f64)> {
+        match outcome {
+            Outcome::Found { prices, .. } => prices.into_iter().map(|p| (p.label, p.chaos)).collect(),
+            Outcome::NotFound(m) => panic!("not found: {m}"),
+            Outcome::Unsupported(m) => panic!("unsupported: {m}"),
+        }
+    }
+
+    fn look(text: &str) -> Vec<(String, f64)> {
+        prices(lookup(&fixture_db(), &parse(text).expect("item text")))
+    }
+
+    /// The fixture line of `name` whose `field` is `value` (Null: absent).
+    fn line(kind: &str, name: &str, pick: impl Fn(&Value) -> bool) -> Value {
+        let lines: Vec<Value> = fixture_lines(kind, name).into_iter().filter(|l| pick(l)).collect();
+        assert_eq!(lines.len(), 1, "{name}: want one line, fixture has {lines:?}");
+        lines.into_iter().next().unwrap()
+    }
+
+    fn chaos(line: &Value) -> f64 {
+        line["chaosValue"].as_f64().unwrap()
+    }
+
+    fn queen(sockets: &str) -> String {
+        format!(
+            "Item Class: Body Armours\nRarity: Unique\nQueen of the Forest\nDestiny Leather\n--------\n\
+             Evasion Rating: 1200\n--------\nSockets: {sockets}\n--------\nItem Level: 84\n"
+        )
+    }
+
+    #[test]
+    fn unique_by_links() {
+        let unlinked = line("UniqueArmour", "Queen of the Forest", |l| l["links"].is_null());
+        assert_eq!(look(&queen("G-G-G G-G G")), vec![(String::new(), chaos(&unlinked))]);
+        for links in [5, 6] {
+            let linked = line("UniqueArmour", "Queen of the Forest", |l| l["links"] == links);
+            let sockets = if links == 5 { "G-G-G-G-G G" } else { "G-G-G-G-G-G" };
+            assert_eq!(look(&queen(sockets)), vec![(format!("{links}L"), chaos(&linked))], "{links}L");
+        }
+    }
+
+    #[test]
+    fn unidentified_unique_by_base() {
+        let item = parse(
+            "Item Class: Body Armours\nRarity: Unique\nSpidersilk Robe\n--------\nItem Level: 84\n--------\nUnidentified\n",
+        )
+        .unwrap();
+        // poe.ninja happens to send lines most listed first; don't rely on it.
+        let mut db = fixture_db();
+        db.uniques_by_base.get_mut("Spidersilk Robe").unwrap().reverse();
+        let got = prices(lookup(&db, &item));
+        // Every unique on the base that isn't 5L/6L, most listed first, by name.
+        let mut want: Vec<&ItemLine> =
+            db.uniques_by_base["Spidersilk Robe"].iter().filter(|l| l.links.is_none()).collect();
+        want.sort_by_key(|l| std::cmp::Reverse(l.listing_count.unwrap_or(0)));
+        let want: Vec<(String, f64)> = want
+            .iter()
+            .take(MAX_PRICES)
+            .map(|l| match &l.variant {
+                Some(v) => (format!("{} ({v})", l.name), l.chaos_value),
+                None => (l.name.clone(), l.chaos_value),
+            })
+            .collect();
+        assert_eq!(got, want);
+        assert_eq!(got.len(), MAX_PRICES);
+    }
+
+    fn arc(level: &str, quality: Option<u32>, corrupted: bool) -> Vec<(String, f64)> {
+        let mut text = format!("Item Class: Skill Gems\nRarity: Gem\nArc\n--------\nLevel: {level}\n");
+        if let Some(q) = quality {
+            text += &format!("Quality: +{q}% (augmented)\n");
+        }
+        if corrupted {
+            text += "--------\nCorrupted\n";
+        }
+        look(&text)
+    }
+
+    #[test]
+    fn gem_variants() {
+        let variant = |v: &str| {
+            let l = line("SkillGem", "Arc", |l| l["variant"] == v);
+            vec![(v.to_string(), chaos(&l))]
+        };
+        assert_eq!(arc("20 (Max)", Some(20), false), variant("20/20"));
+        assert_eq!(arc("20 (Max)", None, false), variant("20"));
+        assert_eq!(arc("21 (Max)", Some(20), true), variant("21/20c"));
+        // No uncorrupted 20/23 line: the highest quality not above ours.
+        assert!(fixture_lines("SkillGem", "Arc").iter().all(|l| l["variant"] != "20/23"));
+        assert_eq!(arc("20 (Max)", Some(23), false), variant("20/20"));
+        // A level poe.ninja doesn't list: the closest one.
+        assert_eq!(arc("19", Some(20), false), variant("20/20"));
+    }
+
+    #[test]
+    fn currency_stack() {
+        let got = look("Item Class: Stackable Currency\nRarity: Currency\nDivine Orb\n--------\nStack Size: 3/20\n");
+        let each = fixture_db().exchange["Divine Orb"];
+        assert_eq!(got, vec![("each".to_string(), each), ("stack of 3".to_string(), each * 3.0)]);
+    }
+
+    #[test]
+    fn map_by_name() {
+        let got = look("Item Class: Maps\nRarity: Normal\nNightmare Map\n--------\nItem Level: 84\n");
+        let l = line("Map", "Nightmare Map", |_| true);
+        assert_eq!(got, vec![(l["variant"].as_str().unwrap().to_string(), chaos(&l))]);
+    }
+
+    fn crown(implicit: &str) -> String {
+        format!(
+            "Item Class: Viscera\nCoven Queen's Crown\n--------\nUpper Limb\n--------\nItem Level: 84\n--------\n\
+             {{ Implicit Modifier }}\n{implicit}\n--------\n\
+             Take this to the Wickerman in a town or hideout to attach it.\n"
+        )
+    }
+
+    #[test]
+    fn viscera_by_implicit() {
+        let l = line("Viscera", "Coven Queen's Crown", |l| l["variant"] == "#% increased Intelligence");
+        assert_eq!(look(&crown("12(10-15)% increased Intelligence")), vec![(String::new(), chaos(&l))]);
+        // An implicit poe.ninja has no line for: the most listed ones.
+        let got = look(&crown("+1 to Level of all Nonexistent Gems"));
+        let mut lines = fixture_lines("Viscera", "Coven Queen's Crown");
+        lines.sort_by_key(|l| std::cmp::Reverse(l["listingCount"].as_u64().unwrap_or(0)));
+        let want: Vec<(String, f64)> =
+            lines.iter().take(MAX_PRICES).map(|l| (l["variant"].as_str().unwrap().to_string(), chaos(l))).collect();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn not_priced() {
+        let db = fixture_db();
+        let rare = parse("Item Class: Rings\nRarity: Rare\nDoom Loop\nSapphire Ring\n--------\nItem Level: 84\n--------\n+60 to maximum Life\n").unwrap();
+        assert!(matches!(lookup(&db, &rare), Outcome::Unsupported(_)));
+        let unknown = parse(
+            "Item Class: Body Armours\nRarity: Unique\nNo Such Unique\nDestiny Leather\n--------\nItem Level: 84\n",
+        )
+        .unwrap();
+        assert!(matches!(lookup(&db, &unknown), Outcome::NotFound(m) if m.contains("No Such Unique")));
+    }
+}
