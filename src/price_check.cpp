@@ -79,10 +79,12 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     PriceReply reply;
     if (daemon_.poll(&reply)) {
         // A failed re-search (e.g. rate limited) keeps the filters on screen.
-        if (reply.status == "error" && reply_ && reply_->status == "trade")
+        if (reply.status == "error" && reply_ && reply_->status == "trade") {
             status_ = reply.message;
-        else
+        } else {
             reply_ = std::move(reply);
+            stale_ = false;
+        }
         changed();
     }
     if (wake_.poll(&reply) && reply.status == "error") poe_log("daemon wake-up: %s", reply.message.c_str());
@@ -187,15 +189,38 @@ void PriceCheck::set_visible(bool v) {
     changed();
 }
 
+// Nothing is searched until the user asks: every search counts against
+// GGG's rate limit.
 void PriceCheck::toggle_filter(int index) {
     if (!reply_ || reply_->status != "trade") return;
-    std::vector<int> enabled;
-    for (TradeFilter& f : reply_->filters) {
+    for (TradeFilter& f : reply_->filters)
         if (f.index == index) f.enabled = !f.enabled;
+    stale_ = reply_->searched;
+    changed();
+}
+
+void PriceCheck::set_base_only(bool base_only) {
+    if (!reply_ || reply_->status != "trade" || reply_->base_only == base_only) return;
+    reply_->base_only = base_only;
+    stale_ = reply_->searched;
+    changed();
+}
+
+void PriceCheck::cycle_corrupted() {
+    if (!reply_ || reply_->status != "trade") return;
+    std::string& c = reply_->corrupted;
+    c = c == "any" ? "no" : c == "no" ? "yes" : "any";
+    stale_ = reply_->searched;
+    changed();
+}
+
+void PriceCheck::search() {
+    if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
+    std::vector<int> enabled;
+    for (const TradeFilter& f : reply_->filters)
         if (f.enabled) enabled.push_back(f.index);
-    }
     status_.clear();
-    daemon_.request_trade(enabled, item_text_);
+    daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, item_text_);
     changed();
 }
 

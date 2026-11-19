@@ -59,6 +59,10 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "mod" && f.size() >= 4) reply.map_mods.push_back({f[1], f[2], f[3]});
         else if (f[0] == "profile") reply.profile = atoi(f[1].c_str());
         else if (f[0] == "total") reply.total = f[1];
+        else if (f[0] == "searched") reply.searched = f[1] == "1";
+        else if (f[0] == "option" && f.size() >= 4 && f[1] == "base") reply.base_type = f[2], reply.category_label = f[3];
+        else if (f[0] == "option" && f.size() >= 3 && f[1] == "base_only") reply.base_only = f[2] == "1";
+        else if (f[0] == "option" && f.size() >= 3 && f[1] == "corrupted") reply.corrupted = f[2];
         else if (f[0] == "url") reply.url = f[1];
     }
     return reply;
@@ -66,10 +70,11 @@ PriceReply parse_reply(const std::string& body) {
 
 }  // namespace
 
-void DaemonClient::request_trade(const std::vector<int>& enabled, const std::string& item_text) {
+void DaemonClient::request_trade(const std::vector<int>& enabled, bool base_only, const std::string& corrupted,
+                                 const std::string& item_text) {
     std::string indices;
     for (int i : enabled) indices += (indices.empty() ? "" : ",") + std::to_string(i);
-    start("TRADE\n" + indices + "\n" + item_text);
+    start("TRADE\n" + indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + item_text);
 }
 
 void DaemonClient::start(const std::string& body) {

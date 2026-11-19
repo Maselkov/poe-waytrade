@@ -163,6 +163,9 @@ struct Model {
     Rml::String state;  // status | prices | trade
     Rml::String status, source, thin, total, hint;
     bool status_error = false, searching = false, has_url = false, closable = false;
+    // Trade search options
+    Rml::String base_label, category_label, corrupted_label;
+    bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
     Rml::Vector<UiFilter> filters;
     Rml::Vector<UiListing> listings;
@@ -321,6 +324,12 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("total", &model.total);
     c.Bind("hint", &model.hint);
     c.Bind("closable", &model.closable);
+    c.Bind("base_label", &model.base_label);
+    c.Bind("category_label", &model.category_label);
+    c.Bind("corrupted_label", &model.corrupted_label);
+    c.Bind("base_only", &model.base_only);
+    c.Bind("searched", &model.searched);
+    c.Bind("stale", &model.stale);
     c.Bind("verdict", &model.verdict);
     c.Bind("verdict_kind", &model.verdict_kind);
     c.Bind("map_stats", &model.map_stats);
@@ -336,6 +345,15 @@ void OverlayUi::Impl::bind_model() {
     // Events arrive while update() feeds pointer input, with price_check set.
     c.BindEventCallback("close", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->close();
+    });
+    c.BindEventCallback("set_base", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        if (price_check && !args.empty()) price_check->set_base_only(args[0].Get<int>() != 0);
+    });
+    c.BindEventCallback("cycle_corrupted", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->cycle_corrupted();
+    });
+    c.BindEventCallback("search", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->search();
     });
     c.BindEventCallback("toggle_filter", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (price_check && !args.empty()) price_check->toggle_filter(args[0].Get<int>());
@@ -489,6 +507,14 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.status = pc.status();
         m.total = reply->total;
         m.has_url = !reply->url.empty();
+        m.searched = reply->searched;
+        m.stale = pc.stale();
+        m.base_only = reply->base_only;
+        m.base_label = reply->base_type;
+        if (!reply->category_label.empty()) m.category_label = "Any " + reply->category_label;
+        m.corrupted_label = reply->corrupted == "no"    ? "Not corrupted"
+                            : reply->corrupted == "yes" ? "Corrupted only"
+                                                        : "Corrupted or not";
         m.source = reply->league;
         for (const TradeFilter& f : reply->filters) m.filters.push_back({f.index, f.enabled, f.label, f.min});
         for (const TradeListing& l : reply->listings) {

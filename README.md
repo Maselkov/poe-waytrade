@@ -40,10 +40,16 @@ fossils, tattoos and other exchange items; uniques (incl. 5L/6L and
 unidentified); skill gems (level/quality/corruption); maps, invitations,
 beasts.
 
-Rare and magic items get a search on the official trade site instead: their
-mods become filters (minimum at 85% of your rolls, resistances as totals)
-that you can toggle with the mouse, and the cheapest online listings show in
-the panel, with a button to open the same search in your browser.
+Rare and magic items get filters for the official trade site instead, set up
+like Awakened PoE Trade's defaults: life, mana, attributes and resistances
+from any mod (crafted ones included) become totals, and only total life and
+the resistance totals start ticked; other mods are listed, unticked, with a
+minimum 10% below your roll. Pick "Any Ring" or the exact base, and whether
+corrupted items count (uncorrupted items exclude them by default). Nothing is
+searched until you press **Search**, since every search counts against GGG's
+rate limit; changing anything afterwards marks the listings as out of date
+until you search again. The cheapest online listings show in the panel, with
+a button to open the same search in your browser.
 
 ## How it works
 
@@ -180,8 +186,8 @@ testing a new daemon next to the installed one.
 - Only one device gets the overlay (RmlUi is a process-wide singleton).
 - HDR (10-bit/PQ) swapchains aren't colour-corrected yet; sRGB ones are.
 - Scarabs, incubators and influenced/ilvl base types aren't priced yet.
-- Trade search: no ilvl, influence, socket or corruption filters yet, and
-  every matched mod starts enabled (untick some if there are no results).
+- Trade search: no item level, influence or socket filters yet, and magic
+  items can't be searched by exact base (their name hides it among affixes).
 
 ## License note
 

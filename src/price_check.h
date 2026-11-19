@@ -51,7 +51,13 @@ public:
 
     // Actions from the UI.
     void close() { set_visible(false); }
+    // Trade filters and options only change locally; search() sends them.
+    // stale(): they changed since the listings on screen were searched.
     void toggle_filter(int index);
+    void set_base_only(bool base_only);
+    void cycle_corrupted();  // any -> no -> yes
+    void search();
+    bool stale() const { return stale_; }
     void open_trade();
     // Map check: cycle the mod at this index in reply().map_mods through
     // deadly -> warning -> good -> unmarked in the active profile, and
@@ -98,6 +104,7 @@ private:
     bool has_anchor_ = false;
     float anchor_x_ = 0, anchor_y_ = 0;
     bool visible_ = false;
+    bool stale_ = false;
     bool demo_ = false;  // POE_OVERLAY_DEMO_ITEM: stays open for design work
     std::optional<ParsedItem> item_;
     std::string status_;

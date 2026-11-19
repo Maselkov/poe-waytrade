@@ -18,14 +18,21 @@
 //!   request:  "PING\n"   (sent by the layer at game start to wake us up)
 //!   response: status ready | loading
 //!
-//!   Rare/magic items get a trade site search instead of a poe.ninja price
-//!   (status "trade"), with their mods as toggleable filters:
+//!   Rare/magic items get trade site search filters instead of a poe.ninja
+//!   price (status "trade"). Nothing is searched until the layer asks:
 //!     filter   <index> <1|0 enabled> <label> <minimum|"">
+//!     option   base <base type> <category label>   (if the base can be
+//!                                                  searched on its own)
+//!     option   base_only <1|0>
+//!     option   corrupted <any|no|yes>
+//!     searched <1|0>
+//!   and, once searched:
 //!     listing  <amount> <currency name> <chaos value|""> <age, e.g. "5m"|"">
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
 //!   request:  "TRADE\n" + comma-separated enabled filter indices + "\n" +
-//!             item text: the same search with only those filters.
+//!             "base" or "category" + "\n" + any|no|yes + "\n" + item text:
+//!             search with those filters and options.
 //!
 //!   request:  "OPEN\n" + url: open a pathofexile.com trade URL in the
 //!             user's browser (the layer can't, from inside the game).
@@ -219,9 +226,14 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
     let response = if let Some(text) = request.strip_prefix("PRICE\n") {
         respond(state, text, None)
     } else if let Some(rest) = request.strip_prefix("TRADE\n") {
-        let (indices, text) = rest.split_once('\n').unwrap_or((rest, ""));
-        let enabled: Vec<usize> = indices.split(',').filter_map(|s| s.trim().parse().ok()).collect();
-        respond(state, text, Some(&enabled))
+        let mut parts = rest.splitn(4, '\n');
+        let (indices, base, corrupted, text) =
+            (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+        let search = TradeRequest {
+            enabled: indices.split(',').filter_map(|s| s.trim().parse().ok()).collect(),
+            options: trade::SearchOptions { base_only: base == "base", corrupted: trade::Corrupted::parse(corrupted) },
+        };
+        respond(state, text, Some(&search))
     } else if let Some(url) = request.strip_prefix("OPEN\n") {
         open_trade_url(url.trim())
     } else if let Some(text) = request.strip_prefix("MAPCHECK\n") {
@@ -291,36 +303,72 @@ fn open_trade_url(url: &str) -> String {
     }
 }
 
-fn trade_response(state: &State, item: &item::Item, enabled: Option<&[usize]>, db: &ninja::PriceDb) -> String {
+/// A trade search the layer asked for.
+struct TradeRequest {
+    enabled: Vec<usize>,
+    options: trade::SearchOptions,
+}
+
+/// Filters and options for an item, and listings if `search` asks for a
+/// search. Without one, no request goes to the trade site.
+/// `db` is only needed to search (for the league); filters come without it.
+fn trade_response(state: &State, item: &item::Item, search: Option<&TradeRequest>, db: Option<&ninja::PriceDb>) -> String {
     let mut out = String::new();
     let title = item.name.clone().unwrap_or_else(|| item.base.clone());
-    match state.trade.lock().unwrap().search(item, enabled, &db.league, db) {
+    let mut trade = state.trade.lock().unwrap();
+    let fail = |e: String| {
+        eprintln!("trade: {e}");
+        format!("status\terror\ntitle\t{}\nmessage\t{}\n", clean(&title), clean(&e))
+    };
+    let prepared = match trade.prepare(item) {
+        Ok(p) => p,
+        Err(e) => return fail(e),
+    };
+    let options = search.map_or(prepared.defaults, |s| s.options);
+
+    let _ = writeln!(out, "status\ttrade\ntitle\t{}", clean(&title));
+    for (i, f) in prepared.filters.iter().enumerate() {
+        let on = search.map_or(f.default_on, |s| s.enabled.contains(&i));
+        let min = f.min.map(|m| m.to_string()).unwrap_or_default();
+        let _ = writeln!(out, "filter\t{i}\t{}\t{}\t{min}", on as u8, clean(&f.label));
+    }
+    if let Some(label) = prepared.category_label {
+        let _ = writeln!(out, "option\tbase\t{}\t{label}", clean(&item.base));
+    }
+    let _ = writeln!(out, "option\tbase_only\t{}", options.base_only as u8);
+    let _ = writeln!(out, "option\tcorrupted\t{}", options.corrupted.as_str());
+
+    let Some(search) = search else {
+        let _ = writeln!(out, "searched\t0");
+        return out;
+    };
+    let Some(db) = db else { return fail("Still loading league data, try again in a moment".into()) };
+    match trade.search(item, &search.enabled, options, &db.league, db) {
         Ok(r) => {
-            let _ = writeln!(out, "status\ttrade\ntitle\t{}", clean(&title));
-            for (i, (f, on)) in r.filters.iter().zip(&r.enabled).enumerate() {
-                let min = f.min.map(|m| m.to_string()).unwrap_or_default();
-                let _ = writeln!(out, "filter\t{i}\t{}\t{}\t{min}", *on as u8, clean(&f.label));
-            }
+            let _ = writeln!(out, "searched\t1");
             for l in &r.listings {
                 let chaos = l.chaos.map(|c| format!("{c:.2}")).unwrap_or_default();
                 let _ = writeln!(out, "listing\t{}\t{}\t{chaos}\t{}", l.amount, clean(&l.currency), l.age);
             }
             let _ = writeln!(out, "total\t{}\nurl\t{}", r.total, clean(&r.url));
+            out
         }
-        Err(e) => {
-            eprintln!("trade: {e}");
-            let _ = writeln!(out, "status\terror\ntitle\t{}\nmessage\t{}", clean(&title), clean(&e));
-        }
+        Err(e) => fail(e),
     }
-    out
 }
 
-fn respond(state: &State, text: &str, trade_filters: Option<&[usize]>) -> String {
+fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>) -> String {
     let mut out = String::new();
     let Some(item) = item::parse(text) else {
         return "status\tbad_request\nmessage\tNot PoE item text\n".to_string();
     };
-    let Some(db) = state.db.read().unwrap().clone() else {
+    let db = state.db.read().unwrap().clone();
+    // Rares never have a poe.ninja price: show their filters right away,
+    // even while poe.ninja is still loading.
+    if trade_search.is_none() && item.rarity == "Rare" && trade::searchable(&item) {
+        return trade_response(state, &item, None, db.as_deref());
+    }
+    let Some(db) = db else {
         let message = match &*state.last_error.lock().unwrap() {
             Some(e) => format!("Couldn't load prices: {e}"),
             None => "Loading prices from poe.ninja...".to_string(),
@@ -329,12 +377,12 @@ fn respond(state: &State, text: &str, trade_filters: Option<&[usize]>) -> String
         return format!("status\t{status}\nmessage\t{}\n", clean(&message));
     };
 
-    if trade_filters.is_some() {
-        out = trade_response(state, &item, trade_filters, &db);
+    if trade_search.is_some() {
+        out = trade_response(state, &item, trade_search, Some(&db));
     } else {
         match lookup::lookup(&db, &item) {
             lookup::Outcome::Unsupported(_) if trade::searchable(&item) => {
-                out = trade_response(state, &item, None, &db);
+                out = trade_response(state, &item, None, Some(&db));
             }
             outcome => write_lookup(&mut out, outcome),
         }

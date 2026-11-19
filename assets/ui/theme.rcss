@@ -123,6 +123,15 @@ body {
 .min { background-color: $chip; border-radius: 6dp; padding: 2dp 8dp; color: $text-strong; margin-left: 8dp; }
 .filter.off .min { background-color: transparent; color: $text-faint; }
 
+/* Trade search options */
+.options { display: flex; align-items: center; padding: 10dp 14dp 2dp; }
+.segmented { display: flex; border: 1dp $off; border-radius: 8dp; margin-right: 8dp; }
+.seg { padding: 3dp 8dp; color: $text-muted; border-radius: 7dp; cursor: pointer; }
+.seg:hover { color: $text-strong; }
+.seg.active { background-color: $chip; color: $text-strong; }
+.toggle-chip { padding: 3dp 8dp; border: 1dp $off; border-radius: 8dp; color: $text; cursor: pointer; }
+.toggle-chip:hover { color: $text-strong; border-color: #3a404a; }
+
 /* Trade results */
 .results { border-top: 1dp $divider; padding: 8dp 14dp 12dp; }
 .results-head { display: flex; justify-content: space-between; font-size: 11dp; color: $text-muted; margin-bottom: 4dp; }
@@ -134,6 +143,10 @@ body {
 .empty { color: $text-muted; padding: 6dp 0; }
 
 .actions { display: flex; margin-top: 8dp; }
+.actions .button { margin-left: 6dp; }
+.actions .button:first-child { margin-left: 0; }
+.stale-note { color: $warn; font-size: 11dp; margin-bottom: 4dp; }
+.listings.stale { opacity: 0.45; }
 .button {
     flex: 1;
     text-align: center;
@@ -147,6 +160,8 @@ body {
 }
 .button:hover { background-color: #6a5ec4; }
 .button:active { background-color: #4d4296; }
+.button.secondary { background-color: transparent; border: 1dp $off; color: $text; }
+.button.secondary:hover { background-color: $chip; color: $text-strong; }
 
 .hint { text-align: center; font-size: 10dp; color: $text-faint; padding: 0 0 8dp; }
 

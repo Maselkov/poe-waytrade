@@ -50,6 +50,12 @@ struct PriceReply {
     std::vector<TradeListing> listings;
     std::string total;
     std::string url;
+    // Trade search options (see daemon/src/main.rs).
+    std::string base_type;       // e.g. "Sapphire Ring"
+    std::string category_label;  // e.g. "Ring"; empty: no base/category choice
+    bool base_only = false;
+    std::string corrupted = "any";  // any | no | yes
+    bool searched = false;
     // status "map"
     std::string subtitle;
     std::vector<MapStat> map_stats;
@@ -69,8 +75,9 @@ public:
     void request_map(const std::string& item_text) { start("MAPCHECK\n" + item_text); }
     // Any request body (see daemon/src/main.rs), for one-off messages.
     void send_raw(const std::string& body) { start(body); }
-    // Rerun a trade search with only the filters at these indices.
-    void request_trade(const std::vector<int>& enabled, const std::string& item_text);
+    // Search the trade site with the filters at these indices.
+    void request_trade(const std::vector<int>& enabled, bool base_only, const std::string& corrupted,
+                       const std::string& item_text);
     // Ask the daemon to open a trade search URL in the user's browser.
     void open_url(const std::string& url) { start("OPEN\n" + url); }
     bool busy() const { return fd_ >= 0; }

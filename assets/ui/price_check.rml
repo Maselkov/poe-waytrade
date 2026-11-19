@@ -27,6 +27,13 @@
     </div>
 
     <div data-if="state == 'trade'">
+        <div class="options">
+            <div class="segmented" data-if="category_label != ''">
+                <div data-attr-class="base_only ? 'seg' : 'seg active'" data-event-click="set_base(0)">{{category_label}}</div>
+                <div data-attr-class="base_only ? 'seg active' : 'seg'" data-event-click="set_base(1)">{{base_label}}</div>
+            </div>
+            <div class="toggle-chip" data-event-click="cycle_corrupted">{{corrupted_label}}</div>
+        </div>
         <div class="filters">
             <div data-for="f : filters" data-attr-class="f.enabled ? 'filter' : 'filter off'"
                  data-event-click="toggle_filter(f.index)">
@@ -36,19 +43,30 @@
             </div>
         </div>
         <div class="results">
-            <div class="results-head">
-                <span>Cheapest of {{total}} online</span>
-                <span>{{searching ? 'Searching…' : source}}</span>
-            </div>
             <div class="error" data-if="status != ''">{{status}}</div>
-            <div class="listing" data-for="l : listings">
-                <div class="coin"/>
-                <div class="amount">{{l.price}} <span class="sub">{{l.sub}}</span></div>
-                <div class="age">{{l.age}}</div>
+            <div data-if="!searched">
+                <div class="actions">
+                    <div class="button" data-event-click="search">{{searching ? 'Searching…' : 'Search'}}</div>
+                </div>
             </div>
-            <div class="empty" data-if="listings.size == 0 &amp;&amp; !searching">No listings. Turn off a filter to widen the search.</div>
-            <div class="actions" data-if="has_url">
-                <div class="button" data-event-click="open_trade">Open on trade site</div>
+            <div data-if="searched">
+                <div class="results-head">
+                    <span>Cheapest of {{total}} online</span>
+                    <span>{{source}}</span>
+                </div>
+                <div class="stale-note" data-if="stale">Filters changed. Search again to update.</div>
+                <div data-attr-class="stale ? 'listings stale' : 'listings'">
+                    <div class="listing" data-for="l : listings">
+                        <div class="coin"/>
+                        <div class="amount">{{l.price}} <span class="sub">{{l.sub}}</span></div>
+                        <div class="age">{{l.age}}</div>
+                    </div>
+                    <div class="empty" data-if="listings.size == 0">No listings. Turn off a filter to widen the search.</div>
+                </div>
+                <div class="actions">
+                    <div data-attr-class="stale ? 'button' : 'button secondary'" data-event-click="search">{{searching ? 'Searching…' : 'Search again'}}</div>
+                    <div class="button secondary" data-if="has_url" data-event-click="open_trade">Open on trade site</div>
+                </div>
             </div>
         </div>
     </div>

@@ -13,8 +13,9 @@ use std::time::{Duration, Instant, SystemTime};
 const DATA_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
 /// The browser is closed after this long without a search.
 pub const BROWSER_IDLE: Duration = Duration::from_secs(10 * 60);
-/// Default filter minimum, as a fraction of the item's own roll.
-const MIN_FRACTION: f64 = 0.85;
+/// Default filter minimum, as a fraction of the item's own roll (APT's
+/// default range is 10%).
+const MIN_FRACTION: f64 = 0.9;
 /// Listings fetched per search (one fetch request allows up to 10).
 const LISTINGS: usize = 10;
 
@@ -22,6 +23,51 @@ pub struct Filter {
     pub label: String,
     pub stat_id: String,
     pub min: Option<f64>,
+    /// Ticked by default (like Awakened PoE Trade: total life and the
+    /// resistance totals; every other mod starts unticked).
+    pub default_on: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Corrupted {
+    Any,
+    No,
+    Yes,
+}
+
+impl Corrupted {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Corrupted::Any => "any",
+            Corrupted::No => "no",
+            Corrupted::Yes => "yes",
+        }
+    }
+    pub fn parse(s: &str) -> Corrupted {
+        match s {
+            "no" => Corrupted::No,
+            "yes" => Corrupted::Yes,
+            _ => Corrupted::Any,
+        }
+    }
+}
+
+/// How to search, besides the stat filters.
+#[derive(Clone, Copy, Debug)]
+pub struct SearchOptions {
+    /// The exact base type ("Sapphire Ring") rather than its category.
+    pub base_only: bool,
+    pub corrupted: Corrupted,
+}
+
+/// What the panel shows before anything is searched.
+pub struct Prepared {
+    pub filters: Vec<Filter>,
+    /// "Ring" for the "Any Ring" / "Sapphire Ring" toggle; `None` when the
+    /// base can't be searched separately (unknown category, or a magic item,
+    /// whose name hides the base among its affixes).
+    pub category_label: Option<&'static str>,
+    pub defaults: SearchOptions,
 }
 
 pub struct Listing {
@@ -33,8 +79,6 @@ pub struct Listing {
 }
 
 pub struct TradeResult {
-    pub filters: Vec<Filter>,
-    pub enabled: Vec<bool>,
     pub listings: Vec<Listing>,
     pub total: u64,
     pub url: String,
@@ -71,16 +115,33 @@ impl Trade {
         }
     }
 
-    /// `enabled`: indices of filters to use; `None` = all.
+    /// The filters and options for an item, without searching. Needs only
+    /// the stat list (cached on disk for a day), so it normally makes no
+    /// requests at all.
+    pub fn prepare(&mut self, item: &Item) -> Result<Prepared, String> {
+        self.ensure_data()?;
+        let data = &self.data.as_ref().unwrap().0;
+        let filters = build_filters(item, data);
+        let category_label = match (category(item), item.rarity.as_str()) {
+            (Some((_, label)), "Rare" | "Normal") => Some(label),
+            _ => None,
+        };
+        // Like APT: an uncorrupted item is compared with uncorrupted ones.
+        let corrupted = if item.corrupted { Corrupted::Any } else { Corrupted::No };
+        Ok(Prepared { filters, category_label, defaults: SearchOptions { base_only: false, corrupted } })
+    }
+
+    /// `enabled`: indices of the prepared filters to use.
     pub fn search(
         &mut self,
         item: &Item,
-        enabled: Option<&[usize]>,
+        enabled: &[usize],
+        options: SearchOptions,
         league: &str,
         prices: &PriceDb,
     ) -> Result<TradeResult, String> {
         self.last_used = Instant::now();
-        let result = self.search_inner(item, enabled, league, prices);
+        let result = self.search_inner(item, enabled, options, league, prices);
         // A dead or confused browser gets relaunched next time.
         if result.is_err() && !self.browser.as_mut().is_some_and(|b| b.alive()) {
             self.browser = None;
@@ -91,21 +152,16 @@ impl Trade {
     fn search_inner(
         &mut self,
         item: &Item,
-        enabled: Option<&[usize]>,
+        enabled: &[usize],
+        options: SearchOptions,
         league: &str,
         prices: &PriceDb,
     ) -> Result<TradeResult, String> {
         self.ensure_data()?;
         let data = &self.data.as_ref().unwrap().0;
         let filters = build_filters(item, data);
-        if filters.is_empty() {
-            return Err("No mods on this item match trade search stats".into());
-        }
-        let enabled: Vec<bool> = match enabled {
-            Some(idx) => (0..filters.len()).map(|i| idx.contains(&i)).collect(),
-            None => vec![true; filters.len()],
-        };
-        let body = query(item, &filters, &enabled).to_string();
+        let enabled: Vec<bool> = (0..filters.len()).map(|i| enabled.contains(&i)).collect();
+        let body = query(item, &filters, &enabled, options).to_string();
         let league_path = ninja::encode(league);
 
         let resp = self.request("search", "POST", &format!("/api/trade/search/{league_path}"), Some(&body))?;
@@ -144,8 +200,6 @@ impl Trade {
         }
 
         Ok(TradeResult {
-            filters,
-            enabled,
             listings,
             total,
             url: format!("https://www.pathofexile.com/trade/search/{league_path}/{id}"),
@@ -305,38 +359,39 @@ fn resist_parts(template: &str) -> Option<(u32, bool)> {
     Some((elements, chaos))
 }
 
-fn category(item: &Item) -> Option<&'static str> {
+/// The trade category for an item and a short label for it ("Ring").
+fn category(item: &Item) -> Option<(&'static str, &'static str)> {
     if item.base.contains("Cluster Jewel") {
-        return Some("jewel.cluster");
+        return Some(("jewel.cluster", "Cluster Jewel"));
     }
     Some(match item.class.as_str() {
-        "Body Armours" => "armour.chest",
-        "Boots" => "armour.boots",
-        "Gloves" => "armour.gloves",
-        "Helmets" => "armour.helmet",
-        "Shields" => "armour.shield",
-        "Quivers" => "armour.quiver",
-        "Amulets" => "accessory.amulet",
-        "Belts" => "accessory.belt",
-        "Rings" => "accessory.ring",
-        "Jewels" => "jewel.base",
-        "Abyss Jewels" => "jewel.abyss",
-        "Bows" => "weapon.bow",
-        "Claws" => "weapon.claw",
-        "Daggers" => "weapon.basedagger",
-        "Rune Daggers" => "weapon.runedagger",
-        "One Hand Axes" => "weapon.oneaxe",
-        "One Hand Swords" => "weapon.basesword",
-        "Thrusting One Hand Swords" => "weapon.rapier",
-        "One Hand Maces" => "weapon.basemace",
-        "Sceptres" => "weapon.sceptre",
-        "Staves" => "weapon.basestaff",
-        "Warstaves" => "weapon.warstaff",
-        "Two Hand Axes" => "weapon.twoaxe",
-        "Two Hand Maces" => "weapon.twomace",
-        "Two Hand Swords" => "weapon.twosword",
-        "Wands" => "weapon.wand",
-        c if c.ends_with("Flasks") => "flask",
+        "Body Armours" => ("armour.chest", "Body Armour"),
+        "Boots" => ("armour.boots", "Boots"),
+        "Gloves" => ("armour.gloves", "Gloves"),
+        "Helmets" => ("armour.helmet", "Helmet"),
+        "Shields" => ("armour.shield", "Shield"),
+        "Quivers" => ("armour.quiver", "Quiver"),
+        "Amulets" => ("accessory.amulet", "Amulet"),
+        "Belts" => ("accessory.belt", "Belt"),
+        "Rings" => ("accessory.ring", "Ring"),
+        "Jewels" => ("jewel.base", "Jewel"),
+        "Abyss Jewels" => ("jewel.abyss", "Abyss Jewel"),
+        "Bows" => ("weapon.bow", "Bow"),
+        "Claws" => ("weapon.claw", "Claw"),
+        "Daggers" => ("weapon.basedagger", "Dagger"),
+        "Rune Daggers" => ("weapon.runedagger", "Rune Dagger"),
+        "One Hand Axes" => ("weapon.oneaxe", "One-Handed Axe"),
+        "One Hand Swords" => ("weapon.basesword", "One-Handed Sword"),
+        "Thrusting One Hand Swords" => ("weapon.rapier", "Rapier"),
+        "One Hand Maces" => ("weapon.basemace", "One-Handed Mace"),
+        "Sceptres" => ("weapon.sceptre", "Sceptre"),
+        "Staves" => ("weapon.basestaff", "Staff"),
+        "Warstaves" => ("weapon.warstaff", "Warstaff"),
+        "Two Hand Axes" => ("weapon.twoaxe", "Two-Handed Axe"),
+        "Two Hand Maces" => ("weapon.twomace", "Two-Handed Mace"),
+        "Two Hand Swords" => ("weapon.twosword", "Two-Handed Sword"),
+        "Wands" => ("weapon.wand", "Wand"),
+        c if c.ends_with("Flasks") => ("flask", "Flask"),
         _ => return None,
     })
 }
@@ -358,15 +413,44 @@ fn find_stat(data: &TradeData, kind: ModKind, template: &str, local: bool) -> Op
     if let Some(rest) = template.strip_prefix("-#") {
         candidates.push((format!("+#{rest}"), -1.0));
     }
-    candidates
-        .into_iter()
-        .find_map(|(t, sign)| data.stats.get(&(group.clone(), t)).map(|id| (id.clone(), sign)))
+    // Some stats are only searchable as pseudo stats (item rarity, for one).
+    candidates.into_iter().find_map(|(t, sign)| {
+        data.stats
+            .get(&(group.clone(), t.clone()))
+            .or_else(|| data.stats.get(&("pseudo".to_string(), t)))
+            .map(|id| (id.clone(), sign))
+    })
 }
 
+/// "+# to Strength and Dexterity" -> Some([1, 1, 0]) (str, dex, int).
+fn attribute_parts(template: &str) -> Option<[f64; 3]> {
+    let t = template.strip_prefix("+# to ")?;
+    if t == "all Attributes" {
+        return Some([1.0; 3]);
+    }
+    let mut parts = [0.0; 3];
+    for word in t.split(" and ") {
+        match word {
+            "Strength" => parts[0] = 1.0,
+            "Dexterity" => parts[1] = 1.0,
+            "Intelligence" => parts[2] = 1.0,
+            _ => return None,
+        }
+    }
+    Some(parts)
+}
+
+/// Filters in the spirit of Awakened PoE Trade's default ("pseudo") preset:
+/// life, mana, attributes and resistances from any mod (implicit and crafted
+/// included) become totals, and only total life and the resistance totals
+/// start ticked. Other mods are listed, unticked; crafted ones aren't (they
+/// can be redone, so only their contribution to the totals matters).
 fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
-    let local = category(item).is_some_and(|c| c.starts_with("weapon.") || c.starts_with("armour."));
-    let mut filters = Vec::new();
+    let local = category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."));
+    let mut listed = Vec::new();
     let (mut elemental, mut chaos) = (0.0, 0.0);
+    let (mut life, mut mana) = (None::<f64>, None::<f64>);
+    let mut attributes = [0.0; 3];
 
     for m in &item.mods {
         let (template, values) = templatize(&m.text);
@@ -375,13 +459,31 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             [a, b] => (a + b) / 2.0, // "Adds # to # ..." is searched by average
             [v, ..] => *v,
         };
-        // Resistances are searched as totals, like on the trade site's
-        // pseudo filters, so it doesn't matter which mod they come from.
         if let Some((elements, has_chaos)) = resist_parts(&template) {
             elemental += value * elements as f64;
             if has_chaos {
                 chaos += value;
             }
+            continue;
+        }
+        if let Some(parts) = attribute_parts(&template) {
+            for (total, part) in attributes.iter_mut().zip(parts) {
+                *total += value * part;
+            }
+            continue;
+        }
+        match template.as_str() {
+            "+# to maximum Life" => {
+                *life.get_or_insert(0.0) += value;
+                continue;
+            }
+            "+# to maximum Mana" => {
+                *mana.get_or_insert(0.0) += value;
+                continue;
+            }
+            _ => {}
+        }
+        if m.kind == ModKind::Crafted {
             continue;
         }
         let Some((stat_id, sign)) = find_stat(data, m.kind, &template, local) else { continue };
@@ -390,31 +492,46 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             ModKind::Explicit => m.text.clone(),
             kind => format!("{} ({})", m.text, kind.trade_group()),
         };
-        filters.push(Filter { label, stat_id, min: min_for(value) });
+        listed.push(Filter { label, stat_id, min: min_for(value), default_on: false });
     }
 
-    if elemental > 0.0 {
-        filters.push(Filter {
-            label: format!("+{elemental}% total Elemental Resistance"),
-            stat_id: "pseudo.pseudo_total_elemental_resistance".into(),
-            min: min_for(elemental),
+    // Strength gives 1 life per 2, intelligence 1 mana per 2.
+    let [strength, dexterity, intelligence] = attributes;
+    let mut pseudo = Vec::new();
+    let mut add = |text: &str, total: f64, on: bool| {
+        if total <= 0.0 {
+            return;
+        }
+        let Some(id) = data.stats.get(&("pseudo".to_string(), text.to_string())) else { return };
+        let total = total.floor();
+        pseudo.push(Filter {
+            label: text.replacen('#', &total.to_string(), 1),
+            stat_id: id.clone(),
+            min: min_for(total),
+            default_on: on,
         });
+    };
+    if let Some(life) = life {
+        add("+# total maximum Life", life + (strength / 2.0).floor(), true);
     }
-    if chaos > 0.0 {
-        filters.push(Filter {
-            label: format!("+{chaos}% total Chaos Resistance"),
-            stat_id: "pseudo.pseudo_total_chaos_resistance".into(),
-            min: min_for(chaos),
-        });
+    add("+#% total Elemental Resistance", elemental, true);
+    add("+#% total to Chaos Resistance", chaos, true);
+    if let Some(mana) = mana {
+        add("+# total maximum Mana", mana + (intelligence / 2.0).floor(), false);
     }
-    filters
+    add("+# total to Strength", strength, false);
+    add("+# total to Dexterity", dexterity, false);
+    add("+# total to Intelligence", intelligence, false);
+
+    pseudo.extend(listed);
+    pseudo
 }
 
 fn min_for(value: f64) -> Option<f64> {
     (value > 0.0).then(|| (value * MIN_FRACTION).floor())
 }
 
-fn query(item: &Item, filters: &[Filter], enabled: &[bool]) -> Value {
+fn query(item: &Item, filters: &[Filter], enabled: &[bool], options: SearchOptions) -> Value {
     let stats: Vec<Value> = filters
         .iter()
         .zip(enabled)
@@ -430,8 +547,13 @@ fn query(item: &Item, filters: &[Filter], enabled: &[bool]) -> Value {
         "filters": { "type_filters": { "filters": { "rarity": { "option": "nonunique" } } } },
     });
     match category(item) {
-        Some(c) => q["filters"]["type_filters"]["filters"]["category"] = json!({ "option": c }),
-        None => q["type"] = json!(item.base),
+        Some((c, _)) if !options.base_only => q["filters"]["type_filters"]["filters"]["category"] = json!({ "option": c }),
+        _ => q["type"] = json!(item.base),
+    }
+    match options.corrupted {
+        Corrupted::Any => {}
+        Corrupted::No => q["filters"]["misc_filters"] = json!({ "filters": { "corrupted": { "option": "false" } } }),
+        Corrupted::Yes => q["filters"]["misc_filters"] = json!({ "filters": { "corrupted": { "option": "true" } } }),
     }
     json!({ "query": q, "sort": { "price": "asc" } })
 }
@@ -535,6 +657,79 @@ mod tests {
         assert_eq!(parse_utc("1970-01-01T00:00:00Z"), Some(0));
         assert_eq!(parse_utc("2026-11-18T22:01:33Z"), Some(1795039293));
         assert_eq!(parse_utc("nonsense"), None);
+    }
+
+    fn test_data() -> TradeData {
+        let mut stats = HashMap::new();
+        for (text, id) in [
+            ("+# total maximum Life", "pseudo.pseudo_total_life"),
+            ("+#% total Elemental Resistance", "pseudo.pseudo_total_elemental_resistance"),
+            ("+#% total to Chaos Resistance", "pseudo.pseudo_total_chaos_resistance"),
+            ("+# total maximum Mana", "pseudo.pseudo_total_mana"),
+            ("+# total to Strength", "pseudo.pseudo_total_strength"),
+            ("+# total to Dexterity", "pseudo.pseudo_total_dexterity"),
+            ("+# total to Intelligence", "pseudo.pseudo_total_intelligence"),
+        ] {
+            stats.insert(("pseudo".to_string(), text.to_string()), id.to_string());
+        }
+        // Like GGG's list: rarity is only searchable as a pseudo stat.
+        stats.insert(("pseudo".into(), "#% increased Rarity of Items found".into()), "pseudo.rarity".into());
+        TradeData { stats, currencies: HashMap::new() }
+    }
+
+    const RING: &str = "Item Class: Rings\nRarity: Rare\nDoom Loop\nSapphire Ring\n--------\nItem Level: 84\n--------\n\
+                        +25% to Cold Resistance (implicit)\n--------\n+60 to maximum Life\n+30 to Strength\n\
+                        +30% to Fire Resistance\n+20 to Dexterity and Intelligence\n\
+                        12% increased Rarity of Items found\n+12% to Cold Resistance (crafted)\n\
+                        8% increased Rarity of Items found (crafted)\n";
+
+    #[test]
+    fn apt_like_defaults() {
+        let item = crate::item::parse(RING).unwrap();
+        let filters = build_filters(&item, &test_data());
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.min, f.default_on)).collect();
+        assert_eq!(
+            got,
+            vec![
+                // 60 life + 30 str / 2
+                ("+75 total maximum Life", Some(67.0), true),
+                // 25 implicit + 30 + 12 crafted
+                ("+67% total Elemental Resistance", Some(60.0), true),
+                ("+30 total to Strength", Some(27.0), false),
+                ("+20 total to Dexterity", Some(18.0), false),
+                ("+20 total to Intelligence", Some(18.0), false),
+                // the crafted rarity mod isn't listed
+                ("12% increased Rarity of Items found", Some(10.0), false),
+            ]
+        );
+    }
+
+    #[test]
+    fn search_options() {
+        let item = crate::item::parse(RING).unwrap();
+        let filters = build_filters(&item, &test_data());
+        let enabled = vec![true; filters.len()];
+        let opts = |base_only, corrupted| SearchOptions { base_only, corrupted };
+
+        let q = query(&item, &filters, &enabled, opts(false, Corrupted::No));
+        assert_eq!(q["query"]["filters"]["type_filters"]["filters"]["category"]["option"], "accessory.ring");
+        assert!(q["query"]["type"].is_null());
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["corrupted"]["option"], "false");
+
+        let q = query(&item, &filters, &enabled, opts(true, Corrupted::Any));
+        assert_eq!(q["query"]["type"], "Sapphire Ring");
+        assert!(q["query"]["filters"]["type_filters"]["filters"]["category"].is_null());
+        assert!(q["query"]["filters"]["misc_filters"].is_null());
+
+        let q = query(&item, &filters, &enabled, opts(false, Corrupted::Yes));
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["corrupted"]["option"], "true");
+    }
+
+    #[test]
+    fn attributes() {
+        assert_eq!(attribute_parts("+# to all Attributes"), Some([1.0, 1.0, 1.0]));
+        assert_eq!(attribute_parts("+# to Strength and Dexterity"), Some([1.0, 1.0, 0.0]));
+        assert_eq!(attribute_parts("+# to Level of Socketed Strength Gems"), None);
     }
 
     #[test]
