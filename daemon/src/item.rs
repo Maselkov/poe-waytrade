@@ -102,6 +102,19 @@ fn header_tier(header: &str) -> Option<u32> {
     rest[..rest.find(')')?].trim().parse().ok()
 }
 
+/// Advanced copy marks fractured and crafted mods in their header only
+/// (`{ Fractured Prefix Modifier "Fecund" (Tier: 2) — Life }`), not with a
+/// "(fractured)" or "(crafted)" after the mod as plain Ctrl+C does.
+fn kind_from_header(header: &str) -> Option<ModKind> {
+    if header.starts_with("{ Fractured ") {
+        Some(ModKind::Fractured)
+    } else if header.starts_with("{ Master Crafted ") {
+        Some(ModKind::Crafted)
+    } else {
+        None
+    }
+}
+
 fn mod_line(line: &str) -> ModLine {
     const MARKERS: &[(&str, ModKind)] = &[
         (" (implicit)", ModKind::Implicit),
@@ -256,11 +269,13 @@ pub fn parse(text: &str) -> Option<Item> {
             }
             let mut headed = false;
             let mut tier = None;
+            let mut header_kind = None;
             for line in section {
                 if line.starts_with("{ ") && line.ends_with(" }") {
                     item.advanced = true;
                     headed = true;
                     tier = header_tier(line);
+                    header_kind = kind_from_header(line);
                     if let Some(affix) = header_affix(line) {
                         affixes.push(affix);
                     }
@@ -274,6 +289,11 @@ pub fn parse(text: &str) -> Option<Item> {
                 let line = line.trim_end_matches(" — Unscalable Value");
                 let (text, ranges) = split_roll_ranges(line);
                 let mut m = mod_line(&text);
+                if m.kind == ModKind::Explicit
+                    && let Some(kind) = header_kind
+                {
+                    m.kind = kind;
+                }
                 m.headed = headed;
                 m.ranges = ranges;
                 m.tier = tier;
@@ -531,7 +551,7 @@ pub(crate) mod tests {
 
     pub(crate) const FRACTURED_CROWN: &str = "Item Class: Helmets\nRarity: Magic\nFecund Paladin Crown of the Genius\n--------\n\
         Armour: 350\nEnergy Shield: 70\n--------\nItem Level: 84\n--------\n\
-        { Fractured Prefix Modifier \"Fecund\" (Tier: 2) — Life }\n+143(130-144) to maximum Life (fractured)\n\
+        { Fractured Prefix Modifier \"Fecund\" (Tier: 2) — Life }\n+143(130-144) to maximum Life\n\
         { Suffix Modifier \"of the Genius\" (Tier: 2) — Attribute }\n+52(51-55) to Intelligence\n--------\n\
         Fractured Item\n";
 
@@ -549,6 +569,17 @@ pub(crate) mod tests {
                 (ModKind::Explicit, "+52 to Intelligence", Some(2)),
             ]
         );
+        // Plain Ctrl+C marks the mod after it instead.
+        let plain = parse("Item Class: Helmets\nRarity: Magic\nFecund Paladin Crown of the Genius\n--------\n\
+            Item Level: 84\n--------\n+143 to maximum Life (fractured)\n+52 to Intelligence\n--------\nFractured Item\n")
+        .unwrap();
+        assert_eq!(plain.mods[0].kind, ModKind::Fractured);
+        let crafted = parse(&FRACTURED_CROWN.replace(
+            "{ Suffix Modifier \"of the Genius\" (Tier: 2)",
+            "{ Master Crafted Suffix Modifier \"of the Genius\" (Rank: 2)",
+        ))
+        .unwrap();
+        assert_eq!(crafted.mods[1].kind, ModKind::Crafted);
         let shaped = parse(&FRACTURED_CROWN.replace("Fractured Item", "Shaper Item\nElder Item")).unwrap();
         assert_eq!(shaped.influences, vec!["shaper", "elder"]);
     }
