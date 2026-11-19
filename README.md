@@ -20,6 +20,12 @@ Trade:
   anywhere in the game. Only these locked panels have a ×; the quick look
   closes by itself.
 - Your own Ctrl+C on an item opens a quick look too.
+- Ctrl+D keeps your clipboard: what it held (text, images, every format it
+  was offered in) is saved before the game copies the item and put back
+  right after. The restored content is served by the game's process, like
+  `wl-copy` does; KDE's Klipper keeps it once the game exits. The item text
+  still shows up in clipboard managers' history: they see the game's copy,
+  and Klipper can't be told to forget a single entry.
 - Like APT, the panel sits right next to PoE's inventory when you check an
   item there (or next to the stash for items on the left half of the
   screen). PoE's side panels are 986/1600 of the window height wide.
@@ -97,8 +103,10 @@ mods with their tiers, like PoE's tooltip) beside the panel.
   compositor treats the device as a normal keyboard. Needs write access to
   `/dev/uinput` (systemd's uaccess ACL usually grants it to the logged-in
   user; otherwise the `input` group).
-- `src/price_check.cpp`: hotkey → Ctrl+C → wait up to 1 s for a new clipboard
-  transfer → parse (`src/item_text.cpp`) → show. Only clipboard changes right
+- `src/price_check.cpp`: hotkey → save the clipboard (all its mime types,
+  up to 150 ms) → Ctrl+C → wait up to 1 s for a new clipboard transfer →
+  restore the saved clipboard (through `ext-data-control-v1`, which needs no
+  input serial, or the data device) → parse (`src/item_text.cpp`) → show. Only clipboard changes right
   after a Ctrl+C/Ctrl+D count, so stale clipboard contents never pop up.
   The item text then goes to the daemon via `src/daemon_client.cpp`, which
   also never blocks the frame.
@@ -227,7 +235,10 @@ change; `POE_WAYTRADE_DEMO_ITEM` opens the panel on start with that item text
 (as copied from the game; maps open the map check). `POE_WAYTRADE_UI_SCALE`
 scales the whole UI. `POE_WAYTRADE_SNAPSHOT=<file.ppm>` saves one of the app's own rendered frames
 (after 300 frames) and `POE_WAYTRADE_DEMO_SEARCH=1` makes a demo item search by
-itself, for checking the UI without screenshots. `POE_WAYTRADE_SOCKET=name`
+itself, for checking the UI without screenshots. `POE_WAYTRADE_TEST_COPY=1`
+does a Ctrl+D two seconds in without sending keys; `tests/clipboard-kwin.sh
+[text|image]` uses it in a nested, invisible KWin to check that the
+clipboard is restored. `POE_WAYTRADE_SOCKET=name`
 makes the layer (and
 `poe-waytrade-daemon query`) talk to a daemon on another abstract socket, for
 testing a new daemon next to the installed one.

@@ -27,6 +27,11 @@ struct wl_keyboard;
 struct wl_data_device_manager;
 struct wl_data_device;
 struct wl_data_offer;
+struct wl_data_source;
+struct ext_data_control_manager_v1;
+struct ext_data_control_device_v1;
+struct ext_data_control_source_v1;
+struct ext_data_control_offer_v1;
 struct wl_surface;
 struct wl_subsurface;
 struct wl_compositor;
@@ -100,6 +105,18 @@ public:
     uint64_t clipboard_seq() const { return clipboard_seq_; }
     const std::string& clipboard_text() const { return clipboard_text_; }
 
+    // Keeping the user's clipboard across our own Ctrl+C (Ctrl+D): save what
+    // it holds (every format it's offered in), let the game copy the item,
+    // then offer the saved content again as the clipboard.
+    void save_selection();
+    // The save has finished (or there's nothing to save).
+    bool selection_saved() const { return save_state_ != SaveState::Reading; }
+    // After the item text arrived: put the saved content back, as soon as
+    // the save has finished.
+    void restore_selection();
+    // The copy didn't happen; the clipboard never changed.
+    void forget_saved_selection();
+
     // Listener callbacks (called by libwayland on our queue).
     void on_global(wl_registry* reg, uint32_t name, const char* iface, uint32_t version);
     void on_seat_caps(uint32_t caps);
@@ -117,6 +134,12 @@ public:
     void on_pointer_button(uint32_t button, uint32_t state);
     void on_pointer_axis(uint32_t axis, double value);
     void on_preferred_scale(uint32_t scale_120);
+    void on_input_serial(uint32_t serial) { last_serial_ = serial; }
+    void on_source_send(wl_data_source* source, const char* mime, int fd);
+    void on_source_cancelled(wl_data_source* source);
+    void on_control_send(ext_data_control_source_v1* source, const char* mime, int fd);
+    void on_control_cancelled(ext_data_control_source_v1* source);
+    void on_control_finished();
 
 private:
     // wl_pointer.cpp
@@ -132,6 +155,12 @@ private:
     void start_receive(wl_data_offer* offer);
     void continue_receive();
     void cancel_receive();
+    void clear_saved();
+    void continue_save();
+    void do_restore();
+    void continue_writes();
+    void queue_write(const char* mime, int fd);
+    void drop_own_source();
 
     wl_display* display_;
     wl_event_queue* queue_ = nullptr;
@@ -147,14 +176,45 @@ private:
     bool last_key_down_ = false;
     std::vector<Hotkey> hotkeys_;
 
-    // Best text mime type each live offer advertised ("" = none yet).
-    std::unordered_map<wl_data_offer*, std::string> offers_;
+    // Each live offer's mime types, and the best text one ("" = none yet).
+    struct OfferInfo {
+        std::string text_mime;
+        std::vector<std::string> mimes;
+    };
+    std::unordered_map<wl_data_offer*, OfferInfo> offers_;
     wl_data_offer* selection_ = nullptr;
     wl_data_offer* dnd_offer_ = nullptr;
     int receive_fd_ = -1;
     std::string receive_buf_;
     std::string clipboard_text_;
     uint64_t clipboard_seq_ = 0;
+
+    // The user's clipboard, saved around our own Ctrl+C.
+    enum class SaveState { None, Reading, Ready };
+    struct SavedMime {
+        std::string mime, data;
+        int fd = -1;  // still reading
+    };
+    SaveState save_state_ = SaveState::None;
+    std::vector<SavedMime> saved_;
+    bool restore_wanted_ = false;
+    uint64_t restore_deadline_ms_ = 0;
+    // Our source holding the restored content, while it's the clipboard:
+    // through ext-data-control if the compositor has it (no input serial
+    // needed), else the core data device.
+    ext_data_control_manager_v1* control_manager_ = nullptr;
+    ext_data_control_device_v1* control_device_ = nullptr;
+    ext_data_control_source_v1* own_control_source_ = nullptr;
+    wl_data_source* own_source_ = nullptr;
+    bool own_active() const { return own_source_ || own_control_source_; }
+    bool expect_own_selection_ = false;
+    struct PendingWrite {
+        int fd;
+        std::string data;
+        size_t offset = 0;
+    };
+    std::vector<PendingWrite> writes_;
+    uint32_t last_serial_ = 0;  // latest input event, for set_selection
 
     // Mouse: our input-only subsurface over the game's surface.
     wl_surface* parent_ = nullptr;

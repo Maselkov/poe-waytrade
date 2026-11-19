@@ -83,6 +83,16 @@ private:
     bool release_pending_ = false;  // keys go down one frame, up the next
     bool we_pressed_ctrl_ = false;
     bool we_pressed_alt_ = false;
+    // Ctrl+D: the copy keystroke waits (briefly) until the user's clipboard
+    // is saved, and the clipboard is restored once the item text is in.
+    void send_copy_keys(WaylandInput& input);
+    bool copy_queued_ = false;
+    Clock::time_point copy_queued_until_;
+    bool restore_clipboard_ = false;
+    // POE_WAYTRADE_TEST_COPY=1: one Ctrl+D two seconds in, without sending
+    // keys (something else plays the game's copy), to test clipboard keeping.
+    bool test_copy_ = false;
+    std::optional<Clock::time_point> test_copy_at_;
 
     bool waiting_ = false;
     uint64_t seq_at_request_ = 0;

@@ -6,6 +6,7 @@
 #include <linux/input-event-codes.h>
 
 #include <algorithm>
+#include <utility>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -14,6 +15,10 @@ namespace {
 
 // PoE copies the item within a frame or two; this is generous.
 constexpr auto kCopyTimeout = std::chrono::milliseconds(1000);
+// How long Ctrl+D waits for the clipboard to be saved before copying anyway
+// (the save can still finish, and the restore waits for it). Text arrives in
+// a few ms; big images take longer.
+constexpr auto kClipboardSaveWait = std::chrono::milliseconds(150);
 // A quick panel closes once the mouse is this far (logical px) from where
 // the hotkey was pressed, unless Ctrl is held.
 constexpr float kQuickCloseDistance = 40.0f;
@@ -24,6 +29,7 @@ constexpr auto kPinnedLeaveGrace = std::chrono::milliseconds(250);
 
 PriceCheck::PriceCheck() {
     wake_.ping();
+    test_copy_ = getenv("POE_WAYTRADE_TEST_COPY") != nullptr;
     // For working on the UI without the game: open the panel on start with
     // an item as if it had just been copied.
     if (const char* path = getenv("POE_WAYTRADE_DEMO_ITEM")) {
@@ -56,6 +62,13 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
         release_pending_ = false;
     }
 
+    if (test_copy_ && !test_copy_at_) test_copy_at_ = now + std::chrono::seconds(2);
+    if (test_copy_ && test_copy_at_ && now > *test_copy_at_ && input.focused()) {
+        test_copy_at_ = Clock::time_point::max();
+        poe_log("test copy: Ctrl+D");
+        request_copy(input, Mode::Locked, Purpose::Price);
+    }
+
     for (Hotkey key : input.take_hotkeys()) {
         switch (key) {
         case Hotkey::PriceCheck:
@@ -78,6 +91,7 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
         }
     }
 
+    if (copy_queued_ && (input.selection_saved() || now > copy_queued_until_)) send_copy_keys(input);
     if (waiting_) wait_for_clipboard(input, now);
     apply_closing_rules(input, now);
 
@@ -161,9 +175,29 @@ void PriceCheck::request_copy(WaylandInput& input, Mode mode, Purpose purpose) {
         open();
         return;
     }
+    // The copy replaces the user's clipboard: save it first (or give up
+    // waiting after a moment), and put it back afterwards.
+    input.save_selection();
+    copy_queued_ = true;
+    copy_queued_until_ = Clock::now() + kClipboardSaveWait;
+    pending_mode_ = mode;
+    pending_purpose_ = purpose;
+    if (input.selection_saved()) send_copy_keys(input);
+}
+
+void PriceCheck::send_copy_keys(WaylandInput& input) {
+    copy_queued_ = false;
+    restore_clipboard_ = true;
+    Mode mode = pending_mode_;
+    Purpose purpose = pending_purpose_;
     // Ctrl+Alt+C: PoE's advanced copy, which adds each mod's roll range (for
     // the trade filters' sliders) and marks which lines are mods. The user is
     // still holding some modifiers from the hotkey; only add the others.
+    if (test_copy_) {
+        poe_log("test copy: would press Ctrl+Alt+C now");
+        begin_wait(input, mode, purpose, Clock::now() + std::chrono::seconds(5));
+        return;
+    }
     we_pressed_ctrl_ = !input.ctrl_held();
     we_pressed_alt_ = !input.alt_held();
     if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, true);
@@ -186,6 +220,7 @@ void PriceCheck::begin_wait(WaylandInput& input, Mode mode, Purpose purpose, Clo
 void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) {
     if (input.clipboard_seq() != seq_at_request_) {
         waiting_ = false;
+        if (std::exchange(restore_clipboard_, false)) input.restore_selection();
         item_ = parse_item_text(input.clipboard_text());
         status_ = item_ ? "" : "Copied text isn't a PoE item";
         reply_.reset();
@@ -194,6 +229,7 @@ void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) 
         open();
     } else if (now > deadline_) {
         waiting_ = false;
+        if (std::exchange(restore_clipboard_, false)) input.forget_saved_selection();
         item_.reset();
         reply_.reset();
         status_ = "Nothing was copied. Is the cursor over an item?";

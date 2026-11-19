@@ -20,7 +20,9 @@ pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
 find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
 set(PROTOCOL_DIR ${CMAKE_BINARY_DIR}/protocols)
 set(PROTOCOL_SOURCES)
-foreach(xml staging/fractional-scale/fractional-scale-v1.xml)
+# ext-data-control: setting the clipboard without an input serial (to restore
+# the user's clipboard after our copy); wayland-protocols >= 1.39.
+foreach(xml staging/fractional-scale/fractional-scale-v1.xml staging/ext-data-control/ext-data-control-v1.xml)
   get_filename_component(name ${xml} NAME_WE)
   set(header ${PROTOCOL_DIR}/${name}-client-protocol.h)
   set(code ${PROTOCOL_DIR}/${name}-protocol.c)

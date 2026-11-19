@@ -9,13 +9,58 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
+#include <csignal>
+#include <ctime>
+
+#include <pthread.h>
 
 #include <wayland-client.h>
+
+#include "ext-data-control-v1-client-protocol.h"
 
 namespace {
 
 // Item text is a few KB; anything far bigger isn't something we want.
 constexpr size_t kMaxClipboard = 64 * 1024;
+// The user's clipboard, saved around our copy: images can be big, but not
+// unboundedly so.
+constexpr size_t kMaxSaved = 32 * 1024 * 1024;
+constexpr size_t kMaxSavedMimes = 32;
+// Give up restoring if the save never finishes.
+constexpr uint64_t kRestoreTimeoutMs = 3000;
+
+uint64_t now_ms() {
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+// write() to a pipe whose reader is gone raises SIGPIPE, which would kill
+// the game: block it around the write and swallow one that became pending.
+ssize_t write_no_sigpipe(int fd, const char* data, size_t size) {
+    sigset_t pipe_set, old;
+    sigemptyset(&pipe_set);
+    sigaddset(&pipe_set, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &pipe_set, &old);
+    ssize_t n = write(fd, data, size);
+    if (n < 0 && errno == EPIPE) {
+        int saved = errno;
+        timespec zero = {0, 0};
+        sigtimedwait(&pipe_set, nullptr, &zero);
+        errno = saved;
+    }
+    pthread_sigmask(SIG_SETMASK, &old, nullptr);
+    return n;
+}
+
+// X11 selection targets that XWayland/Wine may list; they aren't data.
+bool junk_mime(const std::string& mime) {
+    static const char* const junk[] = {"TARGETS", "MULTIPLE", "TIMESTAMP", "SAVE_TARGETS", "DELETE",
+                                       "INSERT_PROPERTY", "INSERT_SELECTION"};
+    for (const char* j : junk)
+        if (mime == j) return true;
+    return false;
+}
 
 // Preferred first. Wine offers the UTF-8 types for CF_UNICODETEXT.
 const char* const kTextMimes[] = {"text/plain;charset=utf-8", "UTF8_STRING", "text/plain"};
@@ -39,11 +84,13 @@ void seat_name(void*, wl_seat*, const char*) {}
 const wl_seat_listener seat_listener = {seat_caps, seat_name};
 
 void kb_keymap(void*, wl_keyboard*, uint32_t, int32_t fd, uint32_t) { close(fd); }
-void kb_enter(void* data, wl_keyboard*, uint32_t, wl_surface*, wl_array* keys) {
+void kb_enter(void* data, wl_keyboard*, uint32_t serial, wl_surface*, wl_array* keys) {
+    self(data)->on_input_serial(serial);
     self(data)->on_enter(static_cast<uint32_t*>(keys->data), keys->size / sizeof(uint32_t));
 }
 void kb_leave(void* data, wl_keyboard*, uint32_t, wl_surface*) { self(data)->on_leave(); }
-void kb_key(void* data, wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
+void kb_key(void* data, wl_keyboard*, uint32_t serial, uint32_t, uint32_t key, uint32_t state) {
+    self(data)->on_input_serial(serial);
     self(data)->on_key(key, state);
 }
 void kb_modifiers(void*, wl_keyboard*, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) {}
@@ -74,6 +121,49 @@ void dd_leave(void* data, wl_data_device*) { self(data)->on_dnd_leave(); }
 void dd_motion(void*, wl_data_device*, uint32_t, wl_fixed_t, wl_fixed_t) {}
 void dd_drop(void*, wl_data_device*) {}
 void dd_selection(void* data, wl_data_device*, wl_data_offer* offer) { self(data)->on_selection(offer); }
+void src_target(void*, wl_data_source*, const char*) {}
+void src_send(void* data, wl_data_source* source, const char* mime, int32_t fd) {
+    self(data)->on_source_send(source, mime, fd);
+}
+void src_cancelled(void* data, wl_data_source* source) { self(data)->on_source_cancelled(source); }
+void src_dnd_drop_performed(void*, wl_data_source*) {}
+void src_dnd_finished(void*, wl_data_source*) {}
+void src_action(void*, wl_data_source*, uint32_t) {}
+const wl_data_source_listener source_listener = {
+    .target = src_target,
+    .send = src_send,
+    .cancelled = src_cancelled,
+    .dnd_drop_performed = src_dnd_drop_performed,
+    .dnd_finished = src_dnd_finished,
+    .action = src_action,
+};
+
+void ctl_src_send(void* data, ext_data_control_source_v1* source, const char* mime, int32_t fd) {
+    self(data)->on_control_send(source, mime, fd);
+}
+void ctl_src_cancelled(void* data, ext_data_control_source_v1* source) { self(data)->on_control_cancelled(source); }
+const ext_data_control_source_v1_listener control_source_listener = {
+    .send = ctl_src_send,
+    .cancelled = ctl_src_cancelled,
+};
+
+// We only write the clipboard through data-control (reading goes through
+// the data device, like the game's), so offers are dropped right away.
+void ctl_dev_data_offer(void*, ext_data_control_device_v1*, ext_data_control_offer_v1*) {}
+void ctl_dev_selection(void*, ext_data_control_device_v1*, ext_data_control_offer_v1* offer) {
+    if (offer) ext_data_control_offer_v1_destroy(offer);
+}
+void ctl_dev_finished(void* data, ext_data_control_device_v1*) { self(data)->on_control_finished(); }
+void ctl_dev_primary_selection(void*, ext_data_control_device_v1*, ext_data_control_offer_v1* offer) {
+    if (offer) ext_data_control_offer_v1_destroy(offer);
+}
+const ext_data_control_device_v1_listener control_device_listener = {
+    .data_offer = ctl_dev_data_offer,
+    .selection = ctl_dev_selection,
+    .finished = ctl_dev_finished,
+    .primary_selection = ctl_dev_primary_selection,
+};
+
 const wl_data_device_listener data_device_listener = {
     .data_offer = dd_data_offer,
     .enter = dd_enter,
@@ -102,7 +192,13 @@ WaylandInput::WaylandInput(wl_display* display, wl_surface* parent) : display_(d
 WaylandInput::~WaylandInput() {
     destroy_pointer_objects();
     cancel_receive();
-    for (auto& [offer, mime] : offers_) wl_data_offer_destroy(offer);
+    clear_saved();
+    for (PendingWrite& w : writes_) close(w.fd);
+    if (own_source_) wl_data_source_destroy(own_source_);
+    if (own_control_source_) ext_data_control_source_v1_destroy(own_control_source_);
+    if (control_device_) ext_data_control_device_v1_destroy(control_device_);
+    if (control_manager_) ext_data_control_manager_v1_destroy(control_manager_);
+    for (auto& [offer, info] : offers_) wl_data_offer_destroy(offer);
     if (data_device_) wl_data_device_destroy(data_device_);
     if (data_manager_) wl_data_device_manager_destroy(data_manager_);
     if (keyboard_) wl_keyboard_destroy(keyboard_);
@@ -126,6 +222,14 @@ void WaylandInput::poll() {
     wl_display_dispatch_queue_pending(display_, queue_);
 
     continue_receive();
+    continue_save();
+    if (restore_wanted_ && save_state_ == SaveState::Ready) do_restore();
+    if (restore_wanted_ && now_ms() > restore_deadline_ms_) {
+        poe_log("clipboard: saving took too long, not restoring");
+        restore_wanted_ = false;
+        clear_saved();
+    }
+    continue_writes();
 }
 
 const char* WaylandInput::status() const {
@@ -142,6 +246,9 @@ void WaylandInput::on_global(wl_registry* reg, uint32_t name, const char* iface,
     } else if (!data_manager_ && !strcmp(iface, wl_data_device_manager_interface.name)) {
         data_manager_ = static_cast<wl_data_device_manager*>(
             wl_registry_bind(reg, name, &wl_data_device_manager_interface, std::min(version, 3u)));
+    } else if (!control_manager_ && !strcmp(iface, ext_data_control_manager_v1_interface.name)) {
+        control_manager_ = static_cast<ext_data_control_manager_v1*>(
+            wl_registry_bind(reg, name, &ext_data_control_manager_v1_interface, 1));
     } else {
         bind_pointer_globals(reg, name, iface, version);
     }
@@ -149,6 +256,11 @@ void WaylandInput::on_global(wl_registry* reg, uint32_t name, const char* iface,
 }
 
 void WaylandInput::maybe_create_data_device() {
+    // Globals arrive in any order: data-control may come after the rest.
+    if (seat_ && control_manager_ && !control_device_) {
+        control_device_ = ext_data_control_manager_v1_get_data_device(control_manager_, seat_);
+        ext_data_control_device_v1_add_listener(control_device_, &control_device_listener, this);
+    }
     if (data_device_ || !seat_ || !data_manager_) return;
     data_device_ = wl_data_device_manager_get_data_device(data_manager_, seat_);
     wl_data_device_add_listener(data_device_, &data_device_listener, this);
@@ -216,15 +328,17 @@ void WaylandInput::on_key(uint32_t key, uint32_t state) {
 // ---- clipboard -------------------------------------------------------------
 
 void WaylandInput::on_data_offer(wl_data_offer* offer) {
-    offers_[offer] = "";
+    offers_[offer] = {};
     wl_data_offer_add_listener(offer, &offer_listener, this);
 }
 
 void WaylandInput::on_offer_mime(wl_data_offer* offer, const char* mime) {
     auto it = offers_.find(offer);
     if (it == offers_.end()) return;
+    it->second.mimes.push_back(mime);
     int rank = mime_rank(mime);
-    if (rank >= 0 && (it->second.empty() || rank < mime_rank(it->second))) it->second = mime;
+    std::string& best = it->second.text_mime;
+    if (rank >= 0 && (best.empty() || rank < mime_rank(best))) best = mime;
 }
 
 void WaylandInput::destroy_offer(wl_data_offer* offer) {
@@ -247,12 +361,17 @@ void WaylandInput::on_selection(wl_data_offer* offer) {
     cancel_receive();
     if (selection_ != offer) destroy_offer(selection_);
     selection_ = offer;
+    // Our restored clipboard coming back to us: not a copy.
+    if (offer && expect_own_selection_ && own_active()) {
+        expect_own_selection_ = false;
+        return;
+    }
     if (offer) start_receive(offer);
 }
 
 void WaylandInput::start_receive(wl_data_offer* offer) {
     auto it = offers_.find(offer);
-    if (it == offers_.end() || it->second.empty()) return;  // not text
+    if (it == offers_.end() || it->second.text_mime.empty()) return;  // not text
 
     int fds[2];
     if (pipe2(fds, O_CLOEXEC | O_NONBLOCK) != 0) {
@@ -261,7 +380,7 @@ void WaylandInput::start_receive(wl_data_offer* offer) {
     }
     // The source (Wine) writes into the pipe from its own event handling; we
     // drain it a bit every frame instead of blocking the present thread.
-    wl_data_offer_receive(offer, it->second.c_str(), fds[1]);
+    wl_data_offer_receive(offer, it->second.text_mime.c_str(), fds[1]);
     close(fds[1]);
     wl_display_flush(display_);
     receive_fd_ = fds[0];
@@ -298,4 +417,194 @@ void WaylandInput::cancel_receive() {
     close(receive_fd_);
     receive_fd_ = -1;
     receive_buf_.clear();
+}
+
+// ---- keeping the user's clipboard ------------------------------------------
+//
+// Ctrl+D makes the game copy the item, which replaces the clipboard. So
+// before that we read everything the clipboard offers (every mime type, all
+// at once over pipes, drained each frame), and once the item text has
+// arrived we become the clipboard owner with that saved content. Like
+// `wl-copy`, the content lives in this process: it stays the clipboard until
+// something else is copied, or the game exits (a clipboard manager such as
+// Klipper usually keeps it then).
+
+void WaylandInput::clear_saved() {
+    for (SavedMime& m : saved_)
+        if (m.fd >= 0) close(m.fd);
+    saved_.clear();
+    save_state_ = SaveState::None;
+}
+
+void WaylandInput::save_selection() {
+    restore_wanted_ = false;
+    // Still serving an earlier restore: that saved content is current.
+    if (own_active() && !saved_.empty()) {
+        save_state_ = SaveState::Ready;
+        return;
+    }
+    clear_saved();
+    if (!data_device_ || !selection_) return;  // nothing to keep
+    auto it = offers_.find(selection_);
+    if (it == offers_.end()) return;
+    for (const std::string& mime : it->second.mimes) {
+        if (junk_mime(mime) || saved_.size() >= kMaxSavedMimes) continue;
+        if (std::any_of(saved_.begin(), saved_.end(), [&](const SavedMime& m) { return m.mime == mime; })) continue;
+        int fds[2];
+        if (pipe2(fds, O_CLOEXEC | O_NONBLOCK) != 0) break;
+        wl_data_offer_receive(selection_, mime.c_str(), fds[1]);
+        close(fds[1]);
+        saved_.push_back({mime, "", fds[0]});
+    }
+    wl_display_flush(display_);
+    save_state_ = saved_.empty() ? SaveState::None : SaveState::Reading;
+}
+
+void WaylandInput::continue_save() {
+    if (save_state_ != SaveState::Reading) return;
+    size_t total = 0;
+    for (const SavedMime& m : saved_) total += m.data.size();
+    bool reading = false;
+    char chunk[65536];
+    for (SavedMime& m : saved_) {
+        while (m.fd >= 0) {
+            ssize_t n = read(m.fd, chunk, sizeof(chunk));
+            if (n > 0) {
+                total += n;
+                if (total > kMaxSaved) {
+                    poe_log("clipboard: over %zu bytes, not keeping it", kMaxSaved);
+                    clear_saved();
+                    return;
+                }
+                m.data.append(chunk, n);
+                continue;
+            }
+            if (n < 0 && (errno == EAGAIN || errno == EINTR)) break;
+            close(m.fd);  // EOF or error
+            m.fd = -1;
+        }
+        if (m.fd >= 0) reading = true;
+    }
+    if (reading) return;
+    // A type that gave nothing isn't worth offering.
+    std::erase_if(saved_, [](const SavedMime& m) { return m.data.empty(); });
+    save_state_ = saved_.empty() ? SaveState::None : SaveState::Ready;
+    if (save_state_ == SaveState::Ready) poe_log("clipboard: saved %zu type(s)", saved_.size());
+}
+
+void WaylandInput::restore_selection() {
+    if (save_state_ == SaveState::None) return;  // nothing was saved
+    restore_wanted_ = true;
+    restore_deadline_ms_ = now_ms() + kRestoreTimeoutMs;
+}
+
+void WaylandInput::forget_saved_selection() {
+    restore_wanted_ = false;
+    if (!own_active()) clear_saved();
+}
+
+void WaylandInput::drop_own_source() {
+    if (own_source_) wl_data_source_destroy(own_source_);
+    if (own_control_source_) ext_data_control_source_v1_destroy(own_control_source_);
+    own_source_ = nullptr;
+    own_control_source_ = nullptr;
+    expect_own_selection_ = false;
+}
+
+void WaylandInput::do_restore() {
+    restore_wanted_ = false;
+    if (saved_.empty()) return;
+    std::vector<SavedMime> keep = std::move(saved_);
+    drop_own_source();  // an earlier restore's; its cancel mustn't clear `keep`
+    saved_ = std::move(keep);
+    // Sources come from our managers, so their events come to our queue.
+    if (control_device_) {
+        // No input serial needed: KWin refuses a core set_selection without
+        // a fresh one, and the keys we just sent may not count.
+        own_control_source_ = ext_data_control_manager_v1_create_data_source(control_manager_);
+        ext_data_control_source_v1_add_listener(own_control_source_, &control_source_listener, this);
+        for (const SavedMime& m : saved_) ext_data_control_source_v1_offer(own_control_source_, m.mime.c_str());
+        ext_data_control_device_v1_set_selection(control_device_, own_control_source_);
+    } else if (data_device_ && data_manager_) {
+        own_source_ = wl_data_device_manager_create_data_source(data_manager_);
+        wl_data_source_add_listener(own_source_, &source_listener, this);
+        for (const SavedMime& m : saved_) wl_data_source_offer(own_source_, m.mime.c_str());
+        wl_data_device_set_selection(data_device_, own_source_, last_serial_);
+    } else {
+        return;
+    }
+    expect_own_selection_ = true;
+    wl_display_flush(display_);
+    poe_log("clipboard: restored (%s)", own_control_source_ ? "data-control" : "data device");
+}
+
+void WaylandInput::queue_write(const char* mime, int fd) {
+    auto it = std::find_if(saved_.begin(), saved_.end(), [&](const SavedMime& m) { return m.mime == mime; });
+    if (it == saved_.end()) {
+        close(fd);
+        return;
+    }
+    // Written a bit every frame: a slow reader mustn't stall the game.
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    writes_.push_back({fd, it->data});
+    continue_writes();
+}
+
+void WaylandInput::on_source_send(wl_data_source* source, const char* mime, int fd) {
+    if (source != own_source_) {
+        close(fd);
+        return;
+    }
+    queue_write(mime, fd);
+}
+
+void WaylandInput::on_control_send(ext_data_control_source_v1* source, const char* mime, int fd) {
+    if (source != own_control_source_) {
+        close(fd);
+        return;
+    }
+    queue_write(mime, fd);
+}
+
+void WaylandInput::continue_writes() {
+    for (PendingWrite& w : writes_) {
+        while (w.fd >= 0 && w.offset < w.data.size()) {
+            ssize_t n = write_no_sigpipe(w.fd, w.data.data() + w.offset, w.data.size() - w.offset);
+            if (n > 0) {
+                w.offset += n;
+            } else if (n < 0 && (errno == EAGAIN || errno == EINTR)) {
+                break;
+            } else {
+                w.offset = w.data.size();  // reader went away
+            }
+        }
+        if (w.fd >= 0 && w.offset >= w.data.size()) {
+            close(w.fd);
+            w.fd = -1;
+        }
+    }
+    std::erase_if(writes_, [](const PendingWrite& w) { return w.fd < 0; });
+}
+
+// Something else was copied: our saved content is no longer needed.
+void WaylandInput::on_source_cancelled(wl_data_source* source) {
+    if (source != own_source_) return;
+    drop_own_source();
+    clear_saved();
+}
+
+void WaylandInput::on_control_cancelled(ext_data_control_source_v1* source) {
+    if (source != own_control_source_) return;
+    drop_own_source();
+    clear_saved();
+}
+
+void WaylandInput::on_control_finished() {
+    // The compositor withdrew data-control (e.g. the seat went away).
+    if (own_control_source_) {
+        drop_own_source();
+        clear_saved();
+    }
+    ext_data_control_device_v1_destroy(control_device_);
+    control_device_ = nullptr;
 }
