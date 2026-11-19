@@ -126,22 +126,25 @@ body {
 /* Trade search options */
 .options { display: flex; align-items: center; padding: 10dp 14dp 2dp; }
 /* Fixed layout: labels never wrap, and the corrupted button keeps one width,
-   so clicking either control doesn't move anything. */
-.segmented { display: flex; flex: 1; min-width: 0; border: 1dp $off; border-radius: 8dp; margin-right: 8dp; }
-.seg {
-    flex: 1 1 auto;
+   so clicking either control doesn't move anything. The base button (like
+   APT's) shows the search it's set to: "Any Gloves" or the exact base,
+   outlined in the accent colour. */
+.base-toggle {
+    flex: 1;
     min-width: 0;
-    padding: 3dp 6dp;
+    margin-right: 8dp;
+    padding: 3dp 8dp;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: $text-muted;
-    border-radius: 7dp;
+    border: 1dp $off;
+    border-radius: 8dp;
+    color: $text-strong;
     cursor: pointer;
 }
-.seg:hover { color: $text-strong; }
-.seg.active { background-color: $chip; color: $text-strong; }
+.base-toggle:hover { background-color: $chip; }
+.base-toggle.exact { border-color: $accent; }
 .toggle-chip {
     width: 78dp;
     flex-shrink: 0;

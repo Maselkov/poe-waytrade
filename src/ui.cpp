@@ -347,8 +347,8 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("close", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->close();
     });
-    c.BindEventCallback("set_base", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
-        if (price_check && !args.empty()) price_check->set_base_only(args[0].Get<int>() != 0);
+    c.BindEventCallback("toggle_base", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check && price_check->reply()) price_check->set_base_only(!price_check->reply()->base_only);
     });
     c.BindEventCallback("cycle_corrupted", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->cycle_corrupted();
@@ -476,7 +476,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     case PriceCheck::Mode::Quick: m.hint = "Hold Ctrl and move here to use filters"; break;
     // Same line count as in Quick, so pinning doesn't resize the panel
     // (and pull it out from under the pointer).
-    case PriceCheck::Mode::Pinned: m.hint = "Move away to close"; break;
+    case PriceCheck::Mode::Pinned: m.hint = "Release Ctrl and move away to close"; break;
     case PriceCheck::Mode::Locked: if (map) m.hint = "Click a mod to mark it"; break;
     }
     const auto& item = pc.item();

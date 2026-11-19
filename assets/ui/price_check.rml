@@ -28,10 +28,8 @@
 
     <div data-if="state == 'trade'">
         <div class="options">
-            <div class="segmented" data-if="category_label != ''">
-                <div data-attr-class="base_only ? 'seg' : 'seg active'" data-event-click="set_base(0)">{{category_label}}</div>
-                <div data-attr-class="base_only ? 'seg active' : 'seg'" data-event-click="set_base(1)">{{base_label}}</div>
-            </div>
+            <div data-if="category_label != ''" data-attr-class="base_only ? 'base-toggle exact' : 'base-toggle'"
+                 data-event-click="toggle_base">{{base_only ? base_label : category_label}}</div>
             <div data-attr-class="'toggle-chip ' + corrupted" data-event-click="cycle_corrupted">{{corrupted_label}}</div>
         </div>
         <div class="filters">
