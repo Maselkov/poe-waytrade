@@ -25,6 +25,9 @@ jobs:
             exit 1
           fi
           echo "VERSION=$pkgver" >> "$GITHUB_ENV"
+          # The checkout has no .git (git isn't installed yet), so give the
+          # build its version: the tag, which is pkgver.
+          echo "WAYTRADE_VERSION=$pkgver" >> "$GITHUB_ENV"
 
       - name: Test
         working-directory: daemon

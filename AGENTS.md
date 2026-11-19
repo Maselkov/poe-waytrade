@@ -47,3 +47,16 @@ cmake --build build
 
 The `package` job (`cd packaging/arch && makepkg`) takes about 6 minutes in
 CI. Run it locally only when you change `packaging/`.
+
+## Versions and releases
+
+`pkgver` in `packaging/arch/PKGBUILD` is the release version, and
+`daemon/Cargo.toml`'s `version` must equal it (the `lint` job checks). To bump,
+change both, run `cargo update -p poe-waytrade-daemon --offline` in `daemon/`,
+and commit. To release, tag that commit `v<pkgver>` and push the tag:
+`release.yml` builds it and makes the GitHub release.
+
+The binaries report the exact build from `git describe` (`daemon/build.rs`,
+`cmake/version.cmake`): `0.21.0` on the tag, `0.21.0-5-gcf90910` after it,
+`-dirty` with uncommitted changes. The daemon prints it with `--version` and at
+start; the layer logs it when the game creates its Vulkan instance.

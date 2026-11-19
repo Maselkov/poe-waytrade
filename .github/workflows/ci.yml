@@ -25,7 +25,16 @@ jobs:
       - name: Install dependencies
         working-directory: .
         run: .github/scripts/arch-setup.sh rust gcc
+      - name: Cargo version matches the PKGBUILD's pkgver
+        run: |
+          pkgver=$(sed -n 's/^pkgver=//p' ../packaging/arch/PKGBUILD)
+          cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml)
+          if [ "$cargo" != "$pkgver" ]; then
+            echo "daemon/Cargo.toml has version $cargo, packaging/arch/PKGBUILD has pkgver $pkgver" >&2
+            exit 1
+          fi
       - name: Formatting
+        if: ${{ !cancelled() }}
         run: cargo fmt --check
       # Runs even when formatting fails, so both problems show at once.
       - name: Clippy
@@ -53,7 +62,13 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
+      # git before checkout, so the checkout is a repository with its tags
+      # and the build's version comes from `git describe`.
+      - name: Install git
+        run: pacman -Sy --noconfirm --needed git
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install dependencies
         run: .github/scripts/arch-setup.sh
       - name: Arch package

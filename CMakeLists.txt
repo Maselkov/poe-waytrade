@@ -35,6 +35,17 @@ foreach(xml staging/fractional-scale/fractional-scale-v1.xml staging/ext-data-co
   list(APPEND PROTOCOL_SOURCES ${header} ${code})
 endforeach()
 
+# The build's version (version.h), from `git describe` at every build; the
+# PKGBUILD's pkgver when there's no git. See cmake/version.cmake.
+file(STRINGS ${CMAKE_SOURCE_DIR}/packaging/arch/PKGBUILD PKGVER_LINE REGEX "^pkgver=")
+string(REGEX REPLACE "^pkgver=" "" PKGVER "${PKGVER_LINE}")
+set(VERSION_DIR ${CMAKE_BINARY_DIR}/version)
+add_custom_target(poe_waytrade_version
+  COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DOUT=${VERSION_DIR}/version.h -DFALLBACK=${PKGVER}
+          -P ${CMAKE_SOURCE_DIR}/cmake/version.cmake
+  BYPRODUCTS ${VERSION_DIR}/version.h
+  COMMENT "Checking the build version")
+
 # SPIR-V for the UI renderer, as comma-separated words to #include.
 find_program(GLSLC glslc REQUIRED)
 set(SHADER_DIR ${CMAKE_BINARY_DIR}/shaders)
@@ -77,7 +88,8 @@ add_library(VkLayer_poe_waytrade SHARED
   ${SHADER_OUTPUTS}
 )
 target_include_directories(VkLayer_poe_waytrade PRIVATE ${VULKAN_INCLUDE_DIR} ${PROTOCOL_DIR} ${SHADER_DIR}
-  ${CMAKE_SOURCE_DIR}/third_party/stb)
+  ${VERSION_DIR} ${CMAKE_SOURCE_DIR}/third_party/stb)
+add_dependencies(VkLayer_poe_waytrade poe_waytrade_version)
 target_compile_definitions(VkLayer_poe_waytrade PRIVATE VK_NO_PROTOTYPES VK_USE_PLATFORM_WAYLAND_KHR)
 # Fonts and UI documents are built in with #embed (C23).
 set_source_files_properties(src/assets.c PROPERTIES
