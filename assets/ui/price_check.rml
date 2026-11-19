@@ -48,11 +48,17 @@
                     <div class="switch"><div class="knob"/></div>
                     <div class="mod">{{f.label}}</div>
                     <div class="max-tag" data-if="f.max_roll">Max</div>
-                    <div class="min" data-if="f.min != ''">{{f.min}}+</div>
+                    <div class="min" data-if="f.bounds != ''">{{f.bounds}}</div>
                 </div>
                 <div class="slider-row" data-if="f.enabled &amp;&amp; f.has_slider">
-                    <input type="range" class="slider" data-attr-min="f.lo" data-attr-max="f.hi" data-attr-step="f.step"
-                           data-attr-value="f.min_value" data-event-change="set_min(f.index)"/>
+                    <div class="range" data-event-mousedown="range_press(f.index)" data-event-drag="range_drag(f.index)">
+                        <div class="range-inner">
+                            <div class="range-track"/>
+                            <div class="range-fill" data-style-left="f.min_pct + '%'" data-style-width="(f.max_pct - f.min_pct) + '%'"/>
+                            <div class="range-handle" data-style-left="f.min_pct + '%'"/>
+                            <div class="range-handle" data-style-left="f.max_pct + '%'"/>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="section-label" data-if="weapon_filters.size > 0 &amp;&amp; mod_filters.size > 0">Mods</div>
@@ -61,11 +67,17 @@
                     <div class="switch"><div class="knob"/></div>
                     <div class="mod">{{f.label}}</div>
                     <div class="max-tag" data-if="f.max_roll">Max</div>
-                    <div class="min" data-if="f.min != ''">{{f.min}}+</div>
+                    <div class="min" data-if="f.bounds != ''">{{f.bounds}}</div>
                 </div>
                 <div class="slider-row" data-if="f.enabled &amp;&amp; f.has_slider">
-                    <input type="range" class="slider" data-attr-min="f.lo" data-attr-max="f.hi" data-attr-step="f.step"
-                           data-attr-value="f.min_value" data-event-change="set_min(f.index)"/>
+                    <div class="range" data-event-mousedown="range_press(f.index)" data-event-drag="range_drag(f.index)">
+                        <div class="range-inner">
+                            <div class="range-track"/>
+                            <div class="range-fill" data-style-left="f.min_pct + '%'" data-style-width="(f.max_pct - f.min_pct) + '%'"/>
+                            <div class="range-handle" data-style-left="f.min_pct + '%'"/>
+                            <div class="range-handle" data-style-left="f.max_pct + '%'"/>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="more-mods" data-if="more_mods > 0" data-event-click="show_more_mods">+ {{more_mods}} more mods</div>

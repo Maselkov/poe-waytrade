@@ -218,12 +218,11 @@ impl Trade {
         Ok(Prepared { filters, category_label, defaults: SearchOptions { base_only: false, corrupted } })
     }
 
-    /// `enabled`: the prepared filters to use, by index, each with the
-    /// minimum to search for (`None`: the filter's default).
+    /// `enabled`: the prepared filters to use, by index, with their bounds.
     pub fn search(
         &mut self,
         item: &Item,
-        enabled: &[(usize, Option<f64>)],
+        enabled: &[Choice],
         options: SearchOptions,
         league: &str,
         prices: &PriceDb,
@@ -240,7 +239,7 @@ impl Trade {
     fn search_inner(
         &mut self,
         item: &Item,
-        enabled: &[(usize, Option<f64>)],
+        enabled: &[Choice],
         options: SearchOptions,
         league: &str,
         prices: &PriceDb,
@@ -248,10 +247,10 @@ impl Trade {
         self.ensure_data()?;
         let data = &self.data.as_ref().unwrap().0;
         let filters = build_filters(item, data);
-        let chosen: Vec<Option<Option<f64>>> = filters
+        let chosen: Vec<Option<Bounds>> = filters
             .iter()
             .enumerate()
-            .map(|(i, f)| enabled.iter().find(|(j, _)| *j == i).map(|(_, min)| min.or(f.min)))
+            .map(|(i, f)| enabled.iter().find(|c| c.index == i).map(|c| (c.min.or(f.min), c.max)))
             .collect();
         let body = query(item, &filters, &chosen, options).to_string();
         let league_path = ninja::encode(league);
@@ -768,26 +767,44 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
 }
 
 
-/// `chosen[i]`: whether filter i is used, and its minimum.
-fn query(item: &Item, filters: &[Filter], chosen: &[Option<Option<f64>>], options: SearchOptions) -> Value {
+/// A filter the layer wants searched, with the bounds it chose (no minimum:
+/// the filter's default; no maximum: unbounded).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Choice {
+    pub index: usize,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+}
+
+/// Minimum and maximum of a stat or property filter.
+type Bounds = (Option<f64>, Option<f64>);
+
+fn bounds_json((min, max): Bounds) -> Value {
+    let mut v = json!({});
+    if let Some(min) = min {
+        v["min"] = json!(min);
+    }
+    if let Some(max) = max {
+        v["max"] = json!(max);
+    }
+    v
+}
+
+/// `chosen[i]`: whether filter i is used, and its bounds.
+fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: SearchOptions) -> Value {
     let mut stats = Vec::new();
     let mut q = json!({
         "status": { "option": "online" },
         "filters": { "type_filters": { "filters": { "rarity": { "option": "nonunique" } } } },
     });
     for (f, choice) in filters.iter().zip(chosen) {
-        let Some(min) = choice else { continue };
+        let Some(bounds) = *choice else { continue };
         match &f.target {
-            Target::Stat(id) => stats.push(match min {
-                Some(min) => json!({ "id": id, "value": { "min": min } }),
-                None => json!({ "id": id }),
+            Target::Stat(id) => stats.push(match bounds {
+                (None, None) => json!({ "id": id }),
+                _ => json!({ "id": id, "value": bounds_json(bounds) }),
             }),
-            Target::Property(group, key) => {
-                q["filters"][*group]["filters"][*key] = match min {
-                    Some(min) => json!({ "min": min }),
-                    None => json!({}),
-                }
-            }
+            Target::Property(group, key) => q["filters"][*group]["filters"][*key] = bounds_json(bounds),
         }
     }
     q["stats"] = json!([{ "type": "and", "filters": stats }]);
@@ -953,7 +970,7 @@ mod tests {
     fn search_options() {
         let item = crate::item::parse(RING).unwrap();
         let filters = build_filters(&item, &test_data());
-        let enabled: Vec<Option<Option<f64>>> = filters.iter().map(|f| Some(f.min)).collect();
+        let enabled: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
         let opts = |base_only, corrupted| SearchOptions { base_only, corrupted };
 
         let q = query(&item, &filters, &enabled, opts(false, Corrupted::No));
@@ -1007,10 +1024,18 @@ mod tests {
         assert_eq!(filters[1].min, Some(1.17));
         assert!(!filters[1].default_on);
 
-        let chosen: Vec<Option<Option<f64>>> = filters.iter().map(|f| f.default_on.then_some(f.min)).collect();
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
         let q = query(&item, &filters, &chosen, SearchOptions { base_only: false, corrupted: Corrupted::Any });
         assert_eq!(q["query"]["filters"]["weapon_filters"]["filters"]["pdps"]["min"], 175.0);
         assert!(q["query"]["filters"]["weapon_filters"]["filters"]["aps"].is_null());
+
+        // A chosen maximum goes along with the minimum; either may be left out.
+        let mut chosen = chosen;
+        chosen[0] = Some((Some(180.0), Some(220.0)));
+        chosen[1] = Some((None, Some(1.5)));
+        let q = query(&item, &filters, &chosen, SearchOptions { base_only: false, corrupted: Corrupted::Any });
+        assert_eq!(q["query"]["filters"]["weapon_filters"]["filters"]["pdps"], serde_json::json!({ "min": 180.0, "max": 220.0 }));
+        assert_eq!(q["query"]["filters"]["weapon_filters"]["filters"]["aps"], serde_json::json!({ "max": 1.5 }));
     }
 
     #[test]

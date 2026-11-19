@@ -232,14 +232,20 @@ void PriceCheck::toggle_filter(int index) {
     changed();
 }
 
-void PriceCheck::set_min(int index, double min) {
+void PriceCheck::set_bounds(int index, double min, double max) {
     if (!reply_ || reply_->status != "trade") return;
     for (TradeFilter& f : reply_->filters) {
         if (f.index != index) continue;
-        char buf[32];
-        snprintf(buf, sizeof(buf), f.step < 1 ? "%.2f" : "%.0f", min);
-        if (f.min == buf) return;
-        f.min = buf;
+        auto text = [&](double v) {
+            if (v < 0) return std::string();
+            char buf[32];
+            snprintf(buf, sizeof(buf), f.step < 1 ? "%.2f" : "%.0f", v);
+            return std::string(buf);
+        };
+        std::string min_text = text(min), max_text = text(max);
+        if (f.min == min_text && f.max == max_text) return;
+        f.min = min_text;
+        f.max = max_text;
     }
     stale_ = reply_->searched;
     changed();
@@ -272,9 +278,9 @@ void PriceCheck::cycle_corrupted() {
 
 void PriceCheck::search() {
     if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
-    std::vector<std::pair<int, std::string>> enabled;
+    std::vector<TradeFilter> enabled;
     for (const TradeFilter& f : reply_->filters)
-        if (f.enabled) enabled.emplace_back(f.index, f.min);
+        if (f.enabled) enabled.push_back(f);
     status_.clear();
     daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, item_text_);
     changed();

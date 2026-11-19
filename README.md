@@ -52,9 +52,11 @@ rate limit; changing anything afterwards marks the listings as out of date
 until you search again.
 
 Every price check uses PoE's advanced copy (Ctrl+Alt+C), which includes each
-mod's tier range. A ticked filter gets a slider over that range for its
-minimum; the default is your roll minus 10%, kept within the tier, and a roll
-at the top of its tier defaults to exactly that value (tagged "Max"). Weapons
+mod's tier range. A ticked filter gets a two-handle slider over that range,
+like APT's: the left handle sets the minimum, the right one a maximum (at the
+far right: none). The minimum defaults to your roll minus 10%, kept within
+the tier, and a roll at the top of its tier defaults to exactly that value
+(tagged "Max"). Weapons
 also get physical/elemental DPS and attack speed filters from their
 properties. Unticked mods fold behind "+ N more mods".
 

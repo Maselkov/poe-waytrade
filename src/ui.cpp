@@ -144,7 +144,8 @@ struct UiFilter {
     int index = 0;
     bool enabled = false;
     Rml::String label, min;
-    float min_value = 0, lo = 0, hi = 0, step = 1;
+    Rml::String bounds;            // "185+" or "185–220"
+    float min_pct = 0, max_pct = 100;  // handle positions on the slider
     bool has_slider = false, max_roll = false;
     bool visible = true;  // extra mods fold away until "+ N more"
 };
@@ -236,6 +237,35 @@ struct OverlayUi::Impl {
     uint64_t revision = UINT64_MAX;
     // "+ N more mods" expanded, for this check only.
     bool show_all_mods = false;
+    bool range_max_handle = false;  // which handle the current slider drag moves
+
+    void range_input(int index, Rml::Event& ev, bool press) {
+        if (!price_check || !price_check->reply()) return;
+        const TradeFilter* filter = nullptr;
+        for (const TradeFilter& f : price_check->reply()->filters)
+            if (f.index == index) filter = &f;
+        if (!filter || filter->hi <= filter->lo) return;
+        Rml::Element* track = ev.GetCurrentElement();
+        float left = track->GetAbsoluteOffset(Rml::BoxArea::Content).x;
+        float width = track->GetBox().GetSize(Rml::BoxArea::Content).x;
+        if (width <= 0) return;
+        float x = ev.GetParameter<float>("mouse_x", left);
+        double lo = filter->lo, hi = filter->hi, step = filter->step > 0 ? filter->step : 1;
+        double v = lo + std::clamp((x - left) / width, 0.0f, 1.0f) * (hi - lo);
+        v = std::clamp(std::round(v / step) * step, lo, hi);
+        double min = filter->min.empty() ? lo : atof(filter->min.c_str());
+        double max = filter->max.empty() ? -1 : atof(filter->max.c_str());
+        double max_at = max < 0 ? hi : max;
+        if (press) {
+            double to_min = std::abs(v - std::min(min, hi)), to_max = std::abs(v - max_at);
+            range_max_handle = to_max < to_min || (to_max == to_min && v > max_at - 1e-9 && v >= min);
+        }
+        if (range_max_handle)
+            max = v >= hi ? -1 : std::max(v, std::min(min, hi));
+        else
+            min = std::min(v, max_at);
+        price_check->set_bounds(index, min, max);
+    }
     uint64_t shown_all_check = 0;
     uint64_t placed_check = 0;
     bool debug = getenv("POE_OVERLAY_DEBUG") != nullptr;
@@ -318,10 +348,9 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("enabled", &UiFilter::enabled);
         h.RegisterMember("label", &UiFilter::label);
         h.RegisterMember("min", &UiFilter::min);
-        h.RegisterMember("min_value", &UiFilter::min_value);
-        h.RegisterMember("lo", &UiFilter::lo);
-        h.RegisterMember("hi", &UiFilter::hi);
-        h.RegisterMember("step", &UiFilter::step);
+        h.RegisterMember("bounds", &UiFilter::bounds);
+        h.RegisterMember("min_pct", &UiFilter::min_pct);
+        h.RegisterMember("max_pct", &UiFilter::max_pct);
         h.RegisterMember("has_slider", &UiFilter::has_slider);
         h.RegisterMember("max_roll", &UiFilter::max_roll);
         h.RegisterMember("visible", &UiFilter::visible);
@@ -402,9 +431,12 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("search", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->search();
     });
-    c.BindEventCallback("set_min", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
-        Rml::String value = ev.GetParameter<Rml::String>("value", "");
-        if (price_check && !args.empty() && !value.empty()) price_check->set_min(args[0].Get<int>(), atof(value.c_str()));
+    // Range sliders: a press moves the nearer handle there, dragging moves it on.
+    c.BindEventCallback("range_press", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
+        if (!args.empty()) range_input(args[0].Get<int>(), ev, true);
+    });
+    c.BindEventCallback("range_drag", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
+        if (!args.empty()) range_input(args[0].Get<int>(), ev, false);
     });
     c.BindEventCallback("show_more_mods", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (!price_check) return;
@@ -582,11 +614,14 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         if (pc.check_id() != shown_all_check) show_all_mods = false;
         for (const TradeFilter& f : reply->filters) {
             UiFilter u{f.index, f.enabled, f.label, f.min};
-            u.min_value = (float)atof(f.min.c_str());
-            u.lo = (float)f.lo;
-            u.hi = (float)f.hi;
-            u.step = (float)f.step;
             u.has_slider = f.hi > f.lo && !f.min.empty();
+            if (u.has_slider) {
+                auto pct = [&](double v) { return (float)std::clamp((v - f.lo) / (f.hi - f.lo) * 100, 0.0, 100.0); };
+                u.min_pct = pct(atof(f.min.c_str()));
+                u.max_pct = f.max.empty() ? 100 : pct(atof(f.max.c_str()));
+            }
+            if (!f.min.empty()) u.bounds = f.min + (f.max.empty() ? "+" : "\u2013" + f.max);
+            else if (!f.max.empty()) u.bounds = "\u2264 " + f.max;
             u.max_roll = f.max_roll;
             if (f.section == "weapon") {
                 m.weapon_filters.push_back(u);

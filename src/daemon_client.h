@@ -24,6 +24,7 @@ struct TradeFilter {
     double step = 1;
     bool max_roll = false;
     std::string section;  // weapon | total | mod
+    std::string max;      // empty if none
 };
 
 struct TradeListing {
@@ -92,7 +93,8 @@ public:
     void send_raw(const std::string& body) { start(body); }
     // Search the trade site with the filters at these indices.
     // Each enabled filter by index, with its minimum ("" for the default).
-    void request_trade(const std::vector<std::pair<int, std::string>>& enabled, bool base_only,
+    // `enabled`: the filters to search with, by index, with their min/max.
+    void request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                        const std::string& corrupted, const std::string& item_text);
     // Ask the daemon to open a trade search URL in the user's browser.
     void open_url(const std::string& url) { start("OPEN\n" + url); }

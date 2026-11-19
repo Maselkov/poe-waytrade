@@ -59,6 +59,7 @@ PriceReply parse_reply(const std::string& body) {
                 t.max_roll = f[8] == "1";
                 t.section = f[9];
             }
+            if (f.size() >= 11) t.max = f[10];
             reply.filters.push_back(t);
         } else if (f[0] == "listing" && f.size() >= 5) {
             TradeListing l{f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]};
@@ -83,11 +84,11 @@ PriceReply parse_reply(const std::string& body) {
 
 }  // namespace
 
-void DaemonClient::request_trade(const std::vector<std::pair<int, std::string>>& enabled, bool base_only,
+void DaemonClient::request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                                  const std::string& corrupted, const std::string& item_text) {
     std::string indices;
-    for (const auto& [i, min] : enabled)
-        indices += (indices.empty() ? "" : ",") + std::to_string(i) + (min.empty() ? "" : ":" + min);
+    for (const TradeFilter& f : enabled)
+        indices += (indices.empty() ? "" : ",") + std::to_string(f.index) + ":" + f.min + ":" + f.max;
     start("TRADE\n" + indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + item_text);
 }
 

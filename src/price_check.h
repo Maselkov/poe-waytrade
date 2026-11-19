@@ -56,7 +56,8 @@ public:
     // Trade filters and options only change locally; search() sends them.
     // stale(): they changed since the listings on screen were searched.
     void toggle_filter(int index);
-    void set_min(int index, double min);
+    // A filter's bounds from its slider; max < 0: no maximum.
+    void set_bounds(int index, double min, double max);
     void set_base_only(bool base_only);
     void cycle_corrupted();  // any -> no -> yes
     void search();

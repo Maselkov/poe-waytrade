@@ -124,21 +124,26 @@ body {
 .min { background-color: $chip; border-radius: 6dp; padding: 2dp 8dp; color: $text-strong; margin-left: 8dp; }
 .max-tag { font-size: 10dp; font-weight: 500; color: $price; border: 1dp #5a4a22; border-radius: 6dp; padding: 1dp 5dp; margin-left: 6dp; }
 
-/* Minimum slider under a ticked filter */
+/* Min/max range slider under a ticked filter. The handles centre on their
+   value; the padding keeps both ends reachable. A maximum at the right end
+   means none. */
 .slider-row { padding: 2dp 0 4dp 34dp; }
-input.slider { display: block; width: 100%; height: 14dp; }
-input.slider slidertrack { margin-top: 5dp; height: 4dp; border-radius: 2dp; background-color: $off; }
-input.slider sliderbar {
-    margin-top: -5dp;
+.range { height: 16dp; padding: 0 8dp; drag: drag; cursor: pointer; }
+.range-inner { position: relative; height: 16dp; }
+.range-track, .range-fill { position: absolute; top: 6dp; height: 4dp; border-radius: 2dp; }
+.range-track { left: 0; right: 0; background-color: $off; }
+.range-fill { background-color: $accent; }
+.range-handle {
+    position: absolute;
+    top: 1dp;
     width: 14dp;
     height: 14dp;
+    margin-left: -7dp;
     border-radius: 7dp;
     background-color: $accent-text;
     border: 2dp $accent;
-    cursor: pointer;
 }
-input.slider sliderbar:hover, input.slider sliderbar:active { background-color: #ffffff; }
-input.slider sliderarrowdec, input.slider sliderarrowinc { display: none; }
+.range:hover .range-handle { background-color: #ffffff; }
 
 .section-label { font-size: 10dp; letter-spacing: 0.5dp; color: $text-faint; margin: 6dp 0 2dp; }
 .more-mods { color: $text-muted; padding: 4dp 0 2dp 34dp; cursor: pointer; }

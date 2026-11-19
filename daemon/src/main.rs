@@ -22,6 +22,7 @@
 //!   price (status "trade"). Nothing is searched until the layer asks:
 //!     filter   <index> <1|0 enabled> <label> <minimum|""> <slider low>
 //!              <slider high> <step> <1|0 max roll> <weapon|total|mod>
+//!              <maximum|"">
 //!     option   base <base type> <category label>   (if the base can be
 //!                                                  searched on its own)
 //!     option   base_only <1|0>
@@ -33,8 +34,9 @@
 //!              or "41h–5d"|""> <count> <currency id>   (same prices grouped)
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
-//!   request:  "TRADE\n" + comma-separated enabled filters, each "index" or
-//!             "index:minimum" + "\n" +
+//!   request:  "TRADE\n" + comma-separated enabled filters, each "index",
+//!             "index:minimum" or "index:minimum:maximum" (either may be
+//!             empty: default minimum, no maximum) + "\n" +
 //!             "base" or "category" + "\n" + any|no|yes + "\n" + item text:
 //!             search with those filters and options.
 //!
@@ -239,8 +241,11 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
             enabled: indices
                 .split(',')
                 .filter_map(|s| {
-                    let (i, min) = s.trim().split_once(':').map_or((s.trim(), None), |(i, m)| (i, m.parse().ok()));
-                    Some((i.parse().ok()?, min))
+                    let mut f = s.trim().split(':');
+                    let index = f.next()?.parse().ok()?;
+                    let min = f.next().and_then(|m| m.parse().ok());
+                    let max = f.next().and_then(|m| m.parse().ok());
+                    Some(trade::Choice { index, min, max })
                 })
                 .collect(),
             options: trade::SearchOptions { base_only: base == "base", corrupted: trade::Corrupted::parse(corrupted) },
@@ -338,8 +343,7 @@ fn open_trade_url(url: &str) -> String {
 
 /// A trade search the layer asked for.
 struct TradeRequest {
-    /// Filter index and the minimum chosen for it (None: the default).
-    enabled: Vec<(usize, Option<f64>)>,
+    enabled: Vec<trade::Choice>,
     options: trade::SearchOptions,
 }
 
@@ -362,13 +366,14 @@ fn trade_response(state: &State, item: &item::Item, search: Option<&TradeRequest
 
     let _ = writeln!(out, "status\ttrade\ntitle\t{}", clean(&title));
     for (i, f) in prepared.filters.iter().enumerate() {
-        let chosen = search.and_then(|s| s.enabled.iter().find(|(j, _)| *j == i));
+        let chosen = search.and_then(|s| s.enabled.iter().find(|c| c.index == i));
         let on = search.map_or(f.default_on, |_| chosen.is_some());
-        let min = chosen.and_then(|(_, m)| *m).or(f.min).map(trade::trim_number).unwrap_or_default();
+        let min = chosen.and_then(|c| c.min).or(f.min).map(trade::trim_number).unwrap_or_default();
+        let max = chosen.and_then(|c| c.max).map(trade::trim_number).unwrap_or_default();
         let (lo, hi) = f.slider.map_or((String::new(), String::new()), |(lo, hi)| (trade::trim_number(lo), trade::trim_number(hi)));
         let _ = writeln!(
             out,
-            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}",
+            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}\t{max}",
             on as u8,
             clean(&f.label),
             trade::trim_number(f.step),
