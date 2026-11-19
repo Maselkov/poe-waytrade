@@ -12,7 +12,11 @@
 
 namespace {
 
-constexpr char kSocketName[] = "poe-overlay";
+// POE_OVERLAY_SOCKET picks another name, to test against a separate daemon.
+std::string socket_name() {
+    const char* name = getenv("POE_OVERLAY_SOCKET");
+    return name && *name ? name : "poe-overlay";
+}
 // A trade search can take a few seconds (browser start, two API requests).
 constexpr auto kTimeout = std::chrono::seconds(20);
 constexpr size_t kMaxReply = 64 * 1024;
@@ -50,6 +54,10 @@ PriceReply parse_reply(const std::string& body) {
             reply.filters.push_back({atoi(f[1].c_str()), f[2] == "1", f[3], f.size() >= 5 ? f[4] : ""});
         else if (f[0] == "listing" && f.size() >= 5)
             reply.listings.push_back({f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]});
+        else if (f[0] == "subtitle") reply.subtitle = f[1];
+        else if (f[0] == "stat" && f.size() >= 3) reply.map_stats.push_back({f[1], f[2]});
+        else if (f[0] == "mod" && f.size() >= 4) reply.map_mods.push_back({f[1], f[2], f[3]});
+        else if (f[0] == "profile") reply.profile = atoi(f[1].c_str());
         else if (f[0] == "total") reply.total = f[1];
         else if (f[0] == "url") reply.url = f[1];
     }
@@ -77,8 +85,9 @@ void DaemonClient::start(const std::string& body) {
     // Abstract address: leading NUL, no terminator, length covers the name.
     sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;
-    memcpy(addr.sun_path + 1, kSocketName, sizeof(kSocketName) - 1);
-    socklen_t len = offsetof(sockaddr_un, sun_path) + 1 + sizeof(kSocketName) - 1;
+    std::string name = socket_name().substr(0, sizeof(addr.sun_path) - 1);
+    memcpy(addr.sun_path + 1, name.data(), name.size());
+    socklen_t len = offsetof(sockaddr_un, sun_path) + 1 + name.size();
     if (connect(fd_, reinterpret_cast<sockaddr*>(&addr), len) != 0 && errno != EAGAIN &&
         errno != EINPROGRESS) {
         close_socket();

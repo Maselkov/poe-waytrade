@@ -1,0 +1,39 @@
+<rml>
+<head>
+    <title>Map check</title>
+    <link type="text/rcss" href="theme.rcss"/>
+</head>
+<body data-model="ui">
+<div id="panel">
+    <div id="head">
+        <div id="close" data-event-click="close">×</div>
+        <div data-if="name != ''" data-attr-class="'title ' + rarity">{{name}}</div>
+        <div data-attr-class="(name != '' ? 'base ' : 'title ') + rarity">{{base}}</div>
+        <div class="subtitle" data-if="subtitle != ''">{{subtitle}}</div>
+    </div>
+
+    <div class="status" data-if="state == 'status'" data-class-error="status_error">{{status}}</div>
+
+    <div data-if="state == 'map'">
+        <div data-attr-class="'verdict ' + verdict_kind">{{verdict}}</div>
+        <div class="chips" data-if="map_stats.size > 0">
+            <div class="chip" data-for="s : map_stats"><span class="chip-label">{{s.label}}</span> {{s.value}}</div>
+        </div>
+        <div class="profiles">
+            <span class="profiles-label">Profile</span>
+            <div data-attr-class="profile == 1 ? 'profile active' : 'profile'" data-event-click="set_profile(1)">I</div>
+            <div data-attr-class="profile == 2 ? 'profile active' : 'profile'" data-event-click="set_profile(2)">II</div>
+            <div data-attr-class="profile == 3 ? 'profile active' : 'profile'" data-event-click="set_profile(3)">III</div>
+        </div>
+        <div class="mods">
+            <div data-for="mm : map_mods" data-attr-class="'mapmod ' + mm.mark" data-event-click="cycle_mod(mm.index)">
+                <div class="mapmod-text">{{mm.text}}</div>
+                <div class="mapmod-tag" data-if="mm.tag != ''">{{mm.tag}}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hint" data-if="hint != ''">{{hint}}</div>
+</div>
+</body>
+</rml>

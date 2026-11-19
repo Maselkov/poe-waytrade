@@ -1,4 +1,5 @@
-//! Parser for the text PoE1 puts on the clipboard for Ctrl+C on an item.
+//! Parser for the text PoE1 puts on the clipboard for Ctrl+C on an item,
+//! and for Ctrl+Alt+C ("advanced" copy: mod headers and roll ranges).
 
 #[derive(Debug, Default)]
 pub struct Item {
@@ -18,7 +19,13 @@ pub struct Item {
     pub item_level: Option<u32>,
     /// Lines after the "Item Level:" section: enchants, implicits, explicits,
     /// plus some non-mod lines that simply won't match any trade stat.
+    /// Roll ranges from advanced copy are stripped.
     pub mods: Vec<ModLine>,
+    /// Advanced copy marks each mod with a `{ … Modifier … }` header, so
+    /// mods[i].headed tells real mods from other text.
+    pub advanced: bool,
+    /// Map-ish properties in display order, e.g. ("Item Quantity", "+85%").
+    pub map_props: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -48,6 +55,8 @@ pub struct ModLine {
     pub kind: ModKind,
     /// The mod text without its "(implicit)"-style marker.
     pub text: String,
+    /// Came after a `{ … Modifier … }` header (advanced copy only).
+    pub headed: bool,
 }
 
 fn mod_line(line: &str) -> ModLine {
@@ -59,10 +68,43 @@ fn mod_line(line: &str) -> ModLine {
     ];
     for (marker, kind) in MARKERS {
         if let Some(text) = line.strip_suffix(marker) {
-            return ModLine { kind: *kind, text: text.to_string() };
+            return ModLine { kind: *kind, text: text.to_string(), headed: false };
         }
     }
-    ModLine { kind: ModKind::Explicit, text: line.to_string() }
+    ModLine { kind: ModKind::Explicit, text: line.to_string(), headed: false }
+}
+
+/// Map properties shown in the map check, in this order.
+const MAP_PROPS: &[&str] = &[
+    "Item Quantity", "Item Rarity", "Monster Pack Size", "More Currency", "More Scarabs", "More Maps",
+    "More Divination Cards", "Quality",
+];
+
+/// Advanced copy appends the roll range to each number: "+60(55-69)" and
+/// "+25(20-30)%" become "+60" and "+25%". Other parentheses are kept.
+fn strip_roll_ranges(line: &str) -> String {
+    let bytes = line.as_bytes();
+    let mut out = String::with_capacity(line.len());
+    let mut i = 0;
+    while i < line.len() {
+        let c = bytes[i];
+        if c == b'(' && i > 0 && bytes[i - 1].is_ascii_digit() {
+            if let Some(len) = line[i + 1..].find(')') {
+                let inner = &line[i + 1..i + 1 + len];
+                let is_range = !inner.is_empty()
+                    && inner.chars().all(|ch| ch.is_ascii_digit() || ch == '.' || ch == '-')
+                    && inner.chars().any(|ch| ch.is_ascii_digit());
+                if is_range {
+                    i += len + 2;
+                    continue;
+                }
+            }
+        }
+        let ch = line[i..].chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
 }
 
 pub fn parse(text: &str) -> Option<Item> {
@@ -102,7 +144,21 @@ pub fn parse(text: &str) -> Option<Item> {
     let mut after_item_level = false;
     for section in sections.iter().skip(1) {
         if after_item_level {
-            item.mods.extend(section.iter().map(|l| mod_line(l)));
+            let mut headed = false;
+            for line in section {
+                if line.starts_with("{ ") && line.ends_with(" }") {
+                    item.advanced = true;
+                    headed = true;
+                    continue;
+                }
+                // Advanced copy's reminder text, e.g. "(Ignited enemies take…)".
+                if item.advanced && line.starts_with('(') && line.ends_with(')') {
+                    continue;
+                }
+                let mut m = mod_line(&strip_roll_ranges(line));
+                m.headed = headed;
+                item.mods.push(m);
+            }
         } else if let Some(v) = section.iter().find_map(|l| l.strip_prefix("Item Level: ")) {
             item.item_level = leading_number(v);
             after_item_level = true;
@@ -125,6 +181,12 @@ pub fn parse(text: &str) -> Option<Item> {
             item.map_tier = leading_number(v);
         } else if let Some(v) = line.strip_prefix("Stack Size: ") {
             item.stack_size = leading_number(v);
+        }
+        if let Some((label, value)) = line.split_once(": ") {
+            if MAP_PROPS.contains(&label) {
+                let value = strip_roll_ranges(value.trim_end_matches(" (augmented)"));
+                item.map_props.push((label.to_string(), value));
+            }
         }
     }
     Some(item)
@@ -203,6 +265,34 @@ mod tests {
                 (ModKind::Explicit, "Corrupted"),
             ]
         );
+    }
+
+    #[test]
+    fn advanced_copy() {
+        let text = "Item Class: Rings\nRarity: Rare\nDoom Loop\nSapphire Ring\n--------\nItem Level: 84\n--------\n\
+                    { Implicit Modifier — Elemental, Cold, Resistance }\n+25(20-30)% to Cold Resistance (implicit)\n--------\n\
+                    { Prefix Modifier \"Virile\" (Tier: 3) — Life }\n+60(55-69) to maximum Life\n\
+                    { Suffix Modifier \"of the Furnace\" (Tier: 4) — Elemental, Fire, Resistance }\n\
+                    +30(30-35)% to Fire Resistance\n(Reminder text)\n";
+        let item = parse(text).unwrap();
+        assert!(item.advanced);
+        let mods: Vec<_> = item.mods.iter().map(|m| (m.kind, m.text.as_str(), m.headed)).collect();
+        assert_eq!(
+            mods,
+            vec![
+                (ModKind::Implicit, "+25% to Cold Resistance", true),
+                (ModKind::Explicit, "+60 to maximum Life", true),
+                (ModKind::Explicit, "+30% to Fire Resistance", true),
+            ]
+        );
+    }
+
+    #[test]
+    fn ranges() {
+        assert_eq!(strip_roll_ranges("Adds 5(3-6) to 10(9-11) Damage"), "Adds 5 to 10 Damage");
+        assert_eq!(strip_roll_ranges("+0.8(0.6-1)% Leech"), "+0.8% Leech");
+        assert_eq!(strip_roll_ranges("Grants Level 20 Aspect (Unique)"), "Grants Level 20 Aspect (Unique)");
+        assert_eq!(strip_roll_ranges("Monsters reflect 18(15-20)% of Physical Damage"), "Monsters reflect 18% of Physical Damage");
     }
 
     #[test]

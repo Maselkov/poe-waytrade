@@ -4,6 +4,7 @@
 
 #include <linux/input-event-codes.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 
@@ -26,7 +27,9 @@ PriceCheck::PriceCheck() {
         item_text_.assign(std::istreambuf_iterator<char>(f), {});
         item_ = parse_item_text(item_text_);
         status_ = item_ ? "" : std::string("POE_OVERLAY_DEMO_ITEM isn't PoE item text: ") + path;
-        if (item_) daemon_.request(item_text_);
+        // Maps show the map check, everything else the price check.
+        pending_purpose_ = item_ && is_map_like(*item_) ? Purpose::Map : Purpose::Price;
+        if (item_) pending_purpose_ == Purpose::Map ? daemon_.request_map(item_text_) : daemon_.request(item_text_);
         pending_mode_ = Mode::Locked;
         demo_ = true;
         open();
@@ -51,16 +54,19 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     for (Hotkey key : input.take_hotkeys()) {
         switch (key) {
         case Hotkey::PriceCheck:
-            request_copy(input, Mode::Quick);
+            request_copy(input, Mode::Quick, Purpose::Price);
             break;
         case Hotkey::PriceCheckLocked:
-            request_copy(input, Mode::Locked);
+            request_copy(input, Mode::Locked, Purpose::Price);
+            break;
+        case Hotkey::MapCheck:
+            request_copy(input, Mode::Locked, Purpose::Map);
             break;
         case Hotkey::CopySeen:
             // The user's own Ctrl+C on an item, or the echo of ours (then
             // we're already waiting and keep the hotkey's mode).
             if (!waiting_)
-                begin_wait(input, Mode::Quick, now + kCopyTimeout);
+                begin_wait(input, Mode::Quick, Purpose::Price, now + kCopyTimeout);
             else
                 deadline_ = now + kCopyTimeout;
             break;
@@ -81,6 +87,11 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     }
     if (wake_.poll(&reply) && reply.status == "error") poe_log("daemon wake-up: %s", reply.message.c_str());
     if (opener_.poll(&reply) && reply.status != "ok") poe_log("open trade site: %s", reply.message.c_str());
+    if (sender_.poll(&reply) && reply.status != "ok") poe_log("daemon: %s", reply.message.c_str());
+    if (!sender_.busy() && !outbox_.empty()) {
+        sender_.send_raw(outbox_.front());
+        outbox_.pop_front();
+    }
 }
 
 void PriceCheck::apply_closing_rules(WaylandInput& input) {
@@ -110,11 +121,12 @@ void PriceCheck::apply_closing_rules(WaylandInput& input) {
     }
 }
 
-void PriceCheck::request_copy(WaylandInput& input, Mode mode) {
+void PriceCheck::request_copy(WaylandInput& input, Mode mode, Purpose purpose) {
     if (!keyboard_.ok()) {
         status_ = keyboard_.error() + ". Press Ctrl+C on the item instead.";
         item_.reset();
         pending_mode_ = Mode::Locked;  // there's nothing to move toward
+        pending_purpose_ = purpose;
         open();
         return;
     }
@@ -124,14 +136,15 @@ void PriceCheck::request_copy(WaylandInput& input, Mode mode) {
     keyboard_.key(KEY_C, true);
     keyboard_.sync();
     release_pending_ = true;
-    begin_wait(input, mode, Clock::now() + kCopyTimeout);
+    begin_wait(input, mode, purpose, Clock::now() + kCopyTimeout);
 }
 
-void PriceCheck::begin_wait(WaylandInput& input, Mode mode, Clock::time_point deadline) {
+void PriceCheck::begin_wait(WaylandInput& input, Mode mode, Purpose purpose, Clock::time_point deadline) {
     waiting_ = true;
     seq_at_request_ = input.clipboard_seq();
     deadline_ = deadline;
     pending_mode_ = mode;
+    pending_purpose_ = purpose;
     pending_anchor_ = input.game_pointer(&pending_x_, &pending_y_);
 }
 
@@ -142,7 +155,7 @@ void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) 
         status_ = item_ ? "" : "Copied text isn't a PoE item";
         reply_.reset();
         item_text_ = input.clipboard_text();
-        if (item_) daemon_.request(item_text_);
+        if (item_) pending_purpose_ == Purpose::Map ? daemon_.request_map(item_text_) : daemon_.request(item_text_);
         open();
     } else if (now > deadline_) {
         waiting_ = false;
@@ -158,6 +171,7 @@ void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) 
 void PriceCheck::open() {
     demo_ = demo_ && check_id_ == 0;  // a real check ends the demo
     mode_ = pending_mode_;
+    purpose_ = pending_purpose_;
     has_anchor_ = pending_anchor_;
     anchor_x_ = pending_x_;
     anchor_y_ = pending_y_;
@@ -182,6 +196,30 @@ void PriceCheck::toggle_filter(int index) {
     }
     status_.clear();
     daemon_.request_trade(enabled, item_text_);
+    changed();
+}
+
+void PriceCheck::cycle_mod(int index) {
+    if (!reply_ || reply_->status != "map" || index < 0 || index >= (int)reply_->map_mods.size()) return;
+    MapMod& mod = reply_->map_mods[index];
+    size_t slot = std::clamp(reply_->profile, 1, 3) - 1;
+    while (mod.marks.size() < 3) mod.marks += '-';
+    char next = '-';
+    switch (mod.marks[slot]) {
+    case '-': next = 'd'; break;
+    case 'd': next = 'w'; break;
+    case 'w': next = 'g'; break;
+    default: next = '-'; break;
+    }
+    mod.marks[slot] = next;
+    outbox_.push_back("MAPMARK\n" + std::to_string(slot + 1) + "\n" + next + "\n" + mod.key);
+    changed();
+}
+
+void PriceCheck::set_profile(int profile) {
+    if (!reply_ || reply_->status != "map" || profile < 1 || profile > 3 || profile == reply_->profile) return;
+    reply_->profile = profile;
+    outbox_.push_back("MAPPROFILE\n" + std::to_string(profile));
     changed();
 }
 

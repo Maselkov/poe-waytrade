@@ -20,6 +20,17 @@ Trade:
   item there (or next to the stash for items on the left half of the
   screen). PoE's side panels are 986/1600 of the window height wide.
 
+**Alt+D** on a map (or invitation, heist contract/blueprint, expedition
+logbook) opens the map check instead: a verdict at the top ("Deadly: Monsters
+reflect 18% of Physical Damage", "2 warnings", "No dangerous mods"), the map's
+quantity/rarity/pack size, and its mods. Click a mod to cycle it through
+deadly → warning → good → unmarked; marks are per profile (I/II/III) and saved
+in `~/.config/poe-overlay/map-mods.json`. Reflect, no regen, less recovery,
+−max res, cannot leech, player curses and a few others come pre-marked.
+
+Ctrl+Alt+D and Alt+D send PoE's advanced copy (Ctrl+Alt+C, since Alt is still
+held); the daemon understands both formats.
+
 The game keeps keyboard focus (the panel is part of its window), so the
 overlay never uses keys PoE does; in particular there's no Esc to close.
 
@@ -152,7 +163,10 @@ POE_OVERLAY_UI_DIR=$PWD/assets POE_OVERLAY_DEMO_ITEM=item.txt \
 
 `POE_OVERLAY_UI_DIR` loads `ui/*` from disk and reloads them when they
 change; `POE_OVERLAY_DEMO_ITEM` opens the panel on start with that item text
-(as copied from the game). `POE_OVERLAY_UI_SCALE` scales the whole UI.
+(as copied from the game; maps open the map check). `POE_OVERLAY_UI_SCALE`
+scales the whole UI. `POE_OVERLAY_SOCKET=name` makes the layer (and
+`poe-overlay-daemon query`) talk to a daemon on another abstract socket, for
+testing a new daemon next to the installed one.
 
 ## Known limitations / next steps
 

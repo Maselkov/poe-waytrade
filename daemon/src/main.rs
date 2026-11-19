@@ -30,6 +30,16 @@
 //!   request:  "OPEN\n" + url: open a pathofexile.com trade URL in the
 //!             user's browser (the layer can't, from inside the game).
 //!
+//!   request:  "MAPCHECK\n" + item text: the map danger check
+//!   response: status   map | not_map | bad_request
+//!     title    <map name>
+//!     subtitle <tier, class>
+//!     stat     <label> <value>            (quantity, rarity, pack size, ...)
+//!     mod      <key> <text> <marks>       (marks: one of d/w/g/- per profile)
+//!     profile  <active profile, 1-3>
+//!   request:  "MAPMARK\n" + profile + "\n" + d|w|g|- + "\n" + key
+//!   request:  "MAPPROFILE\n" + profile        (both answer "status ok")
+//!
 //! Normally started by systemd socket activation (poe-overlay-daemon.socket):
 //! systemd owns the socket, starts us on the first connection, and we exit
 //! after a while without requests. Run by hand, we bind the socket ourselves
@@ -38,6 +48,7 @@
 mod cdp;
 mod item;
 mod lookup;
+mod mapcheck;
 mod ninja;
 mod trade;
 
@@ -62,12 +73,13 @@ struct State {
     last_error: Mutex<Option<String>>,
     last_request: Mutex<Instant>,
     trade: Mutex<trade::Trade>,
+    map_marks: Mutex<mapcheck::Decisions>,
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("query") {
-        std::process::exit(match query(args.get(2)) {
+        std::process::exit(match query(&args[2..]) {
             Ok(()) => 0,
             Err(e) => {
                 eprintln!("query failed: {e}");
@@ -81,6 +93,7 @@ fn main() {
         last_error: Mutex::new(None),
         last_request: Mutex::new(Instant::now()),
         trade: Mutex::new(trade::Trade::new()),
+        map_marks: Mutex::new(mapcheck::Decisions::load()),
     });
 
     let listener = match systemd_listener() {
@@ -211,6 +224,24 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         respond(state, text, Some(&enabled))
     } else if let Some(url) = request.strip_prefix("OPEN\n") {
         open_trade_url(url.trim())
+    } else if let Some(text) = request.strip_prefix("MAPCHECK\n") {
+        map_check(state, text)
+    } else if let Some(rest) = request.strip_prefix("MAPMARK\n") {
+        let mut parts = rest.splitn(3, '\n');
+        let (profile, decision, key) = (parts.next(), parts.next(), parts.next());
+        let profile = profile.and_then(|p| p.parse().ok()).unwrap_or(0);
+        let decision = decision.and_then(|d| d.chars().next()).unwrap_or('?');
+        let mut marks = state.map_marks.lock().unwrap();
+        if marks.set(profile, key.unwrap_or(""), decision) { save_marks(&marks) } else { bad_request("Bad mark") }
+    } else if let Some(n) = request.strip_prefix("MAPPROFILE\n") {
+        let mut marks = state.map_marks.lock().unwrap();
+        match n.trim().parse::<usize>() {
+            Ok(p) if (1..=mapcheck::PROFILES).contains(&p) => {
+                marks.profile = p;
+                save_marks(&marks)
+            }
+            _ => bad_request("Bad profile"),
+        }
     } else if request == "PING\n" {
         let ready = state.db.read().unwrap().is_some();
         format!("status\t{}\n", if ready { "ready" } else { "loading" })
@@ -218,6 +249,35 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         "status\tbad_request\nmessage\tUnknown request\n".to_string()
     };
     write_frame(&mut stream, &response)
+}
+
+fn bad_request(message: &str) -> String {
+    format!("status\tbad_request\nmessage\t{message}\n")
+}
+
+fn save_marks(marks: &mapcheck::Decisions) -> String {
+    match marks.save() {
+        Ok(()) => "status\tok\n".to_string(),
+        Err(e) => format!("status\terror\nmessage\tCouldn't save map marks: {}\n", clean(&e.to_string())),
+    }
+}
+
+fn map_check(state: &State, text: &str) -> String {
+    let Some(item) = item::parse(text) else { return bad_request("Not PoE item text") };
+    if !mapcheck::is_map_like(&item) {
+        return "status\tnot_map\nmessage\tNot a map\n".to_string();
+    }
+    let info = mapcheck::analyse(&item);
+    let marks = state.map_marks.lock().unwrap();
+    let mut out = format!("status\tmap\ntitle\t{}\nsubtitle\t{}\n", clean(&info.title), clean(&info.subtitle));
+    for (label, value) in &info.props {
+        let _ = writeln!(out, "stat\t{}\t{}", clean(label), clean(value));
+    }
+    for m in &info.mods {
+        let _ = writeln!(out, "mod\t{}\t{}\t{}", clean(&m.key), clean(&m.text), marks.get(&m.key));
+    }
+    let _ = writeln!(out, "profile\t{}", marks.profile);
+    out
 }
 
 /// Only trade search URLs, so a local client can't make us open anything.
@@ -345,16 +405,21 @@ fn write_frame(stream: &mut UnixStream, body: &str) -> io::Result<()> {
     stream.write_all(body.as_bytes())
 }
 
-/// `poe-overlay-daemon query [file]`: send item text (file or stdin) to the
-/// running daemon and print its answer, for testing without the game.
-fn query(path: Option<&String>) -> io::Result<()> {
+/// `poe-overlay-daemon query [--map] [file]`: send item text (file or stdin)
+/// to the running daemon as a price check (or map check) and print its
+/// answer, for testing without the game. POE_OVERLAY_SOCKET picks another
+/// socket name, for a test daemon.
+fn query(args: &[String]) -> io::Result<()> {
+    let map = args.first().is_some_and(|a| a == "--map");
+    let path = args.get(if map { 1 } else { 0 });
     let text = match path {
         Some(p) => std::fs::read_to_string(p)?,
         None => io::read_to_string(io::stdin())?,
     };
-    let addr = SocketAddr::from_abstract_name(SOCKET_NAME)?;
+    let name = std::env::var("POE_OVERLAY_SOCKET").unwrap_or_else(|_| "poe-overlay".into());
+    let addr = SocketAddr::from_abstract_name(name.as_bytes())?;
     let mut stream = UnixStream::connect_addr(&addr)?;
-    write_frame(&mut stream, &format!("PRICE\n{text}"))?;
+    write_frame(&mut stream, &format!("{}\n{text}", if map { "MAPCHECK" } else { "PRICE" }))?;
     print!("{}", read_frame(&mut stream)?);
     Ok(())
 }

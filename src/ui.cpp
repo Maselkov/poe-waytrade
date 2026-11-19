@@ -19,7 +19,10 @@
 
 namespace {
 
-const char* const kDocuments[] = {"ui/price_check.rml", "ui/debug.rml"};
+const char* const kPriceDoc = "ui/price_check.rml";
+const char* const kMapDoc = "ui/map_check.rml";
+const char* const kDebugDoc = "ui/debug.rml";
+const char* const kDocuments[] = {kPriceDoc, kMapDoc, kDebugDoc};
 
 // ---- RmlUi interfaces ------------------------------------------------------
 
@@ -145,6 +148,16 @@ struct UiListing {
     Rml::String price, sub, age;
 };
 
+struct UiMapStat {
+    Rml::String label, value;
+};
+struct UiMapMod {
+    int index = 0;      // into the reply's mods, for cycle_mod
+    Rml::String text;
+    Rml::String mark;   // deadly | warning | good | "" (CSS class)
+    Rml::String tag;    // Deadly | Warning | Good | ""
+};
+
 struct Model {
     Rml::String name, base, subtitle, rarity;
     Rml::String state;  // status | prices | trade
@@ -154,6 +167,11 @@ struct Model {
     Rml::Vector<UiFilter> filters;
     Rml::Vector<UiListing> listings;
     Rml::Vector<Rml::String> debug_lines;
+    // Map check
+    Rml::String verdict, verdict_kind;  // kind: deadly | warning | clean
+    Rml::Vector<UiMapStat> map_stats;
+    Rml::Vector<UiMapMod> map_mods;
+    int profile = 1;
 };
 
 Rml::String format(const char* fmt, double v) {
@@ -202,6 +220,12 @@ struct OverlayUi::Impl {
     void sync_debug(WaylandInput* input, VkExtent2D extent);
     void place(PriceCheck& pc, VkExtent2D extent);
     bool keep_on_screen(VkExtent2D extent);
+    void sync_map(const PriceReply& reply, Model& m);
+    // The panel document for the current check.
+    const char* panel_doc(const PriceCheck& pc) const {
+        return pc.purpose() == PriceCheck::Purpose::Map ? kMapDoc : kPriceDoc;
+    }
+    const char* shown_panel = kPriceDoc;
 };
 
 OverlayUi::OverlayUi(RmlRenderer* renderer) : impl_(std::make_unique<Impl>()) {
@@ -267,6 +291,18 @@ void OverlayUi::Impl::bind_model() {
     c.RegisterArray<Rml::Vector<UiFilter>>();
     c.RegisterArray<Rml::Vector<UiListing>>();
     c.RegisterArray<Rml::Vector<Rml::String>>();
+    if (auto h = c.RegisterStruct<UiMapStat>()) {
+        h.RegisterMember("label", &UiMapStat::label);
+        h.RegisterMember("value", &UiMapStat::value);
+    }
+    if (auto h = c.RegisterStruct<UiMapMod>()) {
+        h.RegisterMember("index", &UiMapMod::index);
+        h.RegisterMember("text", &UiMapMod::text);
+        h.RegisterMember("mark", &UiMapMod::mark);
+        h.RegisterMember("tag", &UiMapMod::tag);
+    }
+    c.RegisterArray<Rml::Vector<UiMapStat>>();
+    c.RegisterArray<Rml::Vector<UiMapMod>>();
 
     c.Bind("name", &model.name);
     c.Bind("base", &model.base);
@@ -279,6 +315,11 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("thin", &model.thin);
     c.Bind("total", &model.total);
     c.Bind("hint", &model.hint);
+    c.Bind("verdict", &model.verdict);
+    c.Bind("verdict_kind", &model.verdict_kind);
+    c.Bind("map_stats", &model.map_stats);
+    c.Bind("map_mods", &model.map_mods);
+    c.Bind("profile", &model.profile);
     c.Bind("searching", &model.searching);
     c.Bind("has_url", &model.has_url);
     c.Bind("prices", &model.prices);
@@ -292,6 +333,12 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("toggle_filter", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (price_check && !args.empty()) price_check->toggle_filter(args[0].Get<int>());
+    });
+    c.BindEventCallback("cycle_mod", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        if (price_check && !args.empty()) price_check->cycle_mod(args[0].Get<int>());
+    });
+    c.BindEventCallback("set_profile", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        if (price_check && !args.empty()) price_check->set_profile(args[0].Get<int>());
     });
     c.BindEventCallback("open_trade", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->open_trade();
@@ -354,11 +401,14 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
     d.sync(pc);
     if (d.debug && d.frame % 30 == 0) d.sync_debug(input, extent);
 
-    if (auto it = d.docs.find(kDocuments[0]); it != d.docs.end()) {
-        if (pc.visible() && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
-        if (!pc.visible() && it->second->IsVisible()) it->second->Hide();
+    for (const char* path : {kPriceDoc, kMapDoc}) {
+        auto it = d.docs.find(path);
+        if (it == d.docs.end()) continue;
+        bool want = pc.visible() && path == d.panel_doc(pc);
+        if (want && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+        if (!want && it->second->IsVisible()) it->second->Hide();
     }
-    if (auto it = d.docs.find(kDocuments[1]); it != d.docs.end()) {
+    if (auto it = d.docs.find(kDebugDoc); it != d.docs.end()) {
         if (d.debug && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
     }
 
@@ -393,10 +443,11 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     Model m;
     m.debug_lines = std::move(model.debug_lines);
     m.searching = pc.searching();
+    bool map = pc.purpose() == PriceCheck::Purpose::Map;
     switch (pc.mode()) {
     case PriceCheck::Mode::Quick: m.hint = "Hold Ctrl and move here to use filters"; break;
     case PriceCheck::Mode::Pinned: break;
-    case PriceCheck::Mode::Locked: m.hint = "Click the game to close"; break;
+    case PriceCheck::Mode::Locked: m.hint = map ? "Click a mod to mark it · click the game to close" : "Click the game to close"; break;
     }
     const auto& item = pc.item();
     const auto& reply = pc.reply();
@@ -413,8 +464,17 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
 
     if (!item || !reply) {
         m.state = "status";
-        m.status = !pc.status().empty() ? pc.status() : m.searching ? "Checking price…" : "No price";
+        m.status = !pc.status().empty() ? pc.status()
+                   : m.searching         ? (map ? "Checking map…" : "Checking price…")
+                                         : (map ? "No map check" : "No price");
         m.status_error = !pc.status().empty();
+    } else if (reply->status == "map") {
+        m.state = "map";
+        if (!reply->subtitle.empty()) m.subtitle = reply->subtitle;
+        sync_map(*reply, m);
+    } else if (reply->status == "not_map") {
+        m.state = "status";
+        m.status = "Not a map. Alt+D checks maps, invitations, contracts and logbooks.";
     } else if (reply->status == "trade") {
         m.state = "trade";
         m.status = pc.status();
@@ -467,9 +527,10 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
 // (left half) right against the stash's right edge. PoE's side panels are
 // 986/1600 of the window height wide.
 void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
+    shown_panel = panel_doc(pc);
     if (pc.check_id() == placed_check) return;
     placed_check = pc.check_id();
-    auto it = docs.find(kDocuments[0]);
+    auto it = docs.find(shown_panel);
     float ax, ay;
     if (it == docs.end() || !pc.anchor(&ax, &ay)) return;
     float panel = extent.height * 986.0f / 1600.0f;
@@ -480,7 +541,7 @@ void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
 }
 
 bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
-    auto it = docs.find(kDocuments[0]);
+    auto it = docs.find(shown_panel);
     if (it == docs.end() || !it->second->IsVisible()) return false;
     Rml::ElementDocument* doc = it->second;
     float margin = 16 * context->GetDensityIndependentPixelRatio();
@@ -492,6 +553,48 @@ bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
     doc->SetProperty(Rml::PropertyId::Left, Rml::Property(x, Rml::Unit::PX));
     doc->SetProperty(Rml::PropertyId::Top, Rml::Property(y, Rml::Unit::PX));
     return true;
+}
+
+// Marks for the active profile, dangerous mods first, and a one-line verdict
+// readable at a glance.
+void OverlayUi::Impl::sync_map(const PriceReply& reply, Model& m) {
+    m.profile = std::clamp(reply.profile, 1, 3);
+    for (const MapStat& s : reply.map_stats) {
+        Rml::String label = s.label;
+        if (label == "Item Quantity") label = "Quantity";
+        else if (label == "Item Rarity") label = "Rarity";
+        else if (label == "Monster Pack Size") label = "Pack size";
+        m.map_stats.push_back({label, s.value});
+    }
+
+    auto rank = [](const UiMapMod& u) { return u.mark == "deadly" ? 0 : u.mark == "warning" ? 1 : u.mark == "good" ? 2 : 3; };
+    std::vector<const MapMod*> deadly, warnings;
+    for (size_t i = 0; i < reply.map_mods.size(); i++) {
+        const MapMod& mod = reply.map_mods[i];
+        char mark = (size_t)(m.profile - 1) < mod.marks.size() ? mod.marks[m.profile - 1] : '-';
+        UiMapMod u{(int)i, mod.text, "", ""};
+        if (mark == 'd') u = {(int)i, mod.text, "deadly", "Deadly"}, deadly.push_back(&mod);
+        else if (mark == 'w') u = {(int)i, mod.text, "warning", "Warning"}, warnings.push_back(&mod);
+        else if (mark == 'g') u = {(int)i, mod.text, "good", "Good"};
+        m.map_mods.push_back(u);
+    }
+    std::stable_sort(m.map_mods.begin(), m.map_mods.end(),
+                     [&](const UiMapMod& a, const UiMapMod& b) { return rank(a) < rank(b); });
+
+    if (!deadly.empty()) {
+        m.verdict_kind = "deadly";
+        m.verdict = "Deadly: " + deadly[0]->text;
+        if (deadly.size() > 1) m.verdict += " (+" + std::to_string(deadly.size() - 1) + " more)";
+    } else if (warnings.size() == 1) {
+        m.verdict_kind = "warning";
+        m.verdict = "Warning: " + warnings[0]->text;
+    } else if (!warnings.empty()) {
+        m.verdict_kind = "warning";
+        m.verdict = std::to_string(warnings.size()) + " warnings";
+    } else {
+        m.verdict_kind = "clean";
+        m.verdict = reply.map_mods.empty() ? "No mods" : "No dangerous mods";
+    }
 }
 
 void OverlayUi::Impl::sync_debug(WaylandInput* input, VkExtent2D extent) {

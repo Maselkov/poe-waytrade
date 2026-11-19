@@ -17,6 +17,10 @@
 @define $warn-bg #2a1f12;
 @define $warn #e2a35a;
 @define $error #f0857a;
+@define $danger #e0625a;
+@define $danger-bg #3a1716;
+@define $good #6cc08b;
+@define $good-bg #13291d;
 
 @define $normal #c8c8c8;
 @define $magic #8888ff;
@@ -145,6 +149,53 @@ body {
 .button:active { background-color: #4d4296; }
 
 .hint { text-align: center; font-size: 10dp; color: $text-faint; padding: 0 0 8dp; }
+
+/* Map check */
+.verdict { margin: 10dp 14dp 0; padding: 7dp 10dp; border-radius: 8dp; font-weight: 500; }
+.verdict.deadly { background-color: $danger-bg; color: $danger; }
+.verdict.warning { background-color: $warn-bg; color: $warn; }
+.verdict.clean { background-color: $good-bg; color: $good; }
+
+.chips { display: flex; flex-wrap: wrap; padding: 8dp 14dp 0; }
+.chip { background-color: $chip; border-radius: 6dp; padding: 2dp 8dp; margin: 0 6dp 6dp 0; color: $text-strong; }
+.chip-label { color: $text-muted; }
+
+.profiles { display: flex; align-items: center; justify-content: flex-end; padding: 2dp 14dp 4dp; font-size: 11dp; color: $text-muted; }
+.profiles-label { margin-right: 4dp; }
+.profile {
+    width: 26dp;
+    text-align: center;
+    padding: 2dp 0;
+    margin-left: 4dp;
+    border-radius: 6dp;
+    border: 1dp $off;
+    color: $text-muted;
+    font-family: Cinzel;
+    cursor: pointer;
+}
+.profile:hover { color: $text-strong; }
+.profile.active { border-color: $accent; background-color: $accent; color: $accent-text; }
+
+.mods { padding: 4dp 8dp 8dp; }
+.mapmod {
+    display: flex;
+    align-items: center;
+    padding: 6dp 8dp 6dp 9dp;
+    margin-bottom: 3dp;
+    border-left: 3dp transparent;
+    border-radius: 6dp;
+    color: $mod;
+    cursor: pointer;
+}
+.mapmod:hover { background-color: $chip; }
+.mapmod.deadly { background-color: $danger-bg; border-left-color: $danger; color: #f3c9c5; }
+.mapmod.warning { background-color: $warn-bg; border-left-color: $warn; color: #f0dcc0; }
+.mapmod.good { background-color: $good-bg; border-left-color: $good; color: #cfe9d8; }
+.mapmod-text { flex: 1; }
+.mapmod-tag { font-size: 10dp; font-weight: 500; margin-left: 8dp; }
+.deadly .mapmod-tag { color: $danger; }
+.warning .mapmod-tag { color: $warn; }
+.good .mapmod-tag { color: $good; }
 
 /* Debug panel */
 #debug { left: auto; right: 40dp; width: 340dp; }

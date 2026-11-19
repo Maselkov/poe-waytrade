@@ -26,3 +26,6 @@ struct ParsedItem {
 
 // nullopt if the text isn't PoE item text.
 std::optional<ParsedItem> parse_item_text(std::string_view text);
+
+// Maps and map-like items (same classes as the daemon's map check).
+bool is_map_like(const ParsedItem& item);

@@ -46,3 +46,12 @@ std::optional<ParsedItem> parse_item_text(std::string_view text) {
     item.sections = std::move(sections);
     return item;
 }
+
+bool is_map_like(const ParsedItem& item) {
+    static const char* const classes[] = {"Maps", "Misc Map Items", "Contracts", "Heist Contracts",
+                                          "Blueprints", "Heist Blueprints", "Expedition Logbooks"};
+    if (item.item_class == "Maps" && item.rarity == "Unique") return false;
+    for (const char* c : classes)
+        if (item.item_class == c) return true;
+    return false;
+}

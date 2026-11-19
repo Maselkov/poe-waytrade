@@ -1,6 +1,6 @@
-// Price-check flow: hotkey -> Ctrl+C -> wait for clipboard -> parse the item
-// -> ask the daemon for prices. The UI (ui.cpp) reads this state and calls
-// the actions below.
+// Item check flow: hotkey -> Ctrl+C -> wait for clipboard -> parse the item
+// -> ask the daemon for prices (Ctrl+D) or a map mod check (Alt+D). The UI
+// (ui.cpp) reads this state and calls the actions below.
 #pragma once
 
 #include "daemon_client.h"
@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <string>
 
@@ -25,6 +26,8 @@ public:
     //   Locked: Ctrl+Alt+D. Stays until its close button or a click on the
     //           game.
     enum class Mode { Quick, Pinned, Locked };
+    // What the check is for: a price, or the map mod danger check.
+    enum class Purpose { Price, Map };
 
     // Created with the game's device: wakes the daemon right away.
     PriceCheck();
@@ -36,6 +39,7 @@ public:
     uint64_t revision() const { return revision_; }
     bool visible() const { return visible_; }
     Mode mode() const { return mode_; }
+    Purpose purpose() const { return purpose_; }
     // Bumped each time the panel opens for a new check; with anchor(), where
     // the cursor was (swapchain pixels), for placing the panel beside it.
     uint64_t check_id() const { return check_id_; }
@@ -49,10 +53,15 @@ public:
     void close() { set_visible(false); }
     void toggle_filter(int index);
     void open_trade();
+    // Map check: cycle the mod at this index in reply().map_mods through
+    // deadly -> warning -> good -> unmarked in the active profile, and
+    // switch the active profile (1-3). Both are saved by the daemon.
+    void cycle_mod(int index);
+    void set_profile(int profile);
 
 private:
-    void request_copy(WaylandInput& input, Mode mode);
-    void begin_wait(WaylandInput& input, Mode mode, Clock::time_point deadline);
+    void request_copy(WaylandInput& input, Mode mode, Purpose purpose);
+    void begin_wait(WaylandInput& input, Mode mode, Purpose purpose, Clock::time_point deadline);
     void wait_for_clipboard(WaylandInput& input, Clock::time_point now);
     void open();
     void apply_closing_rules(WaylandInput& input);
@@ -70,17 +79,22 @@ private:
     DaemonClient daemon_;
     DaemonClient wake_;    // reply ignored
     DaemonClient opener_;  // "open on trade site"; reply ignored
+    // One-off saves (map marks, profile) go out one at a time, in order.
+    DaemonClient sender_;
+    std::deque<std::string> outbox_;
     std::optional<PriceReply> reply_;
     std::string item_text_;  // as copied, for re-running trade searches
 
     // The check being waited for: how to open, and where the cursor was.
     Mode pending_mode_ = Mode::Quick;
+    Purpose pending_purpose_ = Purpose::Price;
     bool pending_anchor_ = false;
     float pending_x_ = 0, pending_y_ = 0;
 
     uint64_t revision_ = 0;
     uint64_t check_id_ = 0;
     Mode mode_ = Mode::Quick;
+    Purpose purpose_ = Purpose::Price;
     bool has_anchor_ = false;
     float anchor_x_ = 0, anchor_y_ = 0;
     bool visible_ = false;

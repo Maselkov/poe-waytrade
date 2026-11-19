@@ -28,6 +28,16 @@ struct TradeListing {
     std::string age;    // "2m", "3h", "5d"; empty if unknown
 };
 
+struct MapStat {
+    std::string label, value;
+};
+
+struct MapMod {
+    std::string key;    // what the daemon stores marks under
+    std::string text;   // as on the item
+    std::string marks;  // one of d/w/g/- per profile, e.g. "dw-"
+};
+
 struct PriceReply {
     std::string status;  // ok, trade, not_found, unsupported, loading, error, ...
     std::string message;
@@ -40,6 +50,11 @@ struct PriceReply {
     std::vector<TradeListing> listings;
     std::string total;
     std::string url;
+    // status "map"
+    std::string subtitle;
+    std::vector<MapStat> map_stats;
+    std::vector<MapMod> map_mods;
+    int profile = 1;
 };
 
 class DaemonClient {
@@ -51,6 +66,9 @@ public:
     // the first lookup.
     void request(const std::string& item_text) { start("PRICE\n" + item_text); }
     void ping() { start("PING\n"); }
+    void request_map(const std::string& item_text) { start("MAPCHECK\n" + item_text); }
+    // Any request body (see daemon/src/main.rs), for one-off messages.
+    void send_raw(const std::string& body) { start(body); }
     // Rerun a trade search with only the filters at these indices.
     void request_trade(const std::vector<int>& enabled, const std::string& item_text);
     // Ask the daemon to open a trade search URL in the user's browser.

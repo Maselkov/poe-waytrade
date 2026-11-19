@@ -263,7 +263,7 @@ fn parse_utc(s: &str) -> Option<i64> {
 // ---- mods -> trade filters -------------------------------------------------
 
 /// "+45 to maximum Life" -> ("+# to maximum Life", [45.0]).
-fn templatize(line: &str) -> (String, Vec<f64>) {
+pub(crate) fn templatize(line: &str) -> (String, Vec<f64>) {
     let mut template = String::new();
     let mut values = Vec::new();
     let mut chars = line.chars().peekable();
