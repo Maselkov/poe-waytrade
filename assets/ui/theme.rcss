@@ -393,3 +393,18 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .filter.sec-fractured .range-fill { background-color: #a88f52; }
 .filter.sec-fractured .range-handle { border-color: #a88f52; background-color: #efe3c2; }
 .pv-line.fractured { color: #c6b07a; }
+
+/* Influence flags in their influence's color, only when ticked; unticked
+   they look like any other filter. */
+.filter.sec-shaper.on .mod, .filter.sec-shaper.on .mod-full { color: #8fb4ea; }
+.filter.sec-shaper.on { border-left-color: #4f7fc9; background-color: #121925; }
+.filter.sec-elder.on .mod, .filter.sec-elder.on .mod-full { color: #b99ad8; }
+.filter.sec-elder.on { border-left-color: #8661b0; background-color: #1a1522; }
+.filter.sec-crusader.on .mod, .filter.sec-crusader.on .mod-full { color: #e3d48a; }
+.filter.sec-crusader.on { border-left-color: #c2ad4e; background-color: #1c1a10; }
+.filter.sec-redeemer.on .mod, .filter.sec-redeemer.on .mod-full { color: #8fd6df; }
+.filter.sec-redeemer.on { border-left-color: #4fa9b6; background-color: #111c1e; }
+.filter.sec-hunter.on .mod, .filter.sec-hunter.on .mod-full { color: #9fcf86; }
+.filter.sec-hunter.on { border-left-color: #6a9f4f; background-color: #141c11; }
+.filter.sec-warlord.on .mod, .filter.sec-warlord.on .mod-full { color: #e59a7a; }
+.filter.sec-warlord.on { border-left-color: #c0603e; background-color: #1f1411; }

@@ -19,6 +19,8 @@ pub struct Item {
     pub map_tier: Option<u32>,
     pub stack_size: Option<u32>,
     pub item_level: Option<u32>,
+    /// "Memory Strands: 72" on weapons, armour and jewellery.
+    pub memory_strands: Option<u32>,
     /// Lines after the "Item Level:" section: enchants, implicits, explicits,
     /// plus some non-mod lines that simply won't match any trade stat.
     /// Roll ranges from advanced copy are stripped.
@@ -271,6 +273,10 @@ pub fn parse(text: &str) -> Option<Item> {
             let mut tier = None;
             let mut header_kind = None;
             for line in section {
+                // A property, wherever the game puts it.
+                if line.starts_with("Memory Strands: ") {
+                    continue;
+                }
                 if line.starts_with("{ ") && line.ends_with(" }") {
                     item.advanced = true;
                     headed = true;
@@ -328,6 +334,8 @@ pub fn parse(text: &str) -> Option<Item> {
             item.sockets = v.split(|c: char| c == '-' || c.is_whitespace()).filter(|s| !s.is_empty()).count() as u32;
         } else if let Some(v) = line.strip_prefix("Map Tier: ") {
             item.map_tier = leading_number(v);
+        } else if let Some(v) = line.strip_prefix("Memory Strands: ") {
+            item.memory_strands = leading_number(v);
         } else if let Some(v) = line.strip_prefix("Stack Size: ") {
             item.stack_size = leading_number(v);
         } else if let Some(v) = line.strip_prefix("Physical Damage: ") {

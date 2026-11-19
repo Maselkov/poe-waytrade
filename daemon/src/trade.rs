@@ -39,8 +39,10 @@ pub enum Section {
     Enchant,
     /// A fractured mod, searched as fractured: always shown.
     Fractured,
-    /// Base item properties: item level, influences, fractured/synthesised.
+    /// Base item properties: item level, fractured/synthesised.
     Base,
+    /// An influence flag, by its trade key ("shaper"): the layer colors it.
+    Influence(&'static str),
     /// Armour, evasion, energy shield, ward, block.
     Armour,
     /// Links and sockets.
@@ -59,6 +61,7 @@ impl Section {
             Section::Enchant => "enchant",
             Section::Fractured => "fractured",
             Section::Base => "base",
+            Section::Influence(influence) => influence,
             Section::Armour => "armour",
             Section::Sockets => "sockets",
             Section::Map => "map",
@@ -1111,12 +1114,31 @@ fn socket_filters(item: &Item) -> Vec<Filter> {
     filters
 }
 
+/// Like APT: the item's memory strands as a minimum, ticked at 60+.
+fn memory_strands_filter(item: &Item) -> Option<Filter> {
+    let strands = item.memory_strands? as f64;
+    Some(Filter {
+        label: format!("Memory Strands {strands}"),
+        target: Target::Property("misc_filters", "memory_level"),
+        min: Some(strands),
+        slider: Some((0.0, 100.0)),
+        step: 1.0,
+        max_roll: false,
+        default_on: strands >= 60.0,
+        section: Section::Base,
+        tier: None,
+        max: None,
+        roll: Some(strands),
+    })
+}
+
 /// Like APT for uniques: no totals, only the mods that roll (fixed ones
 /// don't tell copies apart), all unticked.
 fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     let local = category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."));
     let mut filters = weapon_filters(item, false);
     filters.extend(socket_filters(item));
+    filters.extend(memory_strands_filter(item));
     for m in &item.mods {
         let (template, values) = templatize(&m.text);
         let Some((value, Some((lo, hi)))) = mod_value(&values, &m.ranges) else { continue };
@@ -1230,19 +1252,8 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     if item.synthesised {
         filters.push(flag("Synthesised item".into(), "synthesised_item"));
     }
-    for &influence in &item.influences {
-        let key = match influence {
-            "shaper" => "shaper_item",
-            "elder" => "elder_item",
-            "crusader" => "crusader_item",
-            "redeemer" => "redeemer_item",
-            "hunter" => "hunter_item",
-            _ => "warlord_item",
-        };
-        let mut name = influence.to_string();
-        name[..1].make_ascii_uppercase();
-        filters.push(flag(format!("{name} influence"), key));
-    }
+    filters.extend(influence_filters(item, true));
+    filters.extend(memory_strands_filter(item));
     // Influenced and fractured bases' implicits vary too much to match; a
     // linked base without crafting value is worth its links, not its rolls.
     let implicits = item.influences.is_empty() && !item.fractured_item;
@@ -1260,6 +1271,39 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     }
     filters.extend(armour_filters(item));
     filters
+}
+
+/// "Has Shaper influence" and the like, one per influence (an item can
+/// have two).
+fn influence_filters(item: &Item, on: bool) -> Vec<Filter> {
+    item.influences
+        .iter()
+        .map(|&influence| {
+            let key = match influence {
+                "shaper" => "shaper_item",
+                "elder" => "elder_item",
+                "crusader" => "crusader_item",
+                "redeemer" => "redeemer_item",
+                "hunter" => "hunter_item",
+                _ => "warlord_item",
+            };
+            let mut name = influence.to_string();
+            name[..1].make_ascii_uppercase();
+            Filter {
+                label: format!("Has {name} influence"),
+                target: Target::Flag("misc_filters", key),
+                min: None,
+                slider: None,
+                step: 1.0,
+                max_roll: false,
+                default_on: on,
+                section: Section::Influence(influence),
+                tier: None,
+                max: None,
+                roll: None,
+            }
+        })
+        .collect()
 }
 
 fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
@@ -1328,6 +1372,8 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     filters.extend(weapon_filters(item, true));
     filters.extend(armour_filters(item));
     filters.extend(socket_filters(item));
+    filters.extend(influence_filters(item, false));
+    filters.extend(memory_strands_filter(item));
 
     // Strength gives 1 life per 2, intelligence 1 mana per 2.
     let [strength, dexterity, intelligence] = attributes;
@@ -2017,6 +2063,65 @@ mod tests {
         assert!(crafted.mods.iter().any(|m| m.kind == ModKind::Crafted) && !base_preset_available(&crafted));
         let corrupted = crate::item::parse(&format!("{}Corrupted\n", crate::item::tests::FRACTURED_CROWN)).unwrap();
         assert!(!base_preset_available(&corrupted));
+    }
+
+    #[test]
+    fn influence_toggles() {
+        // Two influences: a toggle each, ticked for the base item, not for
+        // the normal search; both searched when ticked.
+        let text = crate::item::tests::FRACTURED_CROWN.replace("Fractured Item", "Shaper Item\nElder Item");
+        let item = crate::item::parse(&text).unwrap();
+        for (preset, on) in [(Preset::Base, true), (Preset::Normal, false)] {
+            let filters = build_filters(&item, &test_data(), preset);
+            let got: Vec<_> = filters
+                .iter()
+                .filter(|f| f.label.contains("influence"))
+                .map(|f| (f.label.as_str(), f.default_on, f.section))
+                .collect();
+            assert_eq!(
+                got,
+                vec![
+                    ("Has Shaper influence", on, Section::Influence("shaper")),
+                    ("Has Elder influence", on, Section::Influence("elder"))
+                ]
+            );
+            let chosen: Vec<Option<Bounds>> = filters
+                .iter()
+                .map(|f| (f.default_on || f.label.contains("influence")).then_some((f.min, None)))
+                .collect();
+            let opts = SearchOptions { base_only: false, corrupted: Corrupted::No, preset };
+            let q = query(&item, &filters, &chosen, opts);
+            let misc = &q["query"]["filters"]["misc_filters"]["filters"];
+            assert_eq!(misc["shaper_item"]["option"], "true");
+            assert_eq!(misc["elder_item"]["option"], "true");
+        }
+    }
+
+    #[test]
+    fn memory_strands() {
+        // Like APT: a minimum at the item's strands, ticked at 60+, in every
+        // preset; searched as misc "memory_level".
+        let crown = crate::item::tests::FRACTURED_CROWN;
+        let with = |n: u32| crown.replace("Item Level: 84", &format!("Memory Strands: {n}\n--------\nItem Level: 84"));
+        assert_eq!(crate::item::parse(crown).unwrap().memory_strands, None);
+        for (strands, on) in [(72, true), (35, false)] {
+            let item = crate::item::parse(&with(strands)).unwrap();
+            assert_eq!(item.memory_strands, Some(strands));
+            assert!(!item.mods.iter().any(|m| m.text.starts_with("Memory")));
+            for preset in [Preset::Base, Preset::Normal] {
+                let filters = build_filters(&item, &test_data(), preset);
+                let f = filters.iter().find(|f| f.label.starts_with("Memory Strands")).unwrap();
+                assert_eq!(
+                    (f.label.clone(), f.default_on, f.min),
+                    (format!("Memory Strands {strands}"), on, Some(strands as f64))
+                );
+                let chosen: Vec<Option<Bounds>> =
+                    filters.iter().map(|f| f.label.starts_with("Memory").then_some((f.min, None))).collect();
+                let opts = SearchOptions { base_only: false, corrupted: Corrupted::No, preset };
+                let q = query(&item, &filters, &chosen, opts);
+                assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["memory_level"]["min"], strands as f64);
+            }
+        }
     }
 
     #[test]
