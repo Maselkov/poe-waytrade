@@ -26,7 +26,7 @@
             <div data-attr-class="profile == 3 ? 'profile active' : 'profile'" data-event-click="set_profile(3)">III</div>
         </div>
         <div class="mods">
-            <div data-for="mm : map_mods" data-attr-class="'mapmod ' + mm.mark" data-event-click="cycle_mod(mm.index)">
+            <div data-for="mm : map_mods" data-attr-class="'mapmod ' + mm.mark" data-event-mousedown="cycle_mod(mm.index)">
                 <div class="mapmod-text">{{mm.text}}</div>
                 <div class="mapmod-tag" data-if="mm.tag != ''">{{mm.tag}}</div>
             </div>

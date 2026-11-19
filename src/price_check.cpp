@@ -234,18 +234,15 @@ void PriceCheck::search() {
     changed();
 }
 
-void PriceCheck::cycle_mod(int index) {
+void PriceCheck::cycle_mod(int index, bool backward) {
     if (!reply_ || reply_->status != "map" || index < 0 || index >= (int)reply_->map_mods.size()) return;
     MapMod& mod = reply_->map_mods[index];
     size_t slot = std::clamp(reply_->profile, 1, 3) - 1;
     while (mod.marks.size() < 3) mod.marks += '-';
-    char next = '-';
-    switch (mod.marks[slot]) {
-    case '-': next = 'd'; break;
-    case 'd': next = 'w'; break;
-    case 'w': next = 'g'; break;
-    default: next = '-'; break;
-    }
+    static const std::string order = "-dwg";
+    size_t at = order.find(mod.marks[slot]);
+    if (at == std::string::npos) at = 0;
+    char next = order[(at + (backward ? order.size() - 1 : 1)) % order.size()];
     mod.marks[slot] = next;
     outbox_.push_back("MAPMARK\n" + std::to_string(slot + 1) + "\n" + next + "\n" + mod.key);
     changed();

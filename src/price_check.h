@@ -61,9 +61,10 @@ public:
     bool stale() const { return stale_; }
     void open_trade();
     // Map check: cycle the mod at this index in reply().map_mods through
-    // deadly -> warning -> good -> unmarked in the active profile, and
+    // unmarked -> deadly -> warning -> good (or backward) in the active
+    // profile, and
     // switch the active profile (1-3). Both are saved by the daemon.
-    void cycle_mod(int index);
+    void cycle_mod(int index, bool backward = false);
     void set_profile(int profile);
 
 private:

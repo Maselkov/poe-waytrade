@@ -359,8 +359,10 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("toggle_filter", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (price_check && !args.empty()) price_check->toggle_filter(args[0].Get<int>());
     });
-    c.BindEventCallback("cycle_mod", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
-        if (price_check && !args.empty()) price_check->cycle_mod(args[0].Get<int>());
+    // Bound to mousedown: left button cycles forward, right button back.
+    c.BindEventCallback("cycle_mod", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
+        int button = ev.GetParameter<int>("button", 0);
+        if (price_check && !args.empty() && button <= 1) price_check->cycle_mod(args[0].Get<int>(), button == 1);
     });
     c.BindEventCallback("set_profile", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (price_check && !args.empty()) price_check->set_profile(args[0].Get<int>());
@@ -477,7 +479,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     // Same line count as in Quick, so pinning doesn't resize the panel
     // (and pull it out from under the pointer).
     case PriceCheck::Mode::Pinned: m.hint = "Release Ctrl and move away to close"; break;
-    case PriceCheck::Mode::Locked: if (map) m.hint = "Click a mod to mark it"; break;
+    case PriceCheck::Mode::Locked: if (map) m.hint = "Click a mod to mark it · right-click to go back"; break;
     }
     const auto& item = pc.item();
     const auto& reply = pc.reply();
