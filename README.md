@@ -74,8 +74,8 @@ searched until you press **Search**, since every search counts against GGG's
 rate limit; changing anything afterwards marks the listings as out of date
 until you search again.
 
-Every price check uses PoE's advanced copy (Ctrl+Alt+C), which includes each
-mod's tier range. Every filter with a range has a slim slider strip under
+Every price check copies the item with Ctrl+C, which PoE fills with the
+advanced description: each mod's affix name, tier and roll range. Every filter with a range has a slim slider strip under
 it, so ticking a row never moves the others: unticked, it's a faint track
 marking where your item's value sits; ticked, it's a two-handle slider,
 like APT's: the left handle sets the minimum, the right one a maximum (at the
