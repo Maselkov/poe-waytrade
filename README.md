@@ -49,8 +49,20 @@ minimum 10% below your roll. Pick "Any Ring" or the exact base, and whether
 corrupted items count (uncorrupted items exclude them by default). Nothing is
 searched until you press **Search**, since every search counts against GGG's
 rate limit; changing anything afterwards marks the listings as out of date
-until you search again. The cheapest online listings show in the panel, with
-a button to open the same search in your browser.
+until you search again.
+
+Every price check uses PoE's advanced copy (Ctrl+Alt+C), which includes each
+mod's tier range. A ticked filter gets a slider over that range for its
+minimum; the default is your roll minus 10%, kept within the tier, and a roll
+at the top of its tier defaults to exactly that value (tagged "Max"). Weapons
+also get physical/elemental DPS and attack speed filters from their
+properties. Unticked mods fold behind "+ N more mods".
+
+After a search, the panel shows a one-line estimate (the median of the 10
+cheapest listings, with the price range and a "Low value" tag under 5c), then
+the listings grouped by price with currency icons, how many there are, and
+how long ago they were listed, plus a button to open the same search in your
+browser.
 
 ## How it works
 
@@ -172,7 +184,10 @@ POE_OVERLAY_UI_DIR=$PWD/assets POE_OVERLAY_DEMO_ITEM=item.txt \
 `POE_OVERLAY_UI_DIR` loads `ui/*` from disk and reloads them when they
 change; `POE_OVERLAY_DEMO_ITEM` opens the panel on start with that item text
 (as copied from the game; maps open the map check). `POE_OVERLAY_UI_SCALE`
-scales the whole UI. `POE_OVERLAY_SOCKET=name` makes the layer (and
+scales the whole UI. `POE_OVERLAY_SNAPSHOT=<file.ppm>` saves one of the app's own rendered frames
+(after 300 frames) and `POE_OVERLAY_DEMO_SEARCH=1` makes a demo item search by
+itself, for checking the UI without screenshots. `POE_OVERLAY_SOCKET=name`
+makes the layer (and
 `poe-overlay-daemon query`) talk to a daemon on another abstract socket, for
 testing a new daemon next to the installed one.
 
@@ -192,5 +207,6 @@ testing a new daemon next to the installed one.
 
 ## License note
 
-`third_party/rmlui` is RmlUi 6.3 core (MIT). `assets/fonts` has Inter and
+`third_party/rmlui` is RmlUi 6.3 core (MIT); `third_party/stb` has
+stb_image (public domain). `assets/fonts` has Inter and
 Cinzel, both under the SIL Open Font License (licence files alongside).

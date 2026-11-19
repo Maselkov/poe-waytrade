@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "assets.h"
+#include "icons.h"
 #include "layer.h"
 #include "price_check.h"
 #include "rml_renderer.h"
@@ -143,9 +144,12 @@ struct UiFilter {
     int index = 0;
     bool enabled = false;
     Rml::String label, min;
+    float min_value = 0, lo = 0, hi = 0, step = 1;
+    bool has_slider = false, max_roll = false;
+    bool visible = true;  // extra mods fold away until "+ N more"
 };
 struct UiListing {
-    Rml::String price, sub, age;
+    Rml::String price, sub, age, count, icon;
 };
 
 struct UiMapStat {
@@ -167,8 +171,12 @@ struct Model {
     Rml::String base_label, category_label, corrupted, corrupted_label;
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
-    Rml::Vector<UiFilter> filters;
+    Rml::Vector<UiFilter> weapon_filters, mod_filters;
     Rml::Vector<UiListing> listings;
+    int more_mods = 0;  // folded away
+    // Price summary (median of the fetched listings)
+    bool has_summary = false, low_value = false;
+    Rml::String summary_price, summary_icon, summary_sub, summary_range;
     Rml::Vector<Rml::String> debug_lines;
     // Map check
     Rml::String verdict, verdict_kind;  // kind: deadly | warning | clean
@@ -184,6 +192,24 @@ Rml::String format(const char* fmt, double v) {
 }
 
 Rml::String chaos_text(double chaos) { return format(chaos < 10 ? "%.1fc" : "%.0fc", chaos); }
+
+// "2184" -> "2,184"
+Rml::String thousands(const std::string& digits) {
+    if (digits.empty() || digits.find_first_not_of("0123456789") != std::string::npos) return digits;
+    std::string out;
+    int n = 0;
+    for (auto it = digits.rbegin(); it != digits.rend(); ++it, ++n) {
+        if (n && n % 3 == 0) out.insert(out.begin(), ',');
+        out.insert(out.begin(), *it);
+    }
+    return out;
+}
+
+int count_listings(const PriceReply& reply) {
+    int n = 0;
+    for (const TradeListing& l : reply.listings) n += l.count;
+    return n;
+}
 
 Rml::String rarity_class(const std::string& rarity) {
     if (rarity == "Divination Card") return "card";
@@ -208,6 +234,9 @@ struct OverlayUi::Impl {
     Rml::DataModelHandle handle;
     PriceCheck* price_check = nullptr;  // during update(), for event callbacks
     uint64_t revision = UINT64_MAX;
+    // "+ N more mods" expanded, for this check only.
+    bool show_all_mods = false;
+    uint64_t shown_all_check = 0;
     uint64_t placed_check = 0;
     bool debug = getenv("POE_OVERLAY_DEBUG") != nullptr;
     float ui_scale = 1.0f;
@@ -289,11 +318,20 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("enabled", &UiFilter::enabled);
         h.RegisterMember("label", &UiFilter::label);
         h.RegisterMember("min", &UiFilter::min);
+        h.RegisterMember("min_value", &UiFilter::min_value);
+        h.RegisterMember("lo", &UiFilter::lo);
+        h.RegisterMember("hi", &UiFilter::hi);
+        h.RegisterMember("step", &UiFilter::step);
+        h.RegisterMember("has_slider", &UiFilter::has_slider);
+        h.RegisterMember("max_roll", &UiFilter::max_roll);
+        h.RegisterMember("visible", &UiFilter::visible);
     }
     if (auto h = c.RegisterStruct<UiListing>()) {
         h.RegisterMember("price", &UiListing::price);
         h.RegisterMember("sub", &UiListing::sub);
         h.RegisterMember("age", &UiListing::age);
+        h.RegisterMember("count", &UiListing::count);
+        h.RegisterMember("icon", &UiListing::icon);
     }
     c.RegisterArray<Rml::Vector<UiPrice>>();
     c.RegisterArray<Rml::Vector<UiFilter>>();
@@ -339,8 +377,16 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("searching", &model.searching);
     c.Bind("has_url", &model.has_url);
     c.Bind("prices", &model.prices);
-    c.Bind("filters", &model.filters);
+    c.Bind("weapon_filters", &model.weapon_filters);
+    c.Bind("mod_filters", &model.mod_filters);
+    c.Bind("more_mods", &model.more_mods);
     c.Bind("listings", &model.listings);
+    c.Bind("has_summary", &model.has_summary);
+    c.Bind("low_value", &model.low_value);
+    c.Bind("summary_price", &model.summary_price);
+    c.Bind("summary_icon", &model.summary_icon);
+    c.Bind("summary_sub", &model.summary_sub);
+    c.Bind("summary_range", &model.summary_range);
     c.Bind("debug_lines", &model.debug_lines);
 
     // Events arrive while update() feeds pointer input, with price_check set.
@@ -355,6 +401,16 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("search", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->search();
+    });
+    c.BindEventCallback("set_min", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
+        Rml::String value = ev.GetParameter<Rml::String>("value", "");
+        if (price_check && !args.empty() && !value.empty()) price_check->set_min(args[0].Get<int>(), atof(value.c_str()));
+    });
+    c.BindEventCallback("show_more_mods", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (!price_check) return;
+        show_all_mods = true;
+        shown_all_check = price_check->check_id();
+        revision = UINT64_MAX;  // rebuild the lists
     });
     c.BindEventCallback("toggle_filter", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (price_check && !args.empty()) price_check->toggle_filter(args[0].Get<int>());
@@ -521,18 +577,43 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.corrupted = reply->corrupted;
         m.corrupted_label = reply->corrupted == "no" ? "Uncorrupted" : reply->corrupted == "yes" ? "Corrupted" : "Any";
         m.source = reply->league;
-        for (const TradeFilter& f : reply->filters) m.filters.push_back({f.index, f.enabled, f.label, f.min});
+        // Weapon DPS first; totals and ticked mods always shown, the rest
+        // folded behind "+ N more mods" until expanded.
+        if (pc.check_id() != shown_all_check) show_all_mods = false;
+        for (const TradeFilter& f : reply->filters) {
+            UiFilter u{f.index, f.enabled, f.label, f.min};
+            u.min_value = (float)atof(f.min.c_str());
+            u.lo = (float)f.lo;
+            u.hi = (float)f.hi;
+            u.step = (float)f.step;
+            u.has_slider = f.hi > f.lo && !f.min.empty();
+            u.max_roll = f.max_roll;
+            if (f.section == "weapon") {
+                m.weapon_filters.push_back(u);
+                continue;
+            }
+            u.visible = f.section == "total" || f.enabled || show_all_mods;
+            if (!u.visible) m.more_mods++;
+            m.mod_filters.push_back(u);
+        }
         for (const TradeListing& l : reply->listings) {
             UiListing u;
-            if (l.currency == "Chaos Orb")
-                u.price = l.amount + "c";
-            else if (l.currency == "Divine Orb")
-                u.price = l.amount + " div";
-            else
-                u.price = l.amount + " " + l.currency;
-            if (l.chaos >= 0 && l.currency != "Chaos Orb") u.sub = chaos_text(l.chaos);
+            u.price = l.amount + " " + l.currency;
+            // Skip conversions too small to read ("0.0c").
+            if (l.chaos >= 0.1 && l.currency != "Chaos Orb") u.sub = chaos_text(l.chaos);
             u.age = l.age;
+            if (l.count > 1) u.count = "×" + std::to_string(l.count);
+            if (icons_get(l.currency_id)) u.icon = l.currency_id;
             m.listings.push_back(u);
+        }
+        if (reply->summary) {
+            const TradeSummary& s = *reply->summary;
+            m.has_summary = true;
+            m.summary_price = "≈ " + s.amount + " " + s.currency;
+            if (icons_get(s.currency_id)) m.summary_icon = s.currency_id;
+            if (s.chaos >= 0.1 && s.currency != "Chaos Orb") m.summary_sub = chaos_text(s.chaos);
+            m.low_value = s.chaos >= 0 && s.chaos < 5;
+            m.summary_range = std::to_string(count_listings(*reply)) + " of " + thousands(reply->total) + " · " + s.range;
         }
     } else if (reply->status == "ok") {
         m.state = "prices";

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <chrono>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,14 +19,26 @@ struct TradeFilter {
     int index = 0;
     bool enabled = false;
     std::string label;
-    std::string min;  // empty if none
+    std::string min;      // empty if none
+    double lo = 0, hi = 0;  // slider range; lo == hi: no slider
+    double step = 1;
+    bool max_roll = false;
+    std::string section;  // weapon | total | mod
 };
 
 struct TradeListing {
     std::string amount;
     std::string currency;
     double chaos = -1;  // < 0: unknown
-    std::string age;    // "2m", "3h", "5d"; empty if unknown
+    std::string age;    // "2m", "41h–5d"; empty if unknown
+    int count = 1;      // listings at this price
+    std::string currency_id;
+};
+
+// The median of the fetched listings.
+struct TradeSummary {
+    std::string amount, currency, currency_id, range;
+    double chaos = -1;
 };
 
 struct MapStat {
@@ -50,6 +63,8 @@ struct PriceReply {
     std::vector<TradeListing> listings;
     std::string total;
     std::string url;
+    std::optional<TradeSummary> summary;
+    std::string png;  // ICON reply, base64
     // Trade search options (see daemon/src/main.rs).
     std::string base_type;       // e.g. "Sapphire Ring"
     std::string category_label;  // e.g. "Ring"; empty: no base/category choice
@@ -76,8 +91,9 @@ public:
     // Any request body (see daemon/src/main.rs), for one-off messages.
     void send_raw(const std::string& body) { start(body); }
     // Search the trade site with the filters at these indices.
-    void request_trade(const std::vector<int>& enabled, bool base_only, const std::string& corrupted,
-                       const std::string& item_text);
+    // Each enabled filter by index, with its minimum ("" for the default).
+    void request_trade(const std::vector<std::pair<int, std::string>>& enabled, bool base_only,
+                       const std::string& corrupted, const std::string& item_text);
     // Ask the daemon to open a trade search URL in the user's browser.
     void open_url(const std::string& url) { start("OPEN\n" + url); }
     bool busy() const { return fd_ >= 0; }

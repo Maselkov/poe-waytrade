@@ -50,10 +50,23 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "age") reply.age_minutes = atoi(f[1].c_str());
         else if (f[0] == "price" && f.size() >= 5)
             reply.prices.push_back({f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4]});
-        else if (f[0] == "filter" && f.size() >= 4)
-            reply.filters.push_back({atoi(f[1].c_str()), f[2] == "1", f[3], f.size() >= 5 ? f[4] : ""});
-        else if (f[0] == "listing" && f.size() >= 5)
-            reply.listings.push_back({f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]});
+        else if (f[0] == "filter" && f.size() >= 4) {
+            TradeFilter t{atoi(f[1].c_str()), f[2] == "1", f[3], f.size() >= 5 ? f[4] : ""};
+            if (f.size() >= 10) {
+                t.lo = strtod(f[5].c_str(), nullptr);
+                t.hi = strtod(f[6].c_str(), nullptr);
+                t.step = strtod(f[7].c_str(), nullptr);
+                t.max_roll = f[8] == "1";
+                t.section = f[9];
+            }
+            reply.filters.push_back(t);
+        } else if (f[0] == "listing" && f.size() >= 5) {
+            TradeListing l{f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]};
+            if (f.size() >= 7) l.count = atoi(f[5].c_str()), l.currency_id = f[6];
+            reply.listings.push_back(l);
+        } else if (f[0] == "summary" && f.size() >= 6)
+            reply.summary = TradeSummary{f[1], f[2], f[3], f[5], f[4].empty() ? -1 : strtod(f[4].c_str(), nullptr)};
+        else if (f[0] == "png") reply.png = f[1];
         else if (f[0] == "subtitle") reply.subtitle = f[1];
         else if (f[0] == "stat" && f.size() >= 3) reply.map_stats.push_back({f[1], f[2]});
         else if (f[0] == "mod" && f.size() >= 4) reply.map_mods.push_back({f[1], f[2], f[3]});
@@ -70,10 +83,11 @@ PriceReply parse_reply(const std::string& body) {
 
 }  // namespace
 
-void DaemonClient::request_trade(const std::vector<int>& enabled, bool base_only, const std::string& corrupted,
-                                 const std::string& item_text) {
+void DaemonClient::request_trade(const std::vector<std::pair<int, std::string>>& enabled, bool base_only,
+                                 const std::string& corrupted, const std::string& item_text) {
     std::string indices;
-    for (int i : enabled) indices += (indices.empty() ? "" : ",") + std::to_string(i);
+    for (const auto& [i, min] : enabled)
+        indices += (indices.empty() ? "" : ",") + std::to_string(i) + (min.empty() ? "" : ":" + min);
     start("TRADE\n" + indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + item_text);
 }
 

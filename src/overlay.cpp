@@ -10,6 +10,7 @@
 #include <cstring>
 
 struct OverlayImage {
+    VkImage image = VK_NULL_HANDLE;
     VkImageView view = VK_NULL_HANDLE;
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkCommandBuffer cmd = VK_NULL_HANDLE;
@@ -45,6 +46,11 @@ struct OverlayDevice {
     // Created with the device so the uinput keyboard has time to show up in
     // the compositor before the first hotkey.
     PriceCheck price_check;
+
+    // POE_OVERLAY_SNAPSHOT=<file.ppm>: save one rendered frame (the app's own
+    // image, game plus overlay) a few seconds in, for checking the UI.
+    const char* snapshot_path = getenv("POE_OVERLAY_SNAPSHOT");
+    int frames = 0;
 };
 
 namespace {
@@ -135,6 +141,7 @@ bool setup_swapchain(DeviceData* dev, OverlaySwapchain& sc, uint32_t family) {
         OverlayImage& img = sc.images[i];
 
         VkImageViewCreateInfo vci = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        img.image = images[i];
         vci.image = images[i];
         vci.viewType = VK_IMAGE_VIEW_TYPE_2D;
         vci.format = sc.format;
@@ -222,6 +229,99 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     if (input) input->set_input_rects(ov.ui->input_rects(), (int)sc.extent.width, (int)sc.extent.height);
 }
 
+// Copies a presentable image (in PRESENT_SRC layout) to a PPM file.
+void save_snapshot(DeviceData* dev, OverlaySwapchain& sc, OverlayImage& img, VkQueue queue, const char* path) {
+    VkDeviceSize size = (VkDeviceSize)sc.extent.width * sc.extent.height * 4;
+    VkBufferCreateInfo bci = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    bci.size = size;
+    bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    if (dev->CreateBuffer(dev->device, &bci, nullptr, &buffer) != VK_SUCCESS) return;
+    VkMemoryRequirements req;
+    dev->GetBufferMemoryRequirements(dev->device, buffer, &req);
+    VkPhysicalDeviceMemoryProperties props;
+    dev->instance->GetPhysicalDeviceMemoryProperties(dev->physical_device, &props);
+    VkMemoryAllocateInfo ai = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    ai.allocationSize = req.size;
+    ai.memoryTypeIndex = UINT32_MAX;
+    for (uint32_t i = 0; i < props.memoryTypeCount; i++) {
+        VkMemoryPropertyFlags want = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        if ((req.memoryTypeBits & (1u << i)) && (props.memoryTypes[i].propertyFlags & want) == want) {
+            ai.memoryTypeIndex = i;
+            break;
+        }
+    }
+    if (ai.memoryTypeIndex == UINT32_MAX || dev->AllocateMemory(dev->device, &ai, nullptr, &memory) != VK_SUCCESS) {
+        dev->DestroyBuffer(dev->device, buffer, nullptr);
+        return;
+    }
+    dev->BindBufferMemory(dev->device, buffer, memory, 0);
+
+    VkCommandBuffer cmd = img.cmd;  // its frame finished: we waited on the fence
+    VkCommandBufferBeginInfo bi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    dev->ResetCommandBuffer(cmd, 0);
+    dev->BeginCommandBuffer(cmd, &bi);
+    VkImageMemoryBarrier barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = img.image;
+    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    dev->CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
+                            nullptr, 1, &barrier);
+    VkBufferImageCopy copy = {};
+    copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    copy.imageExtent = {sc.extent.width, sc.extent.height, 1};
+    dev->CmdCopyImageToBuffer(cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, 1, &copy);
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = 0;
+    dev->CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0,
+                            nullptr, 1, &barrier);
+    dev->EndCommandBuffer(cmd);
+    VkSubmitInfo si = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    si.commandBufferCount = 1;
+    si.pCommandBuffers = &cmd;
+    dev->QueueSubmit(queue, 1, &si, VK_NULL_HANDLE);
+    dev->QueueWaitIdle(queue);
+
+    void* mapped = nullptr;
+    dev->MapMemory(dev->device, memory, 0, VK_WHOLE_SIZE, 0, &mapped);
+    if (FILE* f = fopen(path, "wb")) {
+        fprintf(f, "P6\n%u %u\n255\n", sc.extent.width, sc.extent.height);
+        bool bgr = sc.format == VK_FORMAT_B8G8R8A8_SRGB || sc.format == VK_FORMAT_B8G8R8A8_UNORM;
+        bool rgb10 = sc.format == VK_FORMAT_A2R10G10B10_UNORM_PACK32;  // 10 bits a channel
+        bool bgr10 = sc.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+        const unsigned char* px = (const unsigned char*)mapped;
+        for (VkDeviceSize i = 0; i < size; i += 4) {
+            unsigned char rgb[3];
+            if (rgb10 || bgr10) {
+                uint32_t v;
+                memcpy(&v, px + i, 4);
+                unsigned char hi = (unsigned char)((v >> 22) & 0xFF), mid = (unsigned char)((v >> 12) & 0xFF),
+                              lo = (unsigned char)((v >> 2) & 0xFF);
+                rgb[0] = rgb10 ? hi : lo;
+                rgb[1] = mid;
+                rgb[2] = rgb10 ? lo : hi;
+            } else {
+                rgb[0] = px[i + (bgr ? 2 : 0)];
+                rgb[1] = px[i + 1];
+                rgb[2] = px[i + (bgr ? 0 : 2)];
+            }
+            fwrite(rgb, 1, 3, f);
+        }
+        fclose(f);
+        poe_log("snapshot saved to %s", path);
+    }
+    dev->FreeMemory(dev->device, memory, nullptr);
+    dev->DestroyBuffer(dev->device, buffer, nullptr);
+}
+
 bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, uint32_t index, VkQueue queue,
                        const VkSemaphore* waits, uint32_t wait_count) {
     OverlayImage& img = sc.images[index];
@@ -253,6 +353,11 @@ bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc,
     si.signalSemaphoreCount = 1;
     si.pSignalSemaphores = &img.done;
     VK_CHECK(dev->QueueSubmit(queue, 1, &si, img.fence));
+
+    if (ov.snapshot_path && ++ov.frames == 300) {
+        VK_CHECK(dev->WaitForFences(dev->device, 1, &img.fence, VK_TRUE, UINT64_MAX));
+        save_snapshot(dev, sc, img, queue, ov.snapshot_path);
+    }
     return true;
 }
 

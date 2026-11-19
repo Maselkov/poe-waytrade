@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <set>
 #include <optional>
 #include <string>
 
@@ -55,6 +56,7 @@ public:
     // Trade filters and options only change locally; search() sends them.
     // stale(): they changed since the listings on screen were searched.
     void toggle_filter(int index);
+    void set_min(int index, double min);
     void set_base_only(bool base_only);
     void cycle_corrupted();  // any -> no -> yes
     void search();
@@ -79,6 +81,7 @@ private:
     UinputKeyboard keyboard_;
     bool release_pending_ = false;  // keys go down one frame, up the next
     bool we_pressed_ctrl_ = false;
+    bool we_pressed_alt_ = false;
 
     bool waiting_ = false;
     uint64_t seq_at_request_ = 0;
@@ -90,6 +93,12 @@ private:
     // One-off saves (map marks, profile) go out one at a time, in order.
     DaemonClient sender_;
     std::deque<std::string> outbox_;
+    // Currency icons for the listings, fetched one at a time.
+    void request_icons();
+    DaemonClient icon_client_;
+    std::deque<std::string> icon_queue_;
+    std::string icon_pending_;
+    std::set<std::string> icons_requested_;
     std::optional<PriceReply> reply_;
     std::string item_text_;  // as copied, for re-running trade searches
 

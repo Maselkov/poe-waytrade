@@ -1,7 +1,13 @@
 #include "rml_renderer.h"
+#include "icons.h"
 
 #include <RmlUi/Core/Math.h>
 #include <RmlUi/Core/Vertex.h>
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#define STBI_NO_STDIO
+#include "stb_image.h"
 
 #include <algorithm>
 #include <cstring>
@@ -294,10 +300,29 @@ void RmlRenderer::ReleaseGeometry(Rml::CompiledGeometryHandle handle) {
     });
 }
 
-Rml::TextureHandle RmlRenderer::LoadTexture(Rml::Vector2i&, const Rml::String& source) {
-    // No image decoding yet; icons come later.
-    poe_log("ui: image textures not supported yet (%s)", source.c_str());
-    return 0;
+// Images are only currency icons, "icon:<id>" (RmlUi may prefix the
+// document's folder), decoded from the PNGs in icons.cpp.
+Rml::TextureHandle RmlRenderer::LoadTexture(Rml::Vector2i& dimensions, const Rml::String& source) {
+    size_t at = source.find("icon:");
+    const std::string* png = at == std::string::npos ? nullptr : icons_get(source.substr(at + 5));
+    if (!png) return 0;
+    int w = 0, h = 0, channels = 0;
+    unsigned char* rgba = stbi_load_from_memory((const unsigned char*)png->data(), (int)png->size(), &w, &h, &channels, 4);
+    if (!rgba) {
+        poe_log("ui: couldn't decode %s", source.c_str());
+        return 0;
+    }
+    // RmlUi works with premultiplied alpha.
+    for (int i = 0; i < w * h; i++) {
+        unsigned char* p = rgba + i * 4;
+        p[0] = (unsigned char)(p[0] * p[3] / 255);
+        p[1] = (unsigned char)(p[1] * p[3] / 255);
+        p[2] = (unsigned char)(p[2] * p[3] / 255);
+    }
+    Texture* t = create_texture(rgba, w, h);
+    stbi_image_free(rgba);
+    if (t) dimensions = {w, h};
+    return reinterpret_cast<Rml::TextureHandle>(t);
 }
 
 Rml::TextureHandle RmlRenderer::GenerateTexture(Rml::Span<const Rml::byte> source, Rml::Vector2i dimensions) {

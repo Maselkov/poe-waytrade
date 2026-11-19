@@ -91,6 +91,7 @@ public:
     std::vector<Hotkey> take_hotkeys() { return std::exchange(hotkeys_, {}); }
     bool focused() const { return focused_; }
     bool ctrl_held() const;
+    bool alt_held() const;
     uint32_t last_key() const { return last_key_; }
     bool last_key_down() const { return last_key_down_; }
     const char* status() const;

@@ -27,18 +27,48 @@
     </div>
 
     <div data-if="state == 'trade'">
+        <div data-if="searched &amp;&amp; has_summary" data-attr-class="stale ? 'summary stale' : 'summary'">
+            <img class="summary-icon" data-if="summary_icon != ''" data-attr-src="'icon:' + summary_icon"/>
+            <div class="coin big" data-if="summary_icon == ''"/>
+            <div class="summary-text">
+                <div class="summary-price">{{summary_price}} <span class="sub">{{summary_sub}}</span></div>
+                <div class="summary-range">{{summary_range}}</div>
+            </div>
+            <div class="tag" data-if="low_value">Low value</div>
+        </div>
         <div class="options">
             <div data-if="category_label != ''" data-attr-class="base_only ? 'base-toggle exact' : 'base-toggle'"
                  data-event-click="toggle_base">{{base_only ? base_label : category_label}}</div>
             <div data-attr-class="'toggle-chip ' + corrupted" data-event-click="cycle_corrupted">{{corrupted_label}}</div>
         </div>
         <div class="filters">
-            <div data-for="f : filters" data-attr-class="f.enabled ? 'filter' : 'filter off'"
-                 data-event-click="toggle_filter(f.index)">
-                <div class="switch"><div class="knob"/></div>
-                <div class="mod">{{f.label}}</div>
-                <div class="min" data-if="f.min != ''">{{f.min}}+</div>
+            <div class="section-label" data-if="weapon_filters.size > 0">Weapon</div>
+            <div data-for="f : weapon_filters" data-if="f.visible" data-attr-class="f.enabled ? 'filter' : 'filter off'">
+                <div class="filter-main" data-event-click="toggle_filter(f.index)">
+                    <div class="switch"><div class="knob"/></div>
+                    <div class="mod">{{f.label}}</div>
+                    <div class="max-tag" data-if="f.max_roll">Max</div>
+                    <div class="min" data-if="f.min != ''">{{f.min}}+</div>
+                </div>
+                <div class="slider-row" data-if="f.enabled &amp;&amp; f.has_slider">
+                    <input type="range" class="slider" data-attr-min="f.lo" data-attr-max="f.hi" data-attr-step="f.step"
+                           data-attr-value="f.min_value" data-event-change="set_min(f.index)"/>
+                </div>
             </div>
+            <div class="section-label" data-if="weapon_filters.size > 0 &amp;&amp; mod_filters.size > 0">Mods</div>
+            <div data-for="f : mod_filters" data-if="f.visible" data-attr-class="f.enabled ? 'filter' : 'filter off'">
+                <div class="filter-main" data-event-click="toggle_filter(f.index)">
+                    <div class="switch"><div class="knob"/></div>
+                    <div class="mod">{{f.label}}</div>
+                    <div class="max-tag" data-if="f.max_roll">Max</div>
+                    <div class="min" data-if="f.min != ''">{{f.min}}+</div>
+                </div>
+                <div class="slider-row" data-if="f.enabled &amp;&amp; f.has_slider">
+                    <input type="range" class="slider" data-attr-min="f.lo" data-attr-max="f.hi" data-attr-step="f.step"
+                           data-attr-value="f.min_value" data-event-change="set_min(f.index)"/>
+                </div>
+            </div>
+            <div class="more-mods" data-if="more_mods > 0" data-event-click="show_more_mods">+ {{more_mods}} more mods</div>
         </div>
         <div class="results">
             <div class="error" data-if="status != ''">{{status}}</div>
@@ -48,15 +78,13 @@
                 </div>
             </div>
             <div data-if="searched">
-                <div class="results-head">
-                    <span>Cheapest of {{total}} online</span>
-                    <span>{{source}}</span>
-                </div>
                 <div class="stale-note" data-if="stale">Filters changed. Search again to update.</div>
                 <div data-attr-class="stale ? 'listings stale' : 'listings'">
                     <div class="listing" data-for="l : listings">
-                        <div class="coin"/>
+                        <img class="cur-icon" data-if="l.icon != ''" data-attr-src="'icon:' + l.icon"/>
+                        <div class="coin" data-if="l.icon == ''"/>
                         <div class="amount">{{l.price}} <span class="sub">{{l.sub}}</span></div>
+                        <div class="count" data-if="l.count != ''">{{l.count}}</div>
                         <div class="age">{{l.age}}</div>
                     </div>
                     <div class="empty" data-if="listings.size == 0">No listings. Turn off a filter to widen the search.</div>

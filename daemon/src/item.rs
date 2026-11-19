@@ -26,6 +26,10 @@ pub struct Item {
     pub advanced: bool,
     /// Map-ish properties in display order, e.g. ("Item Quantity", "+85%").
     pub map_props: Vec<(String, String)>,
+    /// Weapon properties: average damage per hit by type, attacks per second.
+    pub physical_damage: Option<f64>,
+    pub elemental_damage: f64,
+    pub attacks_per_second: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,6 +61,9 @@ pub struct ModLine {
     pub text: String,
     /// Came after a `{ … Modifier … }` header (advanced copy only).
     pub headed: bool,
+    /// For each number in `text`, in order: its tier's roll range, if the
+    /// text came from advanced copy.
+    pub ranges: Vec<Option<(f64, f64)>>,
 }
 
 fn mod_line(line: &str) -> ModLine {
@@ -68,10 +75,10 @@ fn mod_line(line: &str) -> ModLine {
     ];
     for (marker, kind) in MARKERS {
         if let Some(text) = line.strip_suffix(marker) {
-            return ModLine { kind: *kind, text: text.to_string(), headed: false };
+            return ModLine { kind: *kind, text: text.to_string(), headed: false, ranges: Vec::new() };
         }
     }
-    ModLine { kind: ModKind::Explicit, text: line.to_string(), headed: false }
+    ModLine { kind: ModKind::Explicit, text: line.to_string(), headed: false, ranges: Vec::new() }
 }
 
 /// Map properties shown in the map check, in this order.
@@ -83,28 +90,77 @@ const MAP_PROPS: &[&str] = &[
 /// Advanced copy appends the roll range to each number: "+60(55-69)" and
 /// "+25(20-30)%" become "+60" and "+25%". Other parentheses are kept.
 fn strip_roll_ranges(line: &str) -> String {
-    let bytes = line.as_bytes();
+    split_roll_ranges(line).0
+}
+
+/// The text without roll ranges, and for each number in it, in order, the
+/// range that followed it (as a positive range for "-12(-12--9)").
+fn split_roll_ranges(line: &str) -> (String, Vec<Option<(f64, f64)>>) {
+    let chars: Vec<char> = line.chars().collect();
     let mut out = String::with_capacity(line.len());
+    let mut ranges = Vec::new();
     let mut i = 0;
-    while i < line.len() {
-        let c = bytes[i];
-        if c == b'(' && i > 0 && bytes[i - 1].is_ascii_digit() {
-            if let Some(len) = line[i + 1..].find(')') {
-                let inner = &line[i + 1..i + 1 + len];
-                let is_range = !inner.is_empty()
-                    && inner.chars().all(|ch| ch.is_ascii_digit() || ch == '.' || ch == '-')
-                    && inner.chars().any(|ch| ch.is_ascii_digit());
-                if is_range {
+    while i < chars.len() {
+        if !chars[i].is_ascii_digit() {
+            out.push(chars[i]);
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < chars.len()
+            && (chars[i].is_ascii_digit() || (chars[i] == '.' && chars.get(i + 1).is_some_and(|c| c.is_ascii_digit())))
+        {
+            i += 1;
+        }
+        out.extend(&chars[start..i]);
+        let negative = start > 0 && chars[start - 1] == '-';
+        let mut range = None;
+        if chars.get(i) == Some(&'(') {
+            if let Some(len) = chars[i + 1..].iter().position(|&c| c == ')') {
+                let inner: String = chars[i + 1..i + 1 + len].iter().collect();
+                if let Some((a, b)) = parse_range(&inner) {
+                    range = Some(if negative {
+                        let (a, b) = (a.abs(), b.abs());
+                        (a.min(b), a.max(b))
+                    } else {
+                        (a, b)
+                    });
                     i += len + 2;
-                    continue;
                 }
             }
         }
-        let ch = line[i..].chars().next().unwrap();
-        out.push(ch);
-        i += ch.len_utf8();
+        ranges.push(range);
     }
-    out
+    (out, ranges)
+}
+
+/// "55-69", "0.6-1", "-12--9", or a fixed "18".
+fn parse_range(inner: &str) -> Option<(f64, f64)> {
+    if !inner.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-') || !inner.chars().any(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let bytes = inner.as_bytes();
+    for k in 1..bytes.len() {
+        if bytes[k] == b'-' && bytes[k - 1].is_ascii_digit() {
+            let (a, b): (f64, f64) = (inner[..k].parse().ok()?, inner[k + 1..].parse().ok()?);
+            return Some((a.min(b), a.max(b)));
+        }
+    }
+    let v: f64 = inner.parse().ok()?;
+    Some((v, v))
+}
+
+/// "45-120 (augmented)" or "10-20 (augmented), 5-50 (augmented)": the sum of
+/// each range's average.
+fn average_damage(value: &str) -> f64 {
+    value
+        .split(", ")
+        .filter_map(|part| {
+            let part = part.trim_end_matches(" (augmented)");
+            let (a, b) = part.split_once('-')?;
+            Some((a.trim().parse::<f64>().ok()? + b.trim().parse::<f64>().ok()?) / 2.0)
+        })
+        .sum()
 }
 
 pub fn parse(text: &str) -> Option<Item> {
@@ -157,8 +213,10 @@ pub fn parse(text: &str) -> Option<Item> {
                 }
                 // Advanced copy notes mods that quality doesn't scale.
                 let line = line.trim_end_matches(" — Unscalable Value");
-                let mut m = mod_line(&strip_roll_ranges(line));
+                let (text, ranges) = split_roll_ranges(line);
+                let mut m = mod_line(&text);
                 m.headed = headed;
+                m.ranges = ranges;
                 item.mods.push(m);
             }
         } else if let Some(v) = section.iter().find_map(|l| l.strip_prefix("Item Level: ")) {
@@ -183,6 +241,12 @@ pub fn parse(text: &str) -> Option<Item> {
             item.map_tier = leading_number(v);
         } else if let Some(v) = line.strip_prefix("Stack Size: ") {
             item.stack_size = leading_number(v);
+        } else if let Some(v) = line.strip_prefix("Physical Damage: ") {
+            item.physical_damage = Some(average_damage(v));
+        } else if let Some(v) = line.strip_prefix("Elemental Damage: ") {
+            item.elemental_damage += average_damage(v);
+        } else if let Some(v) = line.strip_prefix("Attacks per Second: ") {
+            item.attacks_per_second = v.trim_end_matches(" (augmented)").parse().ok();
         }
         if let Some((label, value)) = line.split_once(": ") {
             if MAP_PROPS.contains(&label) {
@@ -295,6 +359,28 @@ mod tests {
                     { Prefix Modifier \"Elder\" }\nArea is influenced by The Elder — Unscalable Value\n";
         let item = parse(text).unwrap();
         assert_eq!(item.mods[0].text, "Area is influenced by The Elder");
+    }
+
+    #[test]
+    fn range_values() {
+        let (text, ranges) = split_roll_ranges("Adds 5(3-6) to 10(9-11) Damage");
+        assert_eq!(text, "Adds 5 to 10 Damage");
+        assert_eq!(ranges, vec![Some((3.0, 6.0)), Some((9.0, 11.0))]);
+        let (_, ranges) = split_roll_ranges("Players have -12(-12--9)% to all maximum Resistances");
+        assert_eq!(ranges, vec![Some((9.0, 12.0))]);
+        let (_, ranges) = split_roll_ranges("+1 to Level of Socketed Gems");
+        assert_eq!(ranges, vec![None]);
+    }
+
+    #[test]
+    fn weapon_props() {
+        let text = "Item Class: Warstaves\nRarity: Rare\nBramble Mast\nEzomyte Staff\n--------\nWarstaff\n\
+                    Physical Damage: 100-200 (augmented)\nElemental Damage: 10-20 (augmented), 5-15 (augmented)\n\
+                    Attacks per Second: 1.30 (augmented)\n--------\nItem Level: 68\n";
+        let item = parse(text).unwrap();
+        assert_eq!(item.physical_damage, Some(150.0));
+        assert_eq!(item.elemental_damage, 25.0);
+        assert_eq!(item.attacks_per_second, Some(1.3));
     }
 
     #[test]

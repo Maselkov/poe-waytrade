@@ -20,19 +20,25 @@
 //!
 //!   Rare/magic items get trade site search filters instead of a poe.ninja
 //!   price (status "trade"). Nothing is searched until the layer asks:
-//!     filter   <index> <1|0 enabled> <label> <minimum|"">
+//!     filter   <index> <1|0 enabled> <label> <minimum|""> <slider low>
+//!              <slider high> <step> <1|0 max roll> <weapon|total|mod>
 //!     option   base <base type> <category label>   (if the base can be
 //!                                                  searched on its own)
 //!     option   base_only <1|0>
 //!     option   corrupted <any|no|yes>
 //!     searched <1|0>
 //!   and, once searched:
-//!     listing  <amount> <currency name> <chaos value|""> <age, e.g. "5m"|"">
+//!     summary  <amount> <currency name> <currency id> <chaos|""> <range>
+//!     listing  <amount> <currency name> <chaos value|""> <age, e.g. "5m"
+//!              or "41h–5d"|""> <count> <currency id>   (same prices grouped)
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
-//!   request:  "TRADE\n" + comma-separated enabled filter indices + "\n" +
+//!   request:  "TRADE\n" + comma-separated enabled filters, each "index" or
+//!             "index:minimum" + "\n" +
 //!             "base" or "category" + "\n" + any|no|yes + "\n" + item text:
 //!             search with those filters and options.
+//!
+//!   request:  "ICON\n" + currency id: its icon, as "png <base64>"
 //!
 //!   request:  "OPEN\n" + url: open a pathofexile.com trade URL in the
 //!             user's browser (the layer can't, from inside the game).
@@ -230,10 +236,21 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         let (indices, base, corrupted, text) =
             (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
         let search = TradeRequest {
-            enabled: indices.split(',').filter_map(|s| s.trim().parse().ok()).collect(),
+            enabled: indices
+                .split(',')
+                .filter_map(|s| {
+                    let (i, min) = s.trim().split_once(':').map_or((s.trim(), None), |(i, m)| (i, m.parse().ok()));
+                    Some((i.parse().ok()?, min))
+                })
+                .collect(),
             options: trade::SearchOptions { base_only: base == "base", corrupted: trade::Corrupted::parse(corrupted) },
         };
         respond(state, text, Some(&search))
+    } else if let Some(id) = request.strip_prefix("ICON\n") {
+        match state.trade.lock().unwrap().icon(id.trim()) {
+            Ok(png) => format!("status\tok\npng\t{}\n", base64(&png)),
+            Err(e) => format!("status\terror\nmessage\t{}\n", clean(&e)),
+        }
     } else if let Some(url) = request.strip_prefix("OPEN\n") {
         open_trade_url(url.trim())
     } else if let Some(text) = request.strip_prefix("MAPCHECK\n") {
@@ -261,6 +278,22 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         "status\tbad_request\nmessage\tUnknown request\n".to_string()
     };
     write_frame(&mut stream, &response)
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = (chunk[0] as u32) << 16 | (*chunk.get(1).unwrap_or(&0) as u32) << 8 | *chunk.get(2).unwrap_or(&0) as u32;
+        for k in 0..4 {
+            if k <= chunk.len() {
+                out.push(TABLE[(n >> (18 - 6 * k) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }
 
 fn bad_request(message: &str) -> String {
@@ -305,7 +338,8 @@ fn open_trade_url(url: &str) -> String {
 
 /// A trade search the layer asked for.
 struct TradeRequest {
-    enabled: Vec<usize>,
+    /// Filter index and the minimum chosen for it (None: the default).
+    enabled: Vec<(usize, Option<f64>)>,
     options: trade::SearchOptions,
 }
 
@@ -328,9 +362,19 @@ fn trade_response(state: &State, item: &item::Item, search: Option<&TradeRequest
 
     let _ = writeln!(out, "status\ttrade\ntitle\t{}", clean(&title));
     for (i, f) in prepared.filters.iter().enumerate() {
-        let on = search.map_or(f.default_on, |s| s.enabled.contains(&i));
-        let min = f.min.map(|m| m.to_string()).unwrap_or_default();
-        let _ = writeln!(out, "filter\t{i}\t{}\t{}\t{min}", on as u8, clean(&f.label));
+        let chosen = search.and_then(|s| s.enabled.iter().find(|(j, _)| *j == i));
+        let on = search.map_or(f.default_on, |_| chosen.is_some());
+        let min = chosen.and_then(|(_, m)| *m).or(f.min).map(trade::trim_number).unwrap_or_default();
+        let (lo, hi) = f.slider.map_or((String::new(), String::new()), |(lo, hi)| (trade::trim_number(lo), trade::trim_number(hi)));
+        let _ = writeln!(
+            out,
+            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}",
+            on as u8,
+            clean(&f.label),
+            trade::trim_number(f.step),
+            f.max_roll as u8,
+            f.section.as_str()
+        );
     }
     if let Some(label) = prepared.category_label {
         let _ = writeln!(out, "option\tbase\t{}\t{label}", clean(&item.base));
@@ -346,9 +390,28 @@ fn trade_response(state: &State, item: &item::Item, search: Option<&TradeRequest
     match trade.search(item, &search.enabled, options, &db.league, db) {
         Ok(r) => {
             let _ = writeln!(out, "searched\t1");
+            if let Some(s) = &r.summary {
+                let chaos = s.chaos.map(|c| format!("{c:.2}")).unwrap_or_default();
+                let _ = writeln!(
+                    out,
+                    "summary\t{}\t{}\t{}\t{chaos}\t{}",
+                    trade::trim_number(s.amount),
+                    clean(&s.currency),
+                    clean(&s.currency_id),
+                    clean(&s.range)
+                );
+            }
             for l in &r.listings {
                 let chaos = l.chaos.map(|c| format!("{c:.2}")).unwrap_or_default();
-                let _ = writeln!(out, "listing\t{}\t{}\t{chaos}\t{}", l.amount, clean(&l.currency), l.age);
+                let _ = writeln!(
+                    out,
+                    "listing\t{}\t{}\t{chaos}\t{}\t{}\t{}",
+                    trade::trim_number(l.amount),
+                    clean(&l.currency),
+                    l.age,
+                    l.count,
+                    clean(&l.currency_id)
+                );
             }
             let _ = writeln!(out, "total\t{}\nurl\t{}", r.total, clean(&r.url));
             out

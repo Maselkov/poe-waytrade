@@ -98,7 +98,8 @@ body {
 
 /* Trade filters */
 .filters { padding: 6dp 14dp; }
-.filter { display: flex; align-items: center; padding: 5dp 0; cursor: pointer; }
+.filter { padding: 2dp 0; }
+.filter-main { display: flex; align-items: center; padding: 3dp 0; cursor: pointer; }
 .switch {
     width: 26dp;
     height: 15dp;
@@ -121,6 +122,38 @@ body {
 .mod { flex: 1; color: $mod; }
 .filter.off .mod { color: $text-muted; }
 .min { background-color: $chip; border-radius: 6dp; padding: 2dp 8dp; color: $text-strong; margin-left: 8dp; }
+.max-tag { font-size: 10dp; font-weight: 500; color: $price; border: 1dp #5a4a22; border-radius: 6dp; padding: 1dp 5dp; margin-left: 6dp; }
+
+/* Minimum slider under a ticked filter */
+.slider-row { padding: 2dp 0 4dp 34dp; }
+input.slider { display: block; width: 100%; height: 14dp; }
+input.slider slidertrack { margin-top: 5dp; height: 4dp; border-radius: 2dp; background-color: $off; }
+input.slider sliderbar {
+    margin-top: -5dp;
+    width: 14dp;
+    height: 14dp;
+    border-radius: 7dp;
+    background-color: $accent-text;
+    border: 2dp $accent;
+    cursor: pointer;
+}
+input.slider sliderbar:hover, input.slider sliderbar:active { background-color: #ffffff; }
+input.slider sliderarrowdec, input.slider sliderarrowinc { display: none; }
+
+.section-label { font-size: 10dp; letter-spacing: 0.5dp; color: $text-faint; margin: 6dp 0 2dp; }
+.more-mods { color: $text-muted; padding: 4dp 0 2dp 34dp; cursor: pointer; }
+.more-mods:hover { color: $text-strong; }
+
+/* Price summary */
+.summary { display: flex; align-items: center; margin: 10dp 14dp 0; padding: 10dp 12dp; background-color: #1a1d24; border-radius: 10dp; }
+.summary.stale { opacity: 0.45; }
+.summary-icon { width: 30dp; height: 30dp; margin-right: 10dp; }
+.coin.big { width: 26dp; height: 26dp; border-radius: 13dp; margin-right: 10dp; }
+.summary-text { flex: 1; }
+.summary-price { font-size: 17dp; font-weight: 500; color: $price; }
+.summary-price .sub { font-size: 12dp; font-weight: 400; color: $text-muted; }
+.summary-range { font-size: 11dp; color: $text-muted; margin-top: 2dp; }
+.summary .tag { margin: 0 0 0 8dp; }
 .filter.off .min { background-color: transparent; color: $text-faint; }
 
 /* Trade search options */
@@ -167,6 +200,9 @@ body {
 .listing { display: flex; align-items: center; padding: 5dp 0; }
 .coin { width: 12dp; height: 12dp; border-radius: 6dp; background-color: #c9a24f; margin-right: 8dp; flex-shrink: 0; }
 .amount { flex: 1; color: $price; font-weight: 500; }
+.cur-icon { width: 18dp; height: 18dp; margin-right: 6dp; flex-shrink: 0; }
+.count { background-color: $chip; border-radius: 6dp; padding: 1dp 6dp; font-size: 11dp; color: $text; margin-left: 6dp; }
+.age { width: 58dp; text-align: right; }
 .amount .sub { color: $text-muted; font-weight: 400; }
 .age { color: $text-faint; }
 .empty { color: $text-muted; padding: 6dp 0; }

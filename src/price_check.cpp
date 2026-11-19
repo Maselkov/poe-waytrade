@@ -1,10 +1,12 @@
 #include "price_check.h"
+#include "icons.h"
 #include "layer.h"
 #include "wl_input.h"
 
 #include <linux/input-event-codes.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 
@@ -48,6 +50,7 @@ bool PriceCheck::anchor(float* x, float* y) const {
 void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     if (release_pending_) {
         keyboard_.key(KEY_C, false);
+        if (we_pressed_alt_) keyboard_.key(KEY_LEFTALT, false);
         if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, false);
         keyboard_.sync();
         release_pending_ = false;
@@ -86,6 +89,10 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
         } else {
             reply_ = std::move(reply);
             stale_ = false;
+            request_icons();
+            // POE_OVERLAY_DEMO_SEARCH=1: a demo item searches by itself, so
+            // the searched state can be checked without clicking.
+            if (demo_ && reply_->status == "trade" && !reply_->searched && getenv("POE_OVERLAY_DEMO_SEARCH")) search();
         }
         changed();
     }
@@ -95,6 +102,18 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     if (!sender_.busy() && !outbox_.empty()) {
         sender_.send_raw(outbox_.front());
         outbox_.pop_front();
+    }
+    if (icon_client_.poll(&reply)) {
+        if (reply.status == "ok" && !reply.png.empty()) {
+            icons_put(icon_pending_, base64_decode(reply.png));
+            changed();  // the UI shows icons once they're here
+        }
+        icon_pending_.clear();
+    }
+    if (!icon_client_.busy() && icon_pending_.empty() && !icon_queue_.empty()) {
+        icon_pending_ = icon_queue_.front();
+        icon_queue_.pop_front();
+        icon_client_.send_raw("ICON\n" + icon_pending_);
     }
 }
 
@@ -142,9 +161,13 @@ void PriceCheck::request_copy(WaylandInput& input, Mode mode, Purpose purpose) {
         open();
         return;
     }
-    // The user is still holding Ctrl from the hotkey; only add our own if not.
+    // Ctrl+Alt+C: PoE's advanced copy, which adds each mod's roll range (for
+    // the trade filters' sliders) and marks which lines are mods. The user is
+    // still holding some modifiers from the hotkey; only add the others.
     we_pressed_ctrl_ = !input.ctrl_held();
+    we_pressed_alt_ = !input.alt_held();
     if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, true);
+    if (we_pressed_alt_) keyboard_.key(KEY_LEFTALT, true);
     keyboard_.key(KEY_C, true);
     keyboard_.sync();
     release_pending_ = true;
@@ -209,6 +232,29 @@ void PriceCheck::toggle_filter(int index) {
     changed();
 }
 
+void PriceCheck::set_min(int index, double min) {
+    if (!reply_ || reply_->status != "trade") return;
+    for (TradeFilter& f : reply_->filters) {
+        if (f.index != index) continue;
+        char buf[32];
+        snprintf(buf, sizeof(buf), f.step < 1 ? "%.2f" : "%.0f", min);
+        if (f.min == buf) return;
+        f.min = buf;
+    }
+    stale_ = reply_->searched;
+    changed();
+}
+
+void PriceCheck::request_icons() {
+    if (!reply_) return;
+    auto want = [&](const std::string& id) {
+        if (id.empty() || icons_get(id) || !icons_requested_.insert(id).second) return;
+        icon_queue_.push_back(id);
+    };
+    if (reply_->summary) want(reply_->summary->currency_id);
+    for (const TradeListing& l : reply_->listings) want(l.currency_id);
+}
+
 void PriceCheck::set_base_only(bool base_only) {
     if (!reply_ || reply_->status != "trade" || reply_->base_only == base_only) return;
     reply_->base_only = base_only;
@@ -226,9 +272,9 @@ void PriceCheck::cycle_corrupted() {
 
 void PriceCheck::search() {
     if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
-    std::vector<int> enabled;
+    std::vector<std::pair<int, std::string>> enabled;
     for (const TradeFilter& f : reply_->filters)
-        if (f.enabled) enabled.push_back(f.index);
+        if (f.enabled) enabled.emplace_back(f.index, f.min);
     status_.clear();
     daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, item_text_);
     changed();

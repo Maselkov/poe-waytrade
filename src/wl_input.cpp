@@ -180,6 +180,10 @@ void WaylandInput::on_leave() {
     held_.clear();
 }
 
+bool WaylandInput::alt_held() const {
+    return held_.count(KEY_LEFTALT) || held_.count(KEY_RIGHTALT);
+}
+
 bool WaylandInput::ctrl_held() const {
     return held_.count(KEY_LEFTCTRL) || held_.count(KEY_RIGHTCTRL);
 }

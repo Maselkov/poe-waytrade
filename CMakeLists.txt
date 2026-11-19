@@ -63,6 +63,7 @@ add_library(VkLayer_poe_overlay SHARED
   src/overlay.cpp
   src/rml_renderer.cpp
   src/ui.cpp
+  src/icons.cpp
   src/assets.c
   src/wl_input.cpp
   src/wl_pointer.cpp
@@ -73,7 +74,8 @@ add_library(VkLayer_poe_overlay SHARED
   ${PROTOCOL_SOURCES}
   ${SHADER_OUTPUTS}
 )
-target_include_directories(VkLayer_poe_overlay PRIVATE ${VULKAN_INCLUDE_DIR} ${PROTOCOL_DIR} ${SHADER_DIR})
+target_include_directories(VkLayer_poe_overlay PRIVATE ${VULKAN_INCLUDE_DIR} ${PROTOCOL_DIR} ${SHADER_DIR}
+  ${CMAKE_SOURCE_DIR}/third_party/stb)
 target_compile_definitions(VkLayer_poe_overlay PRIVATE VK_NO_PROTOTYPES VK_USE_PLATFORM_WAYLAND_KHR)
 # Fonts and UI documents are built in with #embed (C23).
 set_source_files_properties(src/assets.c PROPERTIES
