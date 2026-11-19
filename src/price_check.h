@@ -1,5 +1,5 @@
 // Item check flow: hotkey -> Ctrl+C -> wait for clipboard -> parse the item
-// -> ask the daemon for prices (Ctrl+D) or a map mod check (Alt+D). The UI
+// -> ask the daemon for prices, or a map mod check for maps. The UI
 // (ui.cpp) reads this state and calls the actions below.
 #pragma once
 
@@ -28,7 +28,10 @@ public:
     //   Locked: Ctrl+Alt+D. Stays until its close button or a click on the
     //           game.
     enum class Mode { Quick, Pinned, Locked };
-    // What the check is for: a price, or the map mod danger check.
+    // What the panel shows: a price, or the map mod danger check. Ctrl+D
+    // picks from the item (maps, contracts and invitations open the map
+    // check; everything else, logbooks included, the price) and
+    // switch_view() flips between them on map-like items.
     enum class Purpose { Price, Map };
 
     // Created with the game's device: wakes the daemon right away.
@@ -72,6 +75,10 @@ public:
     // switch the active profile (1-3). Both are saved by the daemon.
     void cycle_mod(int index, bool backward = false);
     void set_profile(int profile);
+    // Map-like items: the other view (map check <-> price), kept once
+    // fetched. Locks the panel, since you're using it.
+    bool can_switch_view() const;
+    void switch_view();
 
 private:
     void request_copy(WaylandInput& input, Mode mode, Purpose purpose);
@@ -114,6 +121,9 @@ private:
     std::string icon_pending_;
     std::set<std::string> icons_requested_;
     std::optional<PriceReply> reply_;
+    // The view not on screen, once fetched (see switch_view()).
+    std::optional<PriceReply> other_reply_;
+    bool other_stale_ = false;
     std::string item_text_;  // as copied, for re-running trade searches
 
     // The check being waited for: how to open, and where the cursor was.

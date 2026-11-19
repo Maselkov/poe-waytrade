@@ -30,17 +30,25 @@ Trade:
   item there (or next to the stash for items on the left half of the
   screen). PoE's side panels are 986/1600 of the window height wide.
 
-**Alt+D** on a map (or invitation, heist contract/blueprint, expedition
-logbook) opens the map check instead: a one-line verdict at the top ("1 deadly mod ·
-2 warnings", "No dangerous mods"), the map's
-quantity/rarity/pack size, and its mods. Click a mod to cycle it through
-deadly → warning → good → unmarked; marks are per profile (I/II/III) and saved
-in `~/.config/poe-waytrade/map-mods.json` (moved there from
-`~/.config/poe-overlay/` the first time, if you have marks from before the rename). Reflect, no regen, less recovery,
-−max res, cannot leech, player curses and a few others come pre-marked.
+**Maps** (and invitations, heist contracts and blueprints) open the map
+check instead, with the same keys: a one-line verdict at the top ("1 deadly
+mod · 1 warning · 5 unmarked", "No dangerous mods · 3 unmarked"; unmarked mods
+are counted so they don't get skimmed past), the map's rarity, pack size and
+"More ..." bonuses, its poe.ninja price (for a rare map, the white map's), and
+its mods. Click a mod to cycle it through deadly → warning → good → unmarked;
+marks are per profile (I/II/III) and saved in
+`~/.config/poe-waytrade/map-mods.json` (moved there from
+`~/.config/poe-overlay/` the first time, if you have marks from before the
+rename). Reflect, no regen, less recovery, −max res, cannot leech, player
+curses and a few others come pre-marked.
 
-Ctrl+Alt+D and Alt+D send PoE's advanced copy (Ctrl+Alt+C, since Alt is still
-held); the daemon understands both formats.
+**Price check** in the map check switches to the map's trade search: its base
+("Map (Tier 16)", which names the tier), its More currency/scarabs/maps/cards
+bonuses (ticked), pack size and rarity (unticked), and blight. **Map check**
+switches back; each view keeps its state, and switching locks the panel.
+Expedition logbooks open on their price, with the map check one click away.
+Alt+D, the old map check key, still works and now does the same as
+Ctrl+Alt+D.
 
 The game keeps keyboard focus (the panel is part of its window), so the
 overlay never uses keys PoE does; in particular there's no Esc to close.
@@ -278,7 +286,6 @@ testing a new daemon next to the installed one.
 - Mouse input under fractional scaling assumes the app renders at full
   resolution if it runs under Wine, at logical size otherwise;
   `POE_WAYTRADE_SCALE` overrides the pixel-per-logical-unit ratio.
-- No advanced copy (Ctrl+Alt+C) yet, so mod tiers/ranges aren't available.
 - No X11 input path (would be `XQueryKeymap` polling like MangoHud).
 - Only one device gets the overlay (RmlUi is a process-wide singleton).
 - HDR (10-bit/PQ) swapchains aren't colour-corrected yet; sRGB ones are.

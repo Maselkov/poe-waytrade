@@ -19,6 +19,13 @@
         <div class="chips" data-if="map_stats.size > 0">
             <div class="chip" data-for="s : map_stats"><span class="chip-label">{{s.label}}</span> {{s.value}}</div>
         </div>
+        <div class="map-price" data-if="can_switch">
+            <div class="map-price-text">
+                <span data-if="map_price != ''"><span class="map-price-value">≈ {{map_price}}</span><span class="chip-label" data-if="map_price_label != ''"> {{map_price_label}}</span><span class="chip-label"> · poe.ninja</span></span>
+                <span class="chip-label" data-if="map_price == ''">No poe.ninja price</span>
+            </div>
+            <div class="toggle-chip view" data-event-click="switch_view">Price check</div>
+        </div>
         <div class="profiles">
             <span class="profiles-label">Profile</span>
             <div data-attr-class="profile == 1 ? 'profile active' : 'profile'" data-event-click="set_profile(1)">I</div>

@@ -200,6 +200,9 @@ struct Model {
     Rml::Vector<UiMapStat> map_stats;
     Rml::Vector<UiMapMod> map_mods;
     int profile = 1;
+    // Map-like items switch between the map check and the price
+    bool can_switch = false;
+    Rml::String map_price, map_price_label;  // poe.ninja, in the map check
 };
 
 Rml::String format(const char* fmt, double v) {
@@ -471,6 +474,9 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("ninja_icon", &model.ninja_icon);
     c.Bind("ninja_meta", &model.ninja_meta);
     c.Bind("debug_lines", &model.debug_lines);
+    c.Bind("can_switch", &model.can_switch);
+    c.Bind("map_price", &model.map_price);
+    c.Bind("map_price_label", &model.map_price_label);
 
     // Events arrive while update() feeds pointer input, with price_check set.
     c.BindEventCallback("close", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
@@ -512,6 +518,9 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("set_profile", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (price_check && !args.empty()) price_check->set_profile(args[0].Get<int>());
+    });
+    c.BindEventCallback("switch_view", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->switch_view();
     });
     c.BindEventCallback("open_trade", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->open_trade();
@@ -621,7 +630,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     // others close by themselves when the mouse moves away.
     m.closable = pc.mode() == PriceCheck::Mode::Locked;
     switch (pc.mode()) {
-    case PriceCheck::Mode::Quick: m.hint = "Hold Ctrl and move here to use filters"; break;
+    case PriceCheck::Mode::Quick: m.hint = map ? "Hold Ctrl and move here to mark mods" : "Hold Ctrl and move here to use filters"; break;
     // Same line count as in Quick, so pinning doesn't resize the panel
     // (and pull it out from under the pointer).
     case PriceCheck::Mode::Pinned: m.hint = "Release Ctrl and move away to close"; break;
@@ -629,6 +638,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     }
     const auto& item = pc.item();
     const auto& reply = pc.reply();
+    m.can_switch = pc.can_switch_view();
 
     if (item) {
         m.name = item->name;
@@ -650,9 +660,14 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.state = "map";
         if (!reply->subtitle.empty()) m.subtitle = reply->subtitle;
         sync_map(*reply, pc.check_id(), m);
+        if (!reply->prices.empty()) {
+            const PriceLine& p = reply->prices[0];
+            m.map_price = p.divine >= 1.0 ? format(p.divine >= 10 ? "%.0f div" : "%.1f div", p.divine) : chaos_text(p.chaos);
+            m.map_price_label = p.label;
+        }
     } else if (reply->status == "not_map") {
         m.state = "status";
-        m.status = "Not a map. Alt+D checks maps, invitations, contracts and logbooks.";
+        m.status = "Not a map. The map check is for maps, invitations, contracts and logbooks.";
     } else if (reply->status == "trade") {
         m.state = "trade";
         m.status = pc.status();
@@ -686,7 +701,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             return std::any_of(reply->filters.begin(), reply->filters.end(),
                                [&](const TradeFilter& f) { return f.section == section; });
         };
-        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : "Item";
+        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? "Map" : "Item";
         m.filter_groups = {{top, {}}, {"Enchant", {}}, {"Implicit", {}}, {"Totals", {}}, {"Mods", {}}};
         for (const TradeFilter& f : reply->filters) {
             UiFilter u{f.index, f.enabled, f.label, f.min};
@@ -838,7 +853,7 @@ void OverlayUi::Impl::sync_map(const PriceReply& reply, uint64_t check_id, Model
         m.map_stats.push_back({label, s.value});
     }
 
-    int deadly = 0, warnings = 0, good = 0;
+    int deadly = 0, warnings = 0, good = 0, unmarked = 0;
     std::vector<UiMapMod> mods;
     for (size_t i = 0; i < reply.map_mods.size(); i++) {
         const MapMod& mod = reply.map_mods[i];
@@ -847,6 +862,7 @@ void OverlayUi::Impl::sync_map(const PriceReply& reply, uint64_t check_id, Model
         if (mark == 'd') u.mark = "deadly", u.tag = "Deadly", deadly++;
         else if (mark == 'w') u.mark = "warning", u.tag = "Warning", warnings++;
         else if (mark == 'g') u.mark = "good", u.tag = "Good", good++;
+        else unmarked++;
         mods.push_back(u);
     }
 
@@ -872,6 +888,8 @@ void OverlayUi::Impl::sync_map(const PriceReply& reply, uint64_t check_id, Model
         m.verdict = reply.map_mods.empty() ? "No mods" : "No dangerous mods";
     }
     if (good) m.verdict += " · " + count(good, "good mod", "good mods");
+    // Mods nobody has judged yet are easy to skim past: count them too.
+    if (unmarked) m.verdict += " · " + count(unmarked, "unmarked", "unmarked");
 }
 
 void OverlayUi::Impl::sync_debug(WaylandInput* input, VkExtent2D extent) {

@@ -48,7 +48,7 @@ struct wp_fractional_scale_v1;
 enum class Hotkey {
     PriceCheck,        // Ctrl+D: quick look; we send Ctrl+C ourselves
     PriceCheckLocked,  // Ctrl+Alt+D: a panel that stays until dismissed
-    MapCheck,          // Alt+D: map mod danger check (stays until dismissed)
+    MapCheck,          // Alt+D: the old map check key, now like Ctrl+Alt+D
     CopySeen,          // Ctrl+C pressed by the user
 };
 

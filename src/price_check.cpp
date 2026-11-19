@@ -25,6 +25,13 @@ constexpr float kQuickCloseDistance = 40.0f;
 // A pinned panel closes once the pointer has been off it this long.
 constexpr auto kPinnedLeaveGrace = std::chrono::milliseconds(250);
 
+// Ctrl+D on a map opens the map check (is it safe to run?); logbooks are
+// mostly about what they're worth.
+PriceCheck::Purpose default_purpose(const ParsedItem& item) {
+    if (!is_map_like(item) || item.item_class == "Expedition Logbooks") return PriceCheck::Purpose::Price;
+    return PriceCheck::Purpose::Map;
+}
+
 }  // namespace
 
 PriceCheck::PriceCheck() {
@@ -37,8 +44,10 @@ PriceCheck::PriceCheck() {
         item_text_.assign(std::istreambuf_iterator<char>(f), {});
         item_ = parse_item_text(item_text_);
         status_ = item_ ? "" : std::string("POE_WAYTRADE_DEMO_ITEM isn't PoE item text: ") + path;
-        // Maps show the map check, everything else the price check.
-        pending_purpose_ = item_ && is_map_like(*item_) ? Purpose::Map : Purpose::Price;
+        pending_purpose_ = item_ ? default_purpose(*item_) : Purpose::Price;
+        // POE_WAYTRADE_DEMO_VIEW=price: a map opens on its price instead.
+        const char* view = getenv("POE_WAYTRADE_DEMO_VIEW");
+        if (view && std::string(view) == "price") pending_purpose_ = Purpose::Price;
         // POE_WAYTRADE_DEMO_PRESET=base: open on the "Base item" preset.
         const char* preset = getenv("POE_WAYTRADE_DEMO_PRESET");
         if (item_ && preset) daemon_.request_prepare(preset, item_text_);
@@ -81,7 +90,8 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
             request_copy(input, Mode::Locked, Purpose::Price);
             break;
         case Hotkey::MapCheck:
-            request_copy(input, Mode::Locked, Purpose::Map);
+            // Alt+D: the old map check key, now the same as Ctrl+Alt+D.
+            request_copy(input, Mode::Locked, Purpose::Price);
             break;
         case Hotkey::CopySeen:
             // The user's own Ctrl+C on an item, or the echo of ours (then
@@ -227,7 +237,9 @@ void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) 
         item_ = parse_item_text(input.clipboard_text());
         status_ = item_ ? "" : "Copied text isn't a PoE item";
         reply_.reset();
+        other_reply_.reset();
         item_text_ = input.clipboard_text();
+        if (item_) pending_purpose_ = default_purpose(*item_);
         if (item_) pending_purpose_ == Purpose::Map ? daemon_.request_map(item_text_) : daemon_.request(item_text_);
         open();
     } else if (now > deadline_) {
@@ -287,6 +299,24 @@ void PriceCheck::set_bounds(int index, double min, double max) {
         f.max = max_text;
     }
     stale_ = reply_->searched;
+    changed();
+}
+
+bool PriceCheck::can_switch_view() const {
+    return item_ && is_map_like(*item_);
+}
+
+void PriceCheck::switch_view() {
+    // Not while a search is out: its answer would land in the wrong view.
+    if (!can_switch_view() || daemon_.busy()) return;
+    purpose_ = purpose_ == Purpose::Map ? Purpose::Price : Purpose::Map;
+    std::swap(reply_, other_reply_);
+    std::swap(stale_, other_stale_);
+    status_.clear();
+    if (!reply_) purpose_ == Purpose::Map ? daemon_.request_map(item_text_) : daemon_.request(item_text_);
+    // The panel changes size; a quick look could slip out from under the
+    // pointer and close.
+    mode_ = Mode::Locked;
     changed();
 }
 

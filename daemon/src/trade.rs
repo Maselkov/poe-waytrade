@@ -45,6 +45,8 @@ pub enum Section {
     Armour,
     /// Links and sockets.
     Sockets,
+    /// A map's tier, quantity, rarity, pack size, blight.
+    Map,
 }
 
 impl Section {
@@ -59,6 +61,7 @@ impl Section {
             Section::Base => "base",
             Section::Armour => "armour",
             Section::Sockets => "sockets",
+            Section::Map => "map",
         }
     }
 }
@@ -337,11 +340,13 @@ impl Trade {
         };
         // Like APT: an uncorrupted item is compared with uncorrupted ones.
         let corrupted = if item.corrupted { Corrupted::Any } else { Corrupted::No };
+        // A map's base names its tier ("Map (Tier 16)"): search that base.
+        let base_only = preset == Preset::Base || tiered_map_base(item);
         Ok(Prepared {
             filters,
             category_label,
             base_preset: base_preset_available(item),
-            defaults: SearchOptions { base_only: preset == Preset::Base, corrupted, preset },
+            defaults: SearchOptions { base_only, corrupted, preset },
         })
     }
 
@@ -717,6 +722,7 @@ fn category(item: &Item) -> Option<(&'static str, &'static str)> {
         "Two Hand Maces" => ("weapon.twomace", "Two-Handed Mace"),
         "Two Hand Swords" => ("weapon.twosword", "Two-Handed Sword"),
         "Wands" => ("weapon.wand", "Wand"),
+        "Maps" => ("map", "Map"),
         c if c.ends_with("Flasks") => ("flask", "Flask"),
         _ => return None,
     })
@@ -948,6 +954,63 @@ fn armour_filters(item: &Item) -> Vec<Filter> {
     filters
 }
 
+/// Current map bases name their tier, e.g. "Map (Tier 16)" or "Blighted Map
+/// (Tier 5)"; older ones ("Strand Map") don't.
+fn tiered_map_base(item: &Item) -> bool {
+    item.class == "Maps" && item.base.contains("(Tier ")
+}
+
+/// A map is priced by what it gives, not by its mods (those are for the map
+/// check): its tier (unless the base names it), its drop bonuses (ticked),
+/// pack size and rarity (unticked), and blight.
+fn map_filters(item: &Item) -> Vec<Filter> {
+    let mut filters = Vec::new();
+    if let Some(tier) = item.map_tier.filter(|_| !tiered_map_base(item)) {
+        let t = tier as f64;
+        let label = format!("Tier {tier}");
+        filters.push(Filter::new(label, Target::Property("map_filters", "map_tier"), t, Some((t, t)), true, Section::Map));
+    }
+    // Since 3.25 a map's worth is mostly its "More ..." drop bonuses; old
+    // maps still have item quantity.
+    let props = [
+        ("More Currency", "More currency", Target::Stat("pseudo.pseudo_map_more_currency_drops".into()), true),
+        ("More Scarabs", "More scarabs", Target::Stat("pseudo.pseudo_map_more_scarab_drops".into()), true),
+        ("More Maps", "More maps", Target::Stat("pseudo.pseudo_map_more_map_drops".into()), true),
+        ("More Divination Cards", "More cards", Target::Stat("pseudo.pseudo_map_more_card_drops".into()), true),
+        ("Item Quantity", "Quantity", Target::Property("map_filters", "map_iiq"), true),
+        ("Monster Pack Size", "Pack size", Target::Property("map_filters", "map_packsize"), false),
+        ("Item Rarity", "Rarity", Target::Property("map_filters", "map_iir"), false),
+    ];
+    for (prop, name, target, on) in props {
+        let value = item
+            .map_props
+            .iter()
+            .find(|(label, _)| label == prop)
+            .and_then(|(_, v)| v.trim_start_matches('+').trim_end_matches('%').parse::<f64>().ok());
+        let Some(value) = value.filter(|v| *v > 0.0) else { continue };
+        let label = format!("{name} +{value}%");
+        filters.push(Filter::new(label, target, value, None, on, Section::Map));
+    }
+    let flag = |label: &str, key: &'static str| Filter {
+        label: label.to_string(),
+        target: Target::Flag("map_filters", key),
+        min: None,
+        slider: None,
+        step: 1.0,
+        max_roll: false,
+        default_on: true,
+        section: Section::Map,
+        tier: None,
+        roll: None,
+    };
+    if item.base.starts_with("Blight-ravaged") {
+        filters.push(flag("Blight-ravaged", "map_uberblighted"));
+    } else if item.base.starts_with("Blighted") {
+        filters.push(flag("Blighted", "map_blighted"));
+    }
+    filters
+}
+
 /// 5/6 links (ticked, except a rare's 5-link) and an unlinked 6-socket
 /// (unticked).
 fn socket_filters(item: &Item) -> Vec<Filter> {
@@ -1092,6 +1155,9 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
 }
 
 fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
+    if item.class == "Maps" && item.rarity != "Unique" {
+        return map_filters(item);
+    }
     if item.rarity == "Unique" {
         return unique_filters(item, data);
     }
@@ -1682,6 +1748,35 @@ mod tests {
         assert!(crafted.mods.iter().any(|m| m.kind == ModKind::Crafted) && !base_preset_available(&crafted));
         let corrupted = crate::item::parse(&format!("{}Corrupted\n", crate::item::tests::FRACTURED_CROWN)).unwrap();
         assert!(!base_preset_available(&corrupted));
+    }
+
+    #[test]
+    fn map_drop_bonuses() {
+        let text = "Item Class: Maps\nRarity: Rare\nGrim Hollow\nBlighted Map (Tier 16)\n--------\nMap Tier: 16\n\
+                    Item Rarity: +45% (augmented)\nMonster Pack Size: +28% (augmented)\n\
+                    More Maps: +20% (augmented)\nMore Scarabs: +15% (augmented)\n--------\nItem Level: 83\n--------\n\
+                    26% increased Monster Damage\n";
+        let item = crate::item::parse(text).unwrap();
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.default_on)).collect();
+        assert_eq!(
+            got,
+            [
+                ("More scarabs +15%", true),
+                ("More maps +20%", true),
+                ("Pack size +28%", false),
+                ("Rarity +45%", false),
+                ("Blighted", true)
+            ]
+        );
+        // The base names the tier, so it's searched by base, not "Any Map".
+        assert!(tiered_map_base(&item));
+        let opts = SearchOptions { base_only: true, corrupted: Corrupted::Any, preset: Preset::Normal };
+        let q = query(&item, &filters, &[Some((Some(13.0), None)), None, None, None, Some((None, None))], opts);
+        let q = &q["query"];
+        assert_eq!(q["type"], "Blighted Map (Tier 16)");
+        assert_eq!(q["filters"]["map_filters"]["filters"]["map_blighted"]["option"], "true");
+        assert_eq!(q["stats"][0]["filters"][0]["id"], "pseudo.pseudo_map_more_scarab_drops");
     }
 
     #[test]

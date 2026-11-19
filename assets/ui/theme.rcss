@@ -240,6 +240,13 @@ body {
 .chip { background-color: $chip; border-radius: 6dp; padding: 2dp 8dp; margin: 0 6dp 6dp 0; color: $text-strong; }
 .chip-label { color: $text-muted; }
 
+/* A map's poe.ninja price and the switch to its price check */
+.map-price { display: flex; align-items: center; padding: 0 14dp 6dp; }
+.map-price-text { flex: 1; }
+.map-price-value { color: $price; }
+.toggle-chip.view { width: 86dp; margin-left: 8dp; }
+.view-row { display: flex; justify-content: center; padding: 0 14dp 10dp; }
+.view-row .toggle-chip.view { margin-left: 0; }
 .profiles { display: flex; align-items: center; justify-content: flex-end; padding: 2dp 14dp 4dp; font-size: 11dp; color: $text-muted; }
 .profiles-label { margin-right: 4dp; }
 .profile {

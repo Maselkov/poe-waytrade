@@ -64,6 +64,8 @@
 //!     stat     <label> <value>            (quantity, rarity, pack size, ...)
 //!     mod      <key> <text> <marks>       (marks: one of d/w/g/- per profile)
 //!     profile  <active profile, 1-3>
+//!     price    <label> <chaos> <divine> <listings>   (poe.ninja, if listed;
+//!              a rare map's is its base's, labelled "white map")
 //!   request:  "MAPMARK\n" + profile + "\n" + d|w|g|- + "\n" + key
 //!   request:  "MAPPROFILE\n" + profile        (both answer "status ok")
 //!
@@ -377,6 +379,21 @@ fn map_check(state: &State, text: &str) -> String {
         let _ = writeln!(out, "mod\t{}\t{}\t{}", clean(&m.key), clean(&m.text), marks.get(&m.key));
     }
     let _ = writeln!(out, "profile\t{}", marks.profile);
+    drop(marks);
+    // Its poe.ninja price, when it has one (by name, or by base: for a rare
+    // or magic map that's only what it's worth unrolled, labelled so).
+    let db = state.db.read().unwrap().clone();
+    if let Some(db) = db
+        && let lookup::Outcome::Found { mut prices, .. } = lookup::lookup(&db, &item)
+    {
+        prices.truncate(1);
+        if item.rarity != "Normal" && item.name.as_ref().is_none_or(|n| db.items.get(n).is_none()) {
+            for p in &mut prices {
+                p.label = "white map".to_string();
+            }
+        }
+        write_prices(&mut out, prices);
+    }
     out
 }
 
