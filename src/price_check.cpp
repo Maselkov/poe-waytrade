@@ -39,7 +39,10 @@ PriceCheck::PriceCheck() {
         status_ = item_ ? "" : std::string("POE_WAYTRADE_DEMO_ITEM isn't PoE item text: ") + path;
         // Maps show the map check, everything else the price check.
         pending_purpose_ = item_ && is_map_like(*item_) ? Purpose::Map : Purpose::Price;
-        if (item_) pending_purpose_ == Purpose::Map ? daemon_.request_map(item_text_) : daemon_.request(item_text_);
+        // POE_WAYTRADE_DEMO_PRESET=base: open on the "Base item" preset.
+        const char* preset = getenv("POE_WAYTRADE_DEMO_PRESET");
+        if (item_ && preset) daemon_.request_prepare(preset, item_text_);
+        else if (item_) pending_purpose_ == Purpose::Map ? daemon_.request_map(item_text_) : daemon_.request(item_text_);
         pending_mode_ = Mode::Locked;
         demo_ = true;
         open();
@@ -304,6 +307,13 @@ void PriceCheck::set_base_only(bool base_only) {
     changed();
 }
 
+void PriceCheck::toggle_preset() {
+    if (!reply_ || reply_->status != "trade" || !reply_->base_preset || daemon_.busy()) return;
+    status_.clear();
+    daemon_.request_prepare(reply_->preset == "base" ? "normal" : "base", item_text_);
+    changed();
+}
+
 void PriceCheck::cycle_corrupted() {
     if (!reply_ || reply_->status != "trade") return;
     std::string& c = reply_->corrupted;
@@ -318,7 +328,7 @@ void PriceCheck::search() {
     for (const TradeFilter& f : reply_->filters)
         if (f.enabled) enabled.push_back(f);
     status_.clear();
-    daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, item_text_);
+    daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, reply_->preset, item_text_);
     changed();
 }
 

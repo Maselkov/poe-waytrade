@@ -198,6 +198,10 @@ body {
 .toggle-chip:hover { color: $text-strong; }
 .toggle-chip.no { background-color: $good-bg; border-color: #2a5a3c; color: $good; }
 .toggle-chip.yes { background-color: $danger-bg; border-color: #6a2a26; color: $danger; }
+/* "Base item": APT's crafting-base preset, offered for fractured,
+   influenced, synthesised and high item level bases. */
+.toggle-chip.preset { width: 70dp; margin-right: 8dp; }
+.toggle-chip.preset.on { background-color: #2a2546; border-color: $accent; color: $accent-text; }
 
 /* Trade results */
 .results { border-top: 1dp $divider; padding: 8dp 14dp 12dp; }
@@ -330,3 +334,23 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .tier.T1 { color: #c9a85a; }
 .tier.T2 { color: #a9b0ba; }
 .tier.T3 { color: #a87a55; }
+
+/* Fractured mods, like in game: PoE's fractured gold, in a thin gold frame.
+   Row classes are "sec-" + the filter's section (plain "base" would pick up
+   the item header's .base style). */
+.filter.sec-fractured {
+    border: 1dp #6b5c32;
+    border-radius: 8dp;
+    background-color: #1a1710;
+    padding-left: 6dp;
+    padding-right: 6dp;
+    margin: 2dp -7dp;
+}
+.filter.sec-fractured .mod { color: #c6b07a; }
+.filter.sec-fractured.off { border-color: #4a4026; background-color: #15130e; }
+.filter.sec-fractured.off .mod { color: #8e7f57; }
+.filter.sec-fractured .switch { background-color: #8a7440; }
+.filter.sec-fractured.off .switch { background-color: $off; }
+.filter.sec-fractured .range-fill { background-color: #a88f52; }
+.filter.sec-fractured .range-handle { border-color: #a88f52; background-color: #efe3c2; }
+.pv-line.fractured { color: #c6b07a; }

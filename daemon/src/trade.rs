@@ -2,7 +2,7 @@
 //! headless browser (see cdp.rs for why).
 
 use crate::cdp::{self, Browser, HttpResponse};
-use crate::item::{Item, ModKind};
+use crate::item::{Item, ModKind, ModLine};
 use crate::ninja::{self, PriceDb};
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
@@ -26,6 +26,8 @@ const LISTINGS: usize = 10;
 pub enum Target {
     Stat(String),
     Property(&'static str, &'static str),
+    /// A yes/no item filter, e.g. misc_filters.fractured_item.
+    Flag(&'static str, &'static str),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,6 +37,10 @@ pub enum Section {
     Mod,
     /// A unique's mod that rolls: always shown, since rolls set its price.
     Roll,
+    /// A fractured mod, searched as fractured: always shown.
+    Fractured,
+    /// Base item properties: item level, influences, fractured/synthesised.
+    Base,
 }
 
 impl Section {
@@ -44,6 +50,8 @@ impl Section {
             Section::Total => "total",
             Section::Mod => "mod",
             Section::Roll => "roll",
+            Section::Fractured => "fractured",
+            Section::Base => "base",
         }
     }
 }
@@ -153,6 +161,53 @@ pub struct SearchOptions {
     /// The exact base type ("Sapphire Ring") rather than its category.
     pub base_only: bool,
     pub corrupted: Corrupted,
+    pub preset: Preset,
+}
+
+/// Which filters an item gets, like APT's presets.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Preset {
+    /// Totals and mods (APT's "pseudo" preset).
+    Normal,
+    /// The item as a crafting base: exact base, item level, influences,
+    /// fractured/synthesised, fractured mods, enchants and implicits.
+    Base,
+}
+
+impl Preset {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Preset::Normal => "normal",
+            Preset::Base => "base",
+        }
+    }
+    pub fn parse(s: &str) -> Preset {
+        if s == "base" { Preset::Base } else { Preset::Normal }
+    }
+}
+
+/// Like APT: the "base item" preset is offered for unfinished gear with
+/// crafting value (fractured, synthesised, influenced, cluster or magic
+/// jewels, or item level 82+).
+pub fn base_preset_available(item: &Item) -> bool {
+    let class = item.class.as_str();
+    let gear = matches!(item.rarity.as_str(), "Magic" | "Rare")
+        && !item.mods.is_empty()
+        && category(item).is_some()
+        && !matches!(
+            class,
+            "Maps" | "Flasks" | "Tinctures" | "Life Flasks" | "Mana Flasks" | "Hybrid Flasks" | "Utility Flasks"
+        );
+    let finished =
+        item.corrupted || item.mirrored || item.quality == 20 || item.mods.iter().any(|m| m.kind == ModKind::Crafted);
+    let jewel = class.contains("Jewel");
+    let crafting_value = item.fractured_item
+        || item.synthesised
+        || !item.influences.is_empty()
+        || item.base.contains("Cluster Jewel")
+        || (jewel && item.rarity == "Magic")
+        || (!jewel && item.item_level.unwrap_or(0) >= 82);
+    gear && !finished && crafting_value
 }
 
 /// What the panel shows before anything is searched.
@@ -162,6 +217,8 @@ pub struct Prepared {
     /// base can't be searched separately (unknown category, or a magic item,
     /// whose name hides the base among its affixes).
     pub category_label: Option<&'static str>,
+    /// The "base item" preset can be offered.
+    pub base_preset: bool,
     pub defaults: SearchOptions,
 }
 
@@ -237,17 +294,24 @@ impl Trade {
     /// The filters and options for an item, without searching. Needs only
     /// the stat list (cached on disk for a day), so it normally makes no
     /// requests at all.
-    pub fn prepare(&mut self, item: &Item) -> Result<Prepared, String> {
+    pub fn prepare(&mut self, item: &Item, preset: Preset) -> Result<Prepared, String> {
         self.ensure_data()?;
         let data = &self.data.as_ref().unwrap().0;
-        let filters = build_filters(item, data);
+        let filters = build_filters(item, data, preset);
+        // Magic items' base is only known from advanced copy's affix names.
+        let base_known = item.rarity != "Magic" || item.name.is_some();
         let category_label = match (category(item), item.rarity.as_str()) {
-            (Some((_, label)), "Rare" | "Normal") => Some(label),
+            (Some((_, label)), "Rare" | "Normal" | "Magic") if base_known => Some(label),
             _ => None,
         };
         // Like APT: an uncorrupted item is compared with uncorrupted ones.
         let corrupted = if item.corrupted { Corrupted::Any } else { Corrupted::No };
-        Ok(Prepared { filters, category_label, defaults: SearchOptions { base_only: false, corrupted } })
+        Ok(Prepared {
+            filters,
+            category_label,
+            base_preset: base_preset_available(item),
+            defaults: SearchOptions { base_only: preset == Preset::Base, corrupted, preset },
+        })
     }
 
     /// `enabled`: the prepared filters to use, by index, with their bounds.
@@ -278,7 +342,7 @@ impl Trade {
     ) -> Result<TradeResult, String> {
         self.ensure_data()?;
         let data = &self.data.as_ref().unwrap().0;
-        let filters = build_filters(item, data);
+        let filters = build_filters(item, data, options.preset);
         let chosen: Vec<Option<Bounds>> = filters
             .iter()
             .enumerate()
@@ -789,17 +853,108 @@ fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     filters
 }
 
-fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
+/// A mod as a stat filter of its own kind (explicit, fractured, ...).
+fn mod_filter(m: &ModLine, data: &TradeData, local: bool, on: bool, section: Section) -> Option<Filter> {
+    let (template, values) = templatize(&m.text);
+    let (value, range) = mod_value(&values, &m.ranges)?;
+    let (stat_id, sign) = find_stat(data, m.kind, &template, local)?;
+    let label = match m.kind {
+        ModKind::Explicit => m.text.clone(),
+        kind => format!("{} ({})", m.text, kind.trade_group()),
+    };
+    let mut filter = Filter::new(label, Target::Stat(stat_id), value * sign, range, on, section);
+    filter.tier = m.tier;
+    Some(filter)
+}
+
+fn has_local_mods(item: &Item) -> bool {
+    category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."))
+}
+
+/// APT's "base item" preset: what makes the item worth as a crafting base.
+fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
+    let local = has_local_mods(item);
+    let mut filters = Vec::new();
+    let flag = |label: String, key: &'static str| Filter {
+        label,
+        target: Target::Flag("misc_filters", key),
+        min: None,
+        slider: None,
+        step: 1.0,
+        max_roll: false,
+        default_on: true,
+        section: Section::Base,
+        tier: None,
+    };
+    if let Some(ilvl) = item.item_level {
+        // Higher item levels don't add mod tiers (APT caps at 86).
+        let min = ilvl.min(86) as f64;
+        filters.push(Filter {
+            label: format!("Item level {ilvl}"),
+            target: Target::Property("misc_filters", "ilvl"),
+            min: Some(min),
+            slider: Some((min.min(60.0), 86.0)),
+            step: 1.0,
+            max_roll: false,
+            default_on: true,
+            section: Section::Base,
+            tier: None,
+        });
+    }
+    if item.fractured_item {
+        filters.push(flag("Fractured item".into(), "fractured_item"));
+    }
+    if item.synthesised {
+        filters.push(flag("Synthesised item".into(), "synthesised_item"));
+    }
+    for &influence in &item.influences {
+        let key = match influence {
+            "shaper" => "shaper_item",
+            "elder" => "elder_item",
+            "crusader" => "crusader_item",
+            "redeemer" => "redeemer_item",
+            "hunter" => "hunter_item",
+            _ => "warlord_item",
+        };
+        let mut name = influence.to_string();
+        name[..1].make_ascii_uppercase();
+        filters.push(flag(format!("{name} influence"), key));
+    }
+    // Influenced and fractured bases' implicits vary too much to match.
+    let implicits = item.influences.is_empty() && !item.fractured_item;
+    for m in &item.mods {
+        let (on, section) = match m.kind {
+            ModKind::Fractured => (true, Section::Fractured),
+            ModKind::Enchant => (true, Section::Mod),
+            ModKind::Implicit if implicits => (true, Section::Mod),
+            // A magic base's top-tier mods are part of its value.
+            ModKind::Explicit if item.rarity == "Magic" => (m.tier.is_some_and(|t| t <= 2), Section::Mod),
+            _ => continue,
+        };
+        filters.extend(mod_filter(m, data, local, on, section));
+    }
+    filters
+}
+
+fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     if item.rarity == "Unique" {
         return unique_filters(item, data);
     }
-    let local = category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."));
+    if preset == Preset::Base {
+        return base_filters(item, data);
+    }
+    let local = has_local_mods(item);
     let mut listed = Vec::new();
+    // Fractured mods also count in totals, but can be searched as fractured.
+    let mut fractured = Vec::new();
     let (mut elemental, mut chaos, mut life, mut mana) =
         (Amount::default(), Amount::default(), Amount::default(), Amount::default());
     let mut attributes = [Amount::default(); 3];
 
     for m in &item.mods {
+        if m.kind == ModKind::Fractured {
+            fractured.extend(mod_filter(m, data, local, false, Section::Fractured));
+        }
         let (template, values) = templatize(&m.text);
         let Some((value, range)) = mod_value(&values, &m.ranges) else { continue };
         if let Some((elements, has_chaos)) = resist_parts(&template) {
@@ -830,17 +985,10 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             }
             _ => {}
         }
-        if m.kind == ModKind::Crafted {
+        if matches!(m.kind, ModKind::Crafted | ModKind::Fractured) {
             continue;
         }
-        let Some((stat_id, sign)) = find_stat(data, m.kind, &template, local) else { continue };
-        let label = match m.kind {
-            ModKind::Explicit => m.text.clone(),
-            kind => format!("{} ({})", m.text, kind.trade_group()),
-        };
-        let mut filter = Filter::new(label, Target::Stat(stat_id), value * sign, range, false, Section::Mod);
-        filter.tier = m.tier;
-        listed.push(filter);
+        listed.extend(mod_filter(m, data, local, false, Section::Mod));
     }
 
     let mut filters = Vec::new();
@@ -878,6 +1026,7 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     add("+# total to Dexterity", dexterity, false);
     add("+# total to Intelligence", intelligence, false);
 
+    filters.extend(fractured);
     filters.extend(listed);
     filters
 }
@@ -1005,6 +1154,7 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
                 _ => json!({ "id": id, "value": bounds_json(bounds) }),
             }),
             Target::Property(group, key) => q["filters"][*group]["filters"][*key] = bounds_json(bounds),
+            Target::Flag(group, key) => q["filters"][*group]["filters"][*key] = json!({ "option": "true" }),
         }
     }
     q["stats"] = json!([{ "type": "and", "filters": stats }]);
@@ -1013,7 +1163,7 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
         q["type"] = json!(item.base);
     } else {
         match category(item) {
-            Some((c, _)) if !options.base_only => {
+            Some((c, _)) if !options.base_only && options.preset == Preset::Normal => {
                 q["filters"]["type_filters"]["filters"]["category"] = json!({ "option": c })
             }
             _ => q["type"] = json!(item.base),
@@ -1149,9 +1299,11 @@ mod tests {
             ("+# to maximum Life", "explicit.life"),
             ("#% increased Fire Damage", "explicit.fire_damage"),
             ("+#% to Fire Resistance", "explicit.fire_res"),
+            ("+# to Intelligence", "explicit.int"),
         ] {
             stats.insert(("explicit".to_string(), text.to_string()), id.to_string());
         }
+        stats.insert(("fractured".into(), "+# to maximum Life".into()), "fractured.life".into());
         TradeData { stats, currencies: HashMap::new(), images: HashMap::new() }
     }
 
@@ -1164,7 +1316,7 @@ mod tests {
     #[test]
     fn apt_like_defaults() {
         let item = crate::item::parse(RING).unwrap();
-        let filters = build_filters(&item, &test_data());
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
         let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.min, f.default_on)).collect();
         assert_eq!(
             got,
@@ -1185,9 +1337,9 @@ mod tests {
     #[test]
     fn search_options() {
         let item = crate::item::parse(RING).unwrap();
-        let filters = build_filters(&item, &test_data());
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
         let enabled: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
-        let opts = |base_only, corrupted| SearchOptions { base_only, corrupted };
+        let opts = |base_only, corrupted| SearchOptions { base_only, corrupted, preset: Preset::Normal };
 
         let q = query(&item, &filters, &enabled, opts(false, Corrupted::No));
         assert_eq!(q["query"]["filters"]["type_filters"]["filters"]["category"]["option"], "accessory.ring");
@@ -1211,7 +1363,7 @@ mod tests {
                     { Suffix Modifier \"of the Furnace\" (Tier: 4) }\n+30(30-35)% to Fire Resistance\n\
                     { Suffix Modifier \"of Plenty\" (Tier: 2) }\n12(8-14)% increased Rarity of Items found\n";
         let item = crate::item::parse(text).unwrap();
-        let filters = build_filters(&item, &test_data());
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
         let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.min, f.slider, f.max_roll)).collect();
         assert_eq!(
             got,
@@ -1236,7 +1388,7 @@ mod tests {
                     { Unique Modifier — Elemental, Fire, Resistance }\n+40(30-40)% to Fire Resistance\n";
         let item = crate::item::parse(text).unwrap();
         assert!(searchable(&item));
-        let filters = build_filters(&item, &test_data());
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
         let got: Vec<_> =
             filters.iter().map(|f| (f.label.as_str(), f.min, f.slider, f.max_roll, f.default_on, f.section)).collect();
         assert_eq!(
@@ -1248,7 +1400,12 @@ mod tests {
             ]
         );
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
-        let q = query(&item, &filters, &chosen, SearchOptions { base_only: false, corrupted: Corrupted::No });
+        let q = query(
+            &item,
+            &filters,
+            &chosen,
+            SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Normal },
+        );
         assert_eq!(q["query"]["name"], "Kaom's Heart");
         assert_eq!(q["query"]["type"], "Glorious Plate");
         assert_eq!(q["query"]["filters"]["type_filters"]["filters"]["rarity"]["option"], "unique");
@@ -1290,13 +1447,64 @@ mod tests {
     }
 
     #[test]
+    fn fractured_and_base_presets() {
+        let item = crate::item::parse(crate::item::tests::FRACTURED_CROWN).unwrap();
+        assert!(base_preset_available(&item));
+
+        // Normal: the fractured life counts in the total, and can also be
+        // searched as fractured (unticked).
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.default_on, f.section)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("+143 total maximum Life", true, Section::Total),
+                ("+52 total to Intelligence", false, Section::Total),
+                ("+143 to maximum Life (fractured)", false, Section::Fractured),
+            ]
+        );
+        assert_eq!(filters[2].target, Target::Stat("fractured.life".into()));
+
+        // Base item: item level, the fractured flag, the fractured mod and a
+        // top-tier magic mod, all ticked; the exact base.
+        let filters = build_filters(&item, &test_data(), Preset::Base);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.default_on, f.section)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Item level 84", true, Section::Base),
+                ("Fractured item", true, Section::Base),
+                ("+143 to maximum Life (fractured)", true, Section::Fractured),
+                ("+52 to Intelligence", true, Section::Mod),
+            ]
+        );
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
+        let opts = SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Base };
+        let q = query(&item, &filters, &chosen, opts);
+        assert_eq!(q["query"]["type"], "Paladin Crown");
+        assert!(q["query"]["filters"]["type_filters"]["filters"]["category"].is_null());
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["fractured_item"]["option"], "true");
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["ilvl"]["min"], 84.0);
+
+        // Finished items aren't bases: crafted, corrupted, 20% quality.
+        let crafted = crate::item::parse(&format!(
+            "{}--------\n+10% to Fire Resistance (crafted)\n",
+            crate::item::tests::FRACTURED_CROWN.replace("Fractured Item\n", "")
+        ))
+        .unwrap();
+        assert!(crafted.mods.iter().any(|m| m.kind == ModKind::Crafted) && !base_preset_available(&crafted));
+        let corrupted = crate::item::parse(&format!("{}Corrupted\n", crate::item::tests::FRACTURED_CROWN)).unwrap();
+        assert!(!base_preset_available(&corrupted));
+    }
+
+    #[test]
     fn weapon_dps() {
         let text = "Item Class: Warstaves\nRarity: Rare\nBramble Mast\nEzomyte Staff\n--------\n\
                     Physical Damage: 100-200 (augmented)\nCritical Strike Chance: 6.50%\n\
                     Attacks per Second: 1.30 (augmented)\n--------\n\
                     Item Level: 68\n--------\n47% increased Physical Damage\n";
         let item = crate::item::parse(text).unwrap();
-        let filters = build_filters(&item, &test_data());
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
         assert_eq!(filters[0].label, "Physical DPS 195");
         assert_eq!(filters[0].target, Target::Property("weapon_filters", "pdps"));
         assert!(filters[0].default_on);
@@ -1310,11 +1518,16 @@ mod tests {
         assert!(!filters[2].default_on);
         // A whole-number crit chance still slides in hundredths.
         let text = text.replace("6.50%", "7.00%");
-        let filters = build_filters(&crate::item::parse(&text).unwrap(), &test_data());
+        let filters = build_filters(&crate::item::parse(&text).unwrap(), &test_data(), Preset::Normal);
         assert_eq!((filters[2].min, filters[2].step), (Some(6.3), 0.01));
 
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
-        let q = query(&item, &filters, &chosen, SearchOptions { base_only: false, corrupted: Corrupted::Any });
+        let q = query(
+            &item,
+            &filters,
+            &chosen,
+            SearchOptions { base_only: false, corrupted: Corrupted::Any, preset: Preset::Normal },
+        );
         assert_eq!(q["query"]["filters"]["weapon_filters"]["filters"]["pdps"]["min"], 175.0);
         assert!(q["query"]["filters"]["weapon_filters"]["filters"]["aps"].is_null());
 
@@ -1322,7 +1535,12 @@ mod tests {
         let mut chosen = chosen;
         chosen[0] = Some((Some(180.0), Some(220.0)));
         chosen[1] = Some((None, Some(1.5)));
-        let q = query(&item, &filters, &chosen, SearchOptions { base_only: false, corrupted: Corrupted::Any });
+        let q = query(
+            &item,
+            &filters,
+            &chosen,
+            SearchOptions { base_only: false, corrupted: Corrupted::Any, preset: Preset::Normal },
+        );
         assert_eq!(
             q["query"]["filters"]["weapon_filters"]["filters"]["pdps"],
             serde_json::json!({ "min": 180.0, "max": 220.0 })

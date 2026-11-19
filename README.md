@@ -75,6 +75,17 @@ reaches down to it even below the tier), and a roll at the top of its tier defau
 also get physical/elemental DPS, attack speed and critical strike chance
 filters from their properties. Unticked mods fold behind "+ N more mods". Each mod shows its affix tier from the
 advanced copy ([T1] gold, [T2] silver, [T3] bronze, lower ones grey).
+Fractured mods count in the totals and also get a filter of their own that
+searches them as fractured, styled in PoE's fractured gold.
+
+Like APT, unfinished bases with crafting value (fractured, synthesised,
+influenced, cluster or magic jewels, or item level 82+, without crafted
+mods, corruption or 20% quality) get a **Base item** button: it searches the
+exact base with a minimum item level, the fractured/synthesised/influence
+flags, fractured mods, enchants, implicits (unless influenced or fractured)
+and, on magic items, tier 1–2 mods. Magic items' bases are worked out from
+the advanced copy's affix names ("Fecund Paladin Crown of the Genius" →
+Paladin Crown), so they can be searched by exact base too.
 
 After a search, the panel shows a one-line estimate (the median of the 10
 cheapest listings, with the price range and a "Low value" tag under 5c), then
@@ -235,7 +246,8 @@ change; `POE_WAYTRADE_DEMO_ITEM` opens the panel on start with that item text
 (as copied from the game; maps open the map check). `POE_WAYTRADE_UI_SCALE`
 scales the whole UI. `POE_WAYTRADE_SNAPSHOT=<file.ppm>` saves one of the app's own rendered frames
 (after 300 frames) and `POE_WAYTRADE_DEMO_SEARCH=1` makes a demo item search by
-itself, for checking the UI without screenshots. `POE_WAYTRADE_TEST_COPY=1`
+itself, for checking the UI without screenshots. `POE_WAYTRADE_DEMO_PRESET=base` opens a demo item on
+the Base item preset. `POE_WAYTRADE_TEST_COPY=1`
 does a Ctrl+D two seconds in without sending keys; `tests/clipboard-kwin.sh
 [text|image]` uses it in a nested, invisible KWin to check that the
 clipboard is restored. `POE_WAYTRADE_SOCKET=name`

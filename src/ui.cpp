@@ -148,6 +148,7 @@ struct UiFilter {
     float min_pct = 0, max_pct = 100;  // handle positions on the slider
     bool has_slider = false, max_roll = false;
     Rml::String tier;     // "T1"; empty: none
+    Rml::String section;  // weapon | base | total | mod | roll | fractured
     bool visible = true;  // extra mods fold away until "+ N more"
 };
 struct UiPreviewLine {
@@ -179,6 +180,8 @@ struct Model {
     bool status_error = false, searching = false, has_url = false, closable = false;
     // Trade search options
     Rml::String base_label, category_label, corrupted, corrupted_label;
+    bool base_preset = false, preset_base = false;  // offered / active
+    Rml::String top_label;                          // "Weapon" | "Base item"
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
     Rml::Vector<UiFilter> weapon_filters, mod_filters;
@@ -366,6 +369,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("max_roll", &UiFilter::max_roll);
         h.RegisterMember("visible", &UiFilter::visible);
         h.RegisterMember("tier", &UiFilter::tier);
+        h.RegisterMember("section", &UiFilter::section);
     }
     if (auto h = c.RegisterStruct<UiPreviewLine>()) {
         h.RegisterMember("kind", &UiPreviewLine::kind);
@@ -418,6 +422,9 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("closable", &model.closable);
     c.Bind("base_label", &model.base_label);
     c.Bind("category_label", &model.category_label);
+    c.Bind("base_preset", &model.base_preset);
+    c.Bind("preset_base", &model.preset_base);
+    c.Bind("top_label", &model.top_label);
     c.Bind("corrupted", &model.corrupted);
     c.Bind("corrupted_label", &model.corrupted_label);
     c.Bind("base_only", &model.base_only);
@@ -446,6 +453,9 @@ void OverlayUi::Impl::bind_model() {
     // Events arrive while update() feeds pointer input, with price_check set.
     c.BindEventCallback("close", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->close();
+    });
+    c.BindEventCallback("toggle_preset", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->toggle_preset();
     });
     c.BindEventCallback("toggle_base", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check && price_check->reply()) price_check->set_base_only(!price_check->reply()->base_only);
@@ -629,6 +639,11 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.stale = pc.stale();
         m.base_only = reply->base_only;
         m.base_label = reply->base_type;
+        m.base_preset = reply->base_preset;
+        m.preset_base = reply->preset == "base";
+        // The base item preset always searches the exact base.
+        if (m.preset_base) m.base_only = true;
+        m.top_label = m.preset_base ? "Base item" : "Weapon";
         if (!reply->category_label.empty()) m.category_label = "Any " + reply->category_label;
         // Short, so the button keeps its size; its colour tells the state too.
         m.corrupted = reply->corrupted;
@@ -651,11 +666,12 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             else if (!f.max.empty()) u.bounds = "\u2264 " + f.max;
             u.max_roll = f.max_roll;
             if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
-            if (f.section == "weapon") {
+            u.section = f.section;
+            if (f.section == "weapon" || f.section == "base") {
                 m.weapon_filters.push_back(u);
                 continue;
             }
-            u.visible = f.section == "total" || f.section == "roll" || f.enabled || show_all_mods;
+            u.visible = f.section == "total" || f.section == "roll" || f.section == "fractured" || f.enabled || show_all_mods;
             if (!u.visible) m.more_mods++;
             m.mod_filters.push_back(u);
         }

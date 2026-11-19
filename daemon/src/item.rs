@@ -32,7 +32,23 @@ pub struct Item {
     pub attacks_per_second: Option<f64>,
     /// "Critical Strike Chance: 6.50%", in percent.
     pub critical_chance: Option<f64>,
+    /// "Fractured Item", "Synthesised Item", "Mirrored" lines.
+    pub fractured_item: bool,
+    pub synthesised: bool,
+    pub mirrored: bool,
+    /// Influences from "Shaper Item"-style lines, as trade keys ("shaper").
+    pub influences: Vec<&'static str>,
 }
+
+/// Influence lines and their trade site names.
+const INFLUENCES: &[(&str, &str)] = &[
+    ("Shaper Item", "shaper"),
+    ("Elder Item", "elder"),
+    ("Crusader Item", "crusader"),
+    ("Redeemer Item", "redeemer"),
+    ("Hunter Item", "hunter"),
+    ("Warlord Item", "warlord"),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModKind {
@@ -217,6 +233,8 @@ pub fn parse(text: &str) -> Option<Item> {
     }
 
     let mut after_item_level = false;
+    // Magic items' affix names from advanced copy, to find their base.
+    let mut affixes: Vec<(bool, String)> = Vec::new();
     for section in sections.iter().skip(1) {
         if after_item_level {
             // In advanced copy every mod has a "{ … }" header, so a later
@@ -234,6 +252,9 @@ pub fn parse(text: &str) -> Option<Item> {
                     item.advanced = true;
                     headed = true;
                     tier = header_tier(line);
+                    if let Some(affix) = header_affix(line) {
+                        affixes.push(affix);
+                    }
                     continue;
                 }
                 // Advanced copy's reminder text, e.g. "(Ignited enemies take…)".
@@ -258,6 +279,14 @@ pub fn parse(text: &str) -> Option<Item> {
     for line in sections.iter().skip(1).flatten() {
         if *line == "Corrupted" {
             item.corrupted = true;
+        } else if *line == "Fractured Item" {
+            item.fractured_item = true;
+        } else if *line == "Synthesised Item" {
+            item.synthesised = true;
+        } else if *line == "Mirrored" {
+            item.mirrored = true;
+        } else if let Some(&(_, key)) = INFLUENCES.iter().find(|(text, _)| text == line) {
+            item.influences.push(key);
         } else if let Some(v) = line.strip_prefix("Level: ") {
             // Only gems have a bare "Level:" line ("Level: 20 (Max)").
             if item.rarity == "Gem" {
@@ -287,7 +316,35 @@ pub fn parse(text: &str) -> Option<Item> {
             item.map_props.push((label.to_string(), value));
         }
     }
+    // A magic item's one name line is its base with the affixes around it
+    // ("Fecund Paladin Crown of the Genius"); advanced copy names them.
+    if item.rarity == "Magic" && item.name.is_none() && !affixes.is_empty() {
+        let mut base = item.base.as_str();
+        for (prefix, affix) in &affixes {
+            base = if *prefix {
+                base.strip_prefix(affix.as_str()).and_then(|b| b.strip_prefix(' ')).unwrap_or(base)
+            } else {
+                base.strip_suffix(affix.as_str()).and_then(|b| b.strip_suffix(' ')).unwrap_or(base)
+            };
+        }
+        let base = base.strip_prefix("Synthesised ").unwrap_or(base).to_string();
+        if base != item.base {
+            item.name = Some(std::mem::replace(&mut item.base, base));
+        }
+    }
     Some(item)
+}
+
+/// `{ Prefix Modifier "Fecund" (Tier: 2) — Life }` -> (true, "Fecund");
+/// suffixes give false. Unnamed (implicit, unique) headers give None.
+fn header_affix(header: &str) -> Option<(bool, String)> {
+    let prefix = header.contains("Prefix Modifier \"");
+    if !prefix && !header.contains("Suffix Modifier \"") {
+        return None;
+    }
+    let start = header.find('"')? + 1;
+    let len = header[start..].find('"')?;
+    Some((prefix, header[start..start + len].to_string()))
 }
 
 /// First run of digits, ignoring a leading '+' and thousands separators:
@@ -308,7 +365,7 @@ fn largest_link_group(sockets: &str) -> u32 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -445,5 +502,29 @@ mod tests {
         assert_eq!(item.base, "Lesser Brute's Arm");
         let mods: Vec<&str> = item.mods.iter().map(|m| m.text.as_str()).collect();
         assert_eq!(mods, vec!["+15 to Strength"]);
+    }
+
+    pub(crate) const FRACTURED_CROWN: &str = "Item Class: Helmets\nRarity: Magic\nFecund Paladin Crown of the Genius\n--------\n\
+        Armour: 350\nEnergy Shield: 70\n--------\nItem Level: 84\n--------\n\
+        { Fractured Prefix Modifier \"Fecund\" (Tier: 2) — Life }\n+143(130-144) to maximum Life (fractured)\n\
+        { Suffix Modifier \"of the Genius\" (Tier: 2) — Attribute }\n+52(51-55) to Intelligence\n--------\n\
+        Fractured Item\n";
+
+    #[test]
+    fn magic_base_and_markers() {
+        let item = parse(FRACTURED_CROWN).unwrap();
+        assert_eq!(item.base, "Paladin Crown");
+        assert_eq!(item.name.as_deref(), Some("Fecund Paladin Crown of the Genius"));
+        assert!(item.fractured_item);
+        let mods: Vec<_> = item.mods.iter().map(|m| (m.kind, m.text.as_str(), m.tier)).collect();
+        assert_eq!(
+            mods,
+            vec![
+                (ModKind::Fractured, "+143 to maximum Life", Some(2)),
+                (ModKind::Explicit, "+52 to Intelligence", Some(2)),
+            ]
+        );
+        let shaped = parse(&FRACTURED_CROWN.replace("Fractured Item", "Shaper Item\nElder Item")).unwrap();
+        assert_eq!(shaped.influences, vec!["shaper", "elder"]);
     }
 }

@@ -43,11 +43,13 @@
         <div class="options">
             <div data-if="category_label != ''" data-attr-class="base_only ? 'base-toggle exact' : 'base-toggle'"
                  data-event-click="toggle_base">{{base_only ? base_label : category_label}}</div>
+            <div data-if="base_preset" data-attr-class="preset_base ? 'toggle-chip preset on' : 'toggle-chip preset'"
+                 data-event-click="toggle_preset">Base item</div>
             <div data-attr-class="'toggle-chip ' + corrupted" data-event-click="cycle_corrupted">{{corrupted_label}}</div>
         </div>
         <div class="filters">
-            <div class="section-label" data-if="weapon_filters.size > 0">Weapon</div>
-            <div data-for="f : weapon_filters" data-if="f.visible" data-attr-class="f.enabled ? 'filter' : 'filter off'">
+            <div class="section-label" data-if="weapon_filters.size > 0">{{top_label}}</div>
+            <div data-for="f : weapon_filters" data-if="f.visible" data-attr-class="'filter sec-' + f.section + (f.enabled ? '' : ' off')">
                 <div class="filter-main" data-event-click="toggle_filter(f.index)">
                     <div class="switch"><div class="knob"/></div>
                     <div class="mod">{{f.label}}<span data-if="f.tier != ''" data-attr-class="'tier ' + f.tier"> [{{f.tier}}]</span></div>
@@ -66,7 +68,7 @@
                 </div>
             </div>
             <div class="section-label" data-if="weapon_filters.size > 0 &amp;&amp; mod_filters.size > 0">Mods</div>
-            <div data-for="f : mod_filters" data-if="f.visible" data-attr-class="f.enabled ? 'filter' : 'filter off'">
+            <div data-for="f : mod_filters" data-if="f.visible" data-attr-class="'filter sec-' + f.section + (f.enabled ? '' : ' off')">
                 <div class="filter-main" data-event-click="toggle_filter(f.index)">
                     <div class="switch"><div class="knob"/></div>
                     <div class="mod">{{f.label}}<span data-if="f.tier != ''" data-attr-class="'tier ' + f.tier"> [{{f.tier}}]</span></div>
