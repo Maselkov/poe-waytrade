@@ -164,7 +164,7 @@ struct Model {
     Rml::String status, source, thin, total, hint;
     bool status_error = false, searching = false, has_url = false, closable = false;
     // Trade search options
-    Rml::String base_label, category_label, corrupted_label;
+    Rml::String base_label, category_label, corrupted, corrupted_label;
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
     Rml::Vector<UiFilter> filters;
@@ -326,6 +326,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("closable", &model.closable);
     c.Bind("base_label", &model.base_label);
     c.Bind("category_label", &model.category_label);
+    c.Bind("corrupted", &model.corrupted);
     c.Bind("corrupted_label", &model.corrupted_label);
     c.Bind("base_only", &model.base_only);
     c.Bind("searched", &model.searched);
@@ -512,9 +513,9 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.base_only = reply->base_only;
         m.base_label = reply->base_type;
         if (!reply->category_label.empty()) m.category_label = "Any " + reply->category_label;
-        m.corrupted_label = reply->corrupted == "no"    ? "Not corrupted"
-                            : reply->corrupted == "yes" ? "Corrupted only"
-                                                        : "Corrupted or not";
+        // Short, so the button keeps its size; its colour tells the state too.
+        m.corrupted = reply->corrupted;
+        m.corrupted_label = reply->corrupted == "no" ? "Uncorrupted" : reply->corrupted == "yes" ? "Corrupted" : "Any";
         m.source = reply->league;
         for (const TradeFilter& f : reply->filters) m.filters.push_back({f.index, f.enabled, f.label, f.min});
         for (const TradeListing& l : reply->listings) {

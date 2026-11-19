@@ -125,12 +125,38 @@ body {
 
 /* Trade search options */
 .options { display: flex; align-items: center; padding: 10dp 14dp 2dp; }
-.segmented { display: flex; border: 1dp $off; border-radius: 8dp; margin-right: 8dp; }
-.seg { padding: 3dp 8dp; color: $text-muted; border-radius: 7dp; cursor: pointer; }
+/* Fixed layout: labels never wrap, and the corrupted button keeps one width,
+   so clicking either control doesn't move anything. */
+.segmented { display: flex; flex: 1; min-width: 0; border: 1dp $off; border-radius: 8dp; margin-right: 8dp; }
+.seg {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 3dp 6dp;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: $text-muted;
+    border-radius: 7dp;
+    cursor: pointer;
+}
 .seg:hover { color: $text-strong; }
 .seg.active { background-color: $chip; color: $text-strong; }
-.toggle-chip { padding: 3dp 8dp; border: 1dp $off; border-radius: 8dp; color: $text; cursor: pointer; }
-.toggle-chip:hover { color: $text-strong; border-color: #3a404a; }
+.toggle-chip {
+    width: 78dp;
+    flex-shrink: 0;
+    padding: 3dp 0;
+    text-align: center;
+    white-space: nowrap;
+    border: 1dp $off;
+    border-radius: 8dp;
+    color: $text-muted;
+    cursor: pointer;
+    transition: background-color color 0.12s linear-out;
+}
+.toggle-chip:hover { color: $text-strong; }
+.toggle-chip.no { background-color: $good-bg; border-color: #2a5a3c; color: $good; }
+.toggle-chip.yes { background-color: $danger-bg; border-color: #6a2a26; color: $danger; }
 
 /* Trade results */
 .results { border-top: 1dp $divider; padding: 8dp 14dp 12dp; }
