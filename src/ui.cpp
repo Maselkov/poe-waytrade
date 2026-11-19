@@ -634,6 +634,12 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             if (!u.visible) m.more_mods++;
             m.mod_filters.push_back(u);
         }
+        // Folding is for hiding the less important mods next to the shown
+        // ones; with nothing shown (e.g. a rare map), just list them all.
+        if (m.weapon_filters.empty() && m.more_mods == (int)m.mod_filters.size()) {
+            for (UiFilter& u : m.mod_filters) u.visible = true;
+            m.more_mods = 0;
+        }
         for (const TradeListing& l : reply->listings) {
             UiListing u;
             u.price = l.amount + " " + l.currency;

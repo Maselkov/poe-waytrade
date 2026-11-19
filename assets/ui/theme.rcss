@@ -146,7 +146,7 @@ body {
 .range:hover .range-handle { background-color: #ffffff; }
 
 .section-label { font-size: 10dp; letter-spacing: 0.5dp; color: $text-faint; margin: 6dp 0 2dp; }
-.more-mods { color: $text-muted; padding: 4dp 0 2dp 34dp; cursor: pointer; }
+.more-mods { color: $text-muted; padding: 4dp 0 2dp; cursor: pointer; }
 .more-mods:hover { color: $text-strong; }
 
 /* Price summary */
