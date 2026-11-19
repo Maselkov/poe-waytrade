@@ -148,6 +148,7 @@ body {
 .coin.big { width: 26dp; height: 26dp; border-radius: 13dp; margin-right: 10dp; }
 .summary-text { flex: 1; }
 .summary-price { font-size: 17dp; font-weight: 500; color: $price; }
+.summary-price .label { font-size: 12dp; font-weight: 400; color: $text-muted; }
 .summary-price .sub { font-size: 12dp; font-weight: 400; color: $text-muted; }
 .summary-range { font-size: 11dp; color: $text-muted; margin-top: 2dp; }
 .summary .tag { margin: 0 0 0 8dp; }

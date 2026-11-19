@@ -297,6 +297,9 @@ void PriceCheck::request_icons() {
         icon_queue_.push_back(id);
     };
     if (reply_->summary) want(reply_->summary->currency_id);
+    // The poe.ninja card on a unique's trade panel
+    if (reply_->status == "trade" && !reply_->prices.empty())
+        want(reply_->prices[0].divine >= 1.0 ? "divine" : "chaos");
     for (const TradeListing& l : reply_->listings) want(l.currency_id);
 }
 

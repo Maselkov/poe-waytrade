@@ -192,6 +192,8 @@ struct Model {
     // Price summary (the low end of the fetched listings)
     bool has_summary = false, low_value = false;
     Rml::String summary_price, summary_icon, summary_sub, summary_range;
+    // A unique's poe.ninja price, shown big until a trade search prices it
+    Rml::String ninja_icon, ninja_meta;
     Rml::Vector<Rml::String> debug_lines;
     // Map check
     Rml::String verdict, verdict_kind;  // kind: deadly | warning | clean
@@ -466,6 +468,8 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("summary_icon", &model.summary_icon);
     c.Bind("summary_sub", &model.summary_sub);
     c.Bind("summary_range", &model.summary_range);
+    c.Bind("ninja_icon", &model.ninja_icon);
+    c.Bind("ninja_meta", &model.ninja_meta);
     c.Bind("debug_lines", &model.debug_lines);
 
     // Events arrive while update() feeds pointer input, with price_check set.
@@ -669,6 +673,14 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.source = reply->league;
         // A unique's poe.ninja price, which doesn't know its rolls.
         fill_prices(*reply, m);
+        if (!reply->prices.empty()) {
+            const PriceLine& p = reply->prices[0];
+            Rml::String id = p.divine >= 1.0 ? "divine" : "chaos";
+            if (icons_get(id)) m.ninja_icon = id;
+            const Rml::String& listed = p.listings;
+            if (!listed.empty() && atoi(listed.c_str()) < 5) m.thin = listed + " listed";
+            m.ninja_meta = (listed.empty() ? "" : listed + " listed \u00b7 ") + "poe.ninja \u00b7 rolls not counted";
+        }
         // Groups in panel order; the top one takes its name from what's in it.
         auto has = [&](const char* section) {
             return std::any_of(reply->filters.begin(), reply->filters.end(),
