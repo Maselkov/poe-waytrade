@@ -164,8 +164,8 @@ cd packaging/arch && makepkg -si
 ```
 
 This installs the layer (`/usr/lib/libVkLayer_poe_waytrade.so` plus a manifest
-in `/usr/share/vulkan/implicit_layer.d/`), `/usr/bin/poe-waytrade-daemon` and
-its systemd user socket + service, and enables the socket for all users
+in `/usr/share/vulkan/implicit_layer.d/`), the `waytrade` launcher,
+`/usr/bin/poe-waytrade-daemon` and its systemd user socket + service, and enables the socket for all users
 (`systemctl --global`), so there is nothing to start by hand from the next
 login on (`systemctl --user start poe-waytrade-daemon.socket` for the current
 one). Remove with `pacman -R poe-waytrade`. The daemon follows poe.ninja's
@@ -176,9 +176,9 @@ current softcore league; set `POE_LEAGUE` in the service
 
 GitHub Actions builds everything in an Arch container (the layer needs GCC
 15 for `#embed`) on every push to main and every pull request: rustfmt,
-clippy with warnings as errors, the daemon's tests, the layer, a check that
-the layer exports only the three Vulkan loader entry points, and the Arch
-package.
+clippy with warnings as errors, the daemon's tests, the `waytrade`
+launcher, the layer, a check that the layer exports only the three Vulkan
+loader entry points, and the Arch package.
 
 To release, bump `pkgver` in `packaging/arch/PKGBUILD`, commit, and push a
 matching tag:
@@ -193,14 +193,23 @@ checksums.
 
 ## Use with Path of Exile
 
-The layer is inert unless `ENABLE_POE_WAYTRADE=1` is set. Steam launch options:
+Steam launch options, like MangoHud's:
 
 ```
-ENABLE_POE_WAYTRADE=1 PROTON_ENABLE_WAYLAND=1 POE_WAYTRADE_LOG=/tmp/poe-waytrade.log %command%
+waytrade %command%
 ```
 
-Without `PROTON_ENABLE_WAYLAND` the game runs on XWayland: the panel still
-draws, but hotkeys and the clipboard are not implemented for X11 yet.
+`waytrade` turns the layer on (`ENABLE_POE_WAYTRADE=1`; it's inert
+otherwise), uses Proton's Wayland driver (`PROTON_ENABLE_WAYLAND=1`), and
+runs the price daemon for as long as the game does, unless one is already
+serving (e.g. from the systemd socket), so it works without systemd too.
+The daemon's log is in `~/.local/state/poe-waytrade/daemon.log`; add
+`POE_WAYTRADE_LOG=/tmp/poe-waytrade.log` before `waytrade` for the layer's.
+
+The same by hand: `ENABLE_POE_WAYTRADE=1 PROTON_ENABLE_WAYLAND=1 %command%`,
+with the daemon from systemd. With `PROTON_ENABLE_WAYLAND=0` the game runs
+on XWayland: the panel still draws, but hotkeys and the clipboard are not
+implemented for X11 yet.
 
 `POE_WAYTRADE_DEBUG=1` adds a debug window (focus, last key, clipboard state).
 

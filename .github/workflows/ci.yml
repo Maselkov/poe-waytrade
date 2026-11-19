@@ -28,6 +28,10 @@ jobs:
       - name: Daemon tests
         working-directory: daemon
         run: cargo test --locked
+      - name: Launcher
+        run: |
+          cargo build --locked --manifest-path daemon/Cargo.toml
+          .github/scripts/test-launcher.sh daemon/target/debug/poe-waytrade-daemon
 
       - name: Build layer
         run: |

@@ -1,0 +1,40 @@
+#!/bin/sh
+# waytrade: run a game with the Waytrade overlay, like `mangohud %command%`.
+#
+# Steam launch options for Path of Exile:
+#   waytrade %command%
+#
+# This runs on the host, before Steam's runtime container starts. It turns
+# the overlay layer on, uses Proton's Wayland driver (the overlay needs it;
+# set PROTON_ENABLE_WAYLAND=0 to override), and runs the price daemon for as
+# long as the game does. If a daemon is already serving (e.g. systemd's
+# socket is enabled), that one is used and nothing extra starts.
+#
+# The daemon's log goes to $XDG_STATE_HOME/poe-waytrade/daemon.log.
+# POE_WAYTRADE_DAEMON picks another daemon binary.
+
+if [ $# -eq 0 ]; then
+    echo "usage: waytrade <command> [args...]   (in Steam: waytrade %command%)" >&2
+    exit 2
+fi
+
+export ENABLE_POE_WAYTRADE=1
+export PROTON_ENABLE_WAYLAND="${PROTON_ENABLE_WAYLAND:-1}"
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/poe-waytrade"
+mkdir -p "$state_dir"
+
+# Not with Steam's preloads and libraries: the daemon (and the Chromium it
+# starts for trade searches) are ordinary host programs. It exits right away
+# if a daemon is already serving, and with this script otherwise.
+env -u LD_PRELOAD -u LD_LIBRARY_PATH \
+    "${POE_WAYTRADE_DAEMON:-poe-waytrade-daemon}" --exit-with-parent \
+    >"$state_dir/daemon.log" 2>&1 &
+daemon=$!
+
+"$@"
+status=$?
+
+kill "$daemon" 2>/dev/null
+wait "$daemon" 2>/dev/null
+exit "$status"

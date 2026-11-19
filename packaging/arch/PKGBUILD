@@ -1,8 +1,8 @@
 # Builds from the local checkout this file lives in.
 #   cd packaging/arch && makepkg -si
 pkgname=poe-waytrade
-pkgver=0.11.1
-pkgrel=2
+pkgver=0.12.0
+pkgrel=1
 pkgdesc="In-game Vulkan price-check overlay for Path of Exile on Wayland"
 arch=('x86_64')
 license=('GPL-3.0-or-later')

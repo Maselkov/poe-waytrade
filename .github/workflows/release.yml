@@ -56,10 +56,11 @@ jobs:
 
           **Arch Linux:** \`sudo pacman -U poe-waytrade-$VERSION-*.pkg.tar.zst\`
 
-          **Other distros (recent glibc):** \`sudo tar -C / -xzf poe-waytrade-$VERSION-x86_64.tar.gz\`, then
-          \`systemctl --user enable --now poe-waytrade-daemon.socket\`.
+          **Other distros (recent glibc):** \`sudo tar -C / -xzf poe-waytrade-$VERSION-x86_64.tar.gz\`
 
-          Start Path of Exile with \`ENABLE_POE_WAYTRADE=1 PROTON_ENABLE_WAYLAND=1 %command%\` in Steam's launch options.
+          Set Path of Exile's Steam launch options to \`waytrade %command%\`. It turns the overlay on and runs the
+          price daemon while you play (or uses the systemd socket's, if you enable it:
+          \`systemctl --user enable --now poe-waytrade-daemon.socket\`).
           Trade searches need Chromium (or Google Chrome).
           NOTES
           gh release create "$GITHUB_REF_NAME" dist/* --title "Waytrade $VERSION" --notes-file notes.md --generate-notes

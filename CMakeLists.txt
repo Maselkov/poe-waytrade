@@ -107,5 +107,7 @@ set(LAYER_PATH ${CMAKE_INSTALL_FULL_LIBDIR}/libVkLayer_poe_waytrade.so)
 configure_file(VkLayer_poe_waytrade.json.in ${CMAKE_BINARY_DIR}/install/VkLayer_poe_waytrade.json @ONLY)
 
 install(TARGETS VkLayer_poe_waytrade LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# Steam launch-option wrapper: `waytrade %command%`.
+install(PROGRAMS packaging/waytrade DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES ${CMAKE_BINARY_DIR}/install/VkLayer_poe_waytrade.json
         DESTINATION ${CMAKE_INSTALL_DATADIR}/vulkan/implicit_layer.d)

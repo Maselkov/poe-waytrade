@@ -59,8 +59,11 @@
 //!
 //! Normally started by systemd socket activation (poe-waytrade-daemon.socket):
 //! systemd owns the socket, starts us on the first connection, and we exit
-//! after a while without requests. Run by hand, we bind the socket ourselves
-//! and stay up.
+//! after a while without requests. Run by hand or by the `waytrade` launcher,
+//! we bind the socket ourselves (POE_WAYTRADE_SOCKET names another one) and
+//! stay up; if something already holds it (another daemon, or systemd's
+//! socket), we exit successfully, since the layer has a daemon to talk to.
+//! `--exit-with-parent` (the launcher) makes us exit when our parent does.
 
 mod cdp;
 mod item;
@@ -78,7 +81,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const SOCKET_NAME: &[u8] = b"poe-waytrade";
+const SOCKET_NAME: &str = "poe-waytrade";
 const MAX_FRAME: usize = 256 * 1024;
 const REFRESH: Duration = Duration::from_secs(15 * 60);
 const RETRY: Duration = Duration::from_secs(60);
@@ -105,6 +108,10 @@ fn main() {
         });
     }
 
+    if args.iter().any(|a| a == "--exit-with-parent") {
+        exit_with_parent();
+    }
+
     let state = Arc::new(State {
         db: RwLock::new(None),
         last_error: Mutex::new(None),
@@ -126,14 +133,19 @@ fn main() {
             l
         }
         None => {
-            let addr = SocketAddr::from_abstract_name(SOCKET_NAME).expect("socket name");
+            let name = std::env::var("POE_WAYTRADE_SOCKET").unwrap_or_else(|_| SOCKET_NAME.to_string());
+            let addr = SocketAddr::from_abstract_name(name.as_bytes()).expect("socket name");
             match UnixListener::bind_addr(&addr) {
                 Ok(l) => {
-                    eprintln!("listening on @poe-waytrade");
+                    eprintln!("listening on @{name}");
                     l
                 }
+                Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                    eprintln!("@{name} is already served (another daemon or systemd's socket); exiting");
+                    std::process::exit(0);
+                }
                 Err(e) => {
-                    eprintln!("can't listen on @poe-waytrade ({e}); is another daemon running?");
+                    eprintln!("can't listen on @{name}: {e}");
                     std::process::exit(1);
                 }
             }
@@ -161,6 +173,19 @@ fn main() {
                 eprintln!("client: {e}");
             }
         });
+    }
+}
+
+/// For the launcher: SIGTERM when the parent exits, even if it's killed.
+fn exit_with_parent() {
+    // SAFETY: plain syscalls with no pointers.
+    unsafe {
+        let parent = libc::getppid();
+        libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+        // The parent may have exited before prctl took effect.
+        if libc::getppid() != parent {
+            std::process::exit(0);
+        }
     }
 }
 
