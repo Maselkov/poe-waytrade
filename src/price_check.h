@@ -22,7 +22,8 @@ public:
     // How the panel behaves once open (modelled on Awakened PoE Trade):
     //   Quick:  Ctrl+D. Closes when the mouse moves away, unless Ctrl is
     //           held; moving onto the panel while holding Ctrl pins it.
-    //   Pinned: a quick panel the mouse moved onto. Closes when it leaves.
+    //   Pinned: a quick panel the mouse moved onto. Closes when it leaves,
+    //           unless Ctrl is held.
     //   Locked: Ctrl+Alt+D. Stays until its close button or a click on the
     //           game.
     enum class Mode { Quick, Pinned, Locked };

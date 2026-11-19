@@ -12,7 +12,8 @@ Trade:
 
 - **Ctrl+D**: a quick look. It closes as soon as you move the mouse away. To
   use it (toggle trade filters, open the trade site), keep holding Ctrl and
-  move onto it; it then stays until the mouse leaves it.
+  move onto it; it then stays until the mouse leaves it with Ctrl released
+  (holding Ctrl keeps it open wherever the mouse goes).
 - **Ctrl+Alt+D**: a panel that stays open until you click its × or click
   anywhere in the game. Only these locked panels have a ×; the quick look
   closes by itself.

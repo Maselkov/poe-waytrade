@@ -118,7 +118,8 @@ void PriceCheck::apply_closing_rules(WaylandInput& input, Clock::time_point now)
         break;
     }
     case Mode::Pinned:
-        if (input.pointer_inside()) {
+        // Holding Ctrl keeps it open wherever the pointer goes.
+        if (input.pointer_inside() || input.ctrl_held()) {
             left_panel_at_.reset();
         } else if (!left_panel_at_) {
             left_panel_at_ = now;
