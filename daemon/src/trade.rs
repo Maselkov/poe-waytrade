@@ -35,8 +35,8 @@ pub enum Section {
     Weapon,
     Total,
     Mod,
-    /// A unique's mod that rolls: always shown, since rolls set its price.
-    Roll,
+    Implicit,
+    Enchant,
     /// A fractured mod, searched as fractured: always shown.
     Fractured,
     /// Base item properties: item level, influences, fractured/synthesised.
@@ -53,7 +53,8 @@ impl Section {
             Section::Weapon => "weapon",
             Section::Total => "total",
             Section::Mod => "mod",
-            Section::Roll => "roll",
+            Section::Implicit => "implicit",
+            Section::Enchant => "enchant",
             Section::Fractured => "fractured",
             Section::Base => "base",
             Section::Armour => "armour",
@@ -98,8 +99,8 @@ impl Filter {
 
     /// A unique's rolled mod, unticked. Like APT, the minimum is the roll
     /// minus 10% of the mod's range (a perfect roll: exactly the roll).
-    fn unique(label: String, target: Target, value: f64, (lo, hi): (f64, f64)) -> Filter {
-        let mut f = Filter::new(label, target, value, Some((lo, hi)), false, Section::Roll);
+    fn unique(label: String, target: Target, value: f64, (lo, hi): (f64, f64), section: Section) -> Filter {
+        let mut f = Filter::new(label, target, value, Some((lo, hi)), false, section);
         if let (Some(_), false) = (f.min, f.max_roll) {
             let min =
                 ((round_down(value - (hi - lo) * (1.0 - MIN_FRACTION), f.step)) / f.step).round() / (1.0 / f.step);
@@ -975,13 +976,29 @@ fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             continue;
         }
         let Some((stat_id, sign)) = find_stat(data, m.kind, &template, local) else { continue };
-        let label = match m.kind {
-            ModKind::Explicit => m.text.clone(),
-            kind => format!("{} ({})", m.text, kind.trade_group()),
-        };
-        filters.push(Filter::unique(label, Target::Stat(stat_id), value * sign, (lo, hi)));
+        let section = kind_section(m.kind, Section::Mod);
+        let mut filter = Filter::unique(mod_label(m), Target::Stat(stat_id), value * sign, (lo, hi), section);
+        filter.tier = m.tier;
+        filters.push(filter);
     }
     filters
+}
+
+/// The panel groups implicits and enchants under their own headings and
+/// shows fractured mods in gold, so only crafted mods keep a suffix.
+fn mod_label(m: &ModLine) -> String {
+    match m.kind {
+        ModKind::Crafted => format!("{} (crafted)", m.text),
+        _ => m.text.clone(),
+    }
+}
+
+fn kind_section(kind: ModKind, section: Section) -> Section {
+    match (kind, section) {
+        (ModKind::Implicit, Section::Mod) => Section::Implicit,
+        (ModKind::Enchant, Section::Mod) => Section::Enchant,
+        _ => section,
+    }
 }
 
 /// A mod as a stat filter of its own kind (explicit, fractured, ...).
@@ -989,11 +1006,8 @@ fn mod_filter(m: &ModLine, data: &TradeData, local: bool, on: bool, section: Sec
     let (template, values) = templatize(&m.text);
     let (value, range) = mod_value(&values, &m.ranges)?;
     let (stat_id, sign) = find_stat(data, m.kind, &template, local)?;
-    let label = match m.kind {
-        ModKind::Explicit => m.text.clone(),
-        kind => format!("{} ({})", m.text, kind.trade_group()),
-    };
-    let mut filter = Filter::new(label, Target::Stat(stat_id), value * sign, range, on, section);
+    let section = kind_section(m.kind, section);
+    let mut filter = Filter::new(mod_label(m), Target::Stat(stat_id), value * sign, range, on, section);
     filter.tier = m.tier;
     Some(filter)
 }
@@ -1559,8 +1573,8 @@ mod tests {
             got,
             vec![
                 // fixed life isn't listed; no totals; 35 - 10% of 20 = 33
-                ("35% increased Fire Damage", Some(33.0), Some((20.0, 40.0)), false, false, Section::Roll),
-                ("+40% to Fire Resistance", Some(40.0), Some((30.0, 40.0)), true, false, Section::Roll),
+                ("35% increased Fire Damage", Some(33.0), Some((20.0, 40.0)), false, false, Section::Mod),
+                ("+40% to Fire Resistance", Some(40.0), Some((30.0, 40.0)), true, false, Section::Mod),
             ]
         );
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
@@ -1626,7 +1640,7 @@ mod tests {
                 ("Energy shield 84 (at 20% quality)", false, Section::Armour),
                 ("+143 total maximum Life", true, Section::Total),
                 ("+52 total to Intelligence", false, Section::Total),
-                ("+143 to maximum Life (fractured)", false, Section::Fractured),
+                ("+143 to maximum Life", false, Section::Fractured),
             ]
         );
         assert_eq!(filters[4].target, Target::Stat("fractured.life".into()));
@@ -1640,7 +1654,7 @@ mod tests {
             vec![
                 ("Item level 84", true, Section::Base),
                 ("Fractured item", true, Section::Base),
-                ("+143 to maximum Life (fractured)", true, Section::Fractured),
+                ("+143 to maximum Life", true, Section::Fractured),
                 ("+52 to Intelligence", true, Section::Mod),
                 ("Armour 420 (at 20% quality)", false, Section::Armour),
                 ("Energy shield 84 (at 20% quality)", false, Section::Armour),

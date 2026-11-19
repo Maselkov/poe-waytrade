@@ -148,8 +148,11 @@ struct UiFilter {
     float min_pct = 0, max_pct = 100;  // handle positions on the slider
     bool has_slider = false, max_roll = false;
     Rml::String tier;     // "T1"; empty: none
-    Rml::String section;  // weapon | base | armour | sockets | total | mod | roll | fractured
-    bool visible = true;  // extra mods fold away until "+ N more"
+    Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | mod | fractured
+};
+struct UiGroup {
+    Rml::String label;
+    Rml::Vector<UiFilter> filters;
 };
 struct UiPreviewLine {
     Rml::String kind, text;  // kind: enchant, implicit, explicit, ..., divider
@@ -181,12 +184,10 @@ struct Model {
     // Trade search options
     Rml::String base_label, category_label, corrupted, corrupted_label;
     bool base_preset = false, preset_base = false;  // offered / active
-    Rml::String top_label;                          // "Weapon" | "Armour" | "Item" | "Base item"
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
-    Rml::Vector<UiFilter> weapon_filters, mod_filters;
+    Rml::Vector<UiGroup> filter_groups;
     Rml::Vector<UiListing> listings;
-    int more_mods = 0;  // folded away
     // Price summary (the low end of the fetched listings)
     bool has_summary = false, low_value = false;
     Rml::String summary_price, summary_icon, summary_sub, summary_range;
@@ -247,8 +248,6 @@ struct OverlayUi::Impl {
     Rml::DataModelHandle handle;
     PriceCheck* price_check = nullptr;  // during update(), for event callbacks
     uint64_t revision = UINT64_MAX;
-    // "+ N more mods" expanded, for this check only.
-    bool show_all_mods = false;
     bool range_max_handle = false;  // which handle the current slider drag moves
 
     void range_input(int index, Rml::Event& ev, bool press) {
@@ -278,7 +277,17 @@ struct OverlayUi::Impl {
             min = std::min(v, max_at);
         price_check->set_bounds(index, min, max);
     }
-    uint64_t shown_all_check = 0;
+    void bounds_scroll(int index, float delta) {
+        if (!price_check || !price_check->reply() || delta == 0) return;
+        for (const TradeFilter& f : price_check->reply()->filters) {
+            if (f.index != index || f.hi <= f.lo || f.min.empty()) continue;
+            double step = f.step > 0 ? f.step : 1;
+            double max = f.max.empty() ? -1 : atof(f.max.c_str());
+            double min = atof(f.min.c_str()) + (delta < 0 ? step : -step);
+            min = std::clamp(min, f.lo, max < 0 ? f.hi : max);
+            price_check->set_bounds(index, min, max);
+        }
+    }
     uint64_t placed_check = 0;
     bool debug = getenv("POE_WAYTRADE_DEBUG") != nullptr;
     float ui_scale = 1.0f;
@@ -367,7 +376,6 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("max_pct", &UiFilter::max_pct);
         h.RegisterMember("has_slider", &UiFilter::has_slider);
         h.RegisterMember("max_roll", &UiFilter::max_roll);
-        h.RegisterMember("visible", &UiFilter::visible);
         h.RegisterMember("tier", &UiFilter::tier);
         h.RegisterMember("section", &UiFilter::section);
     }
@@ -393,6 +401,11 @@ void OverlayUi::Impl::bind_model() {
     }
     c.RegisterArray<Rml::Vector<UiPrice>>();
     c.RegisterArray<Rml::Vector<UiFilter>>();
+    if (auto h = c.RegisterStruct<UiGroup>()) {
+        h.RegisterMember("label", &UiGroup::label);
+        h.RegisterMember("filters", &UiGroup::filters);
+    }
+    c.RegisterArray<Rml::Vector<UiGroup>>();
     c.RegisterArray<Rml::Vector<UiListing>>();
     c.RegisterArray<Rml::Vector<Rml::String>>();
     if (auto h = c.RegisterStruct<UiMapStat>()) {
@@ -424,7 +437,6 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("category_label", &model.category_label);
     c.Bind("base_preset", &model.base_preset);
     c.Bind("preset_base", &model.preset_base);
-    c.Bind("top_label", &model.top_label);
     c.Bind("corrupted", &model.corrupted);
     c.Bind("corrupted_label", &model.corrupted_label);
     c.Bind("base_only", &model.base_only);
@@ -438,9 +450,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("searching", &model.searching);
     c.Bind("has_url", &model.has_url);
     c.Bind("prices", &model.prices);
-    c.Bind("weapon_filters", &model.weapon_filters);
-    c.Bind("mod_filters", &model.mod_filters);
-    c.Bind("more_mods", &model.more_mods);
+    c.Bind("filter_groups", &model.filter_groups);
     c.Bind("listings", &model.listings);
     c.Bind("has_summary", &model.has_summary);
     c.Bind("low_value", &model.low_value);
@@ -473,11 +483,12 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("range_drag", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
         if (!args.empty()) range_input(args[0].Get<int>(), ev, false);
     });
-    c.BindEventCallback("show_more_mods", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
-        if (!price_check) return;
-        show_all_mods = true;
-        shown_all_check = price_check->check_id();
-        revision = UINT64_MAX;  // rebuild the lists
+    // The wheel over a filter's value moves its minimum one step: typing
+    // isn't an option, since the game gets every key too.
+    c.BindEventCallback("bounds_scroll", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
+        if (args.empty()) return;
+        bounds_scroll(args[0].Get<int>(), ev.GetParameter<float>("wheel_delta_y", 0));
+        ev.StopPropagation();
     });
     c.BindEventCallback("toggle_filter", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (price_check && !args.empty()) price_check->toggle_filter(args[0].Get<int>());
@@ -643,14 +654,6 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.preset_base = reply->preset == "base";
         // The base item preset always searches the exact base.
         if (m.preset_base) m.base_only = true;
-        m.top_label = "Base item";
-        if (!m.preset_base) {
-            auto has = [&](const char* section) {
-                return std::any_of(reply->filters.begin(), reply->filters.end(),
-                                   [&](const TradeFilter& f) { return f.section == section; });
-            };
-            m.top_label = has("weapon") ? "Weapon" : has("armour") ? "Armour" : "Item";
-        }
         if (!reply->category_label.empty()) m.category_label = "Any " + reply->category_label;
         // Short, so the button keeps its size; its colour tells the state too.
         m.corrupted = reply->corrupted;
@@ -658,9 +661,13 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.source = reply->league;
         // A unique's poe.ninja price, which doesn't know its rolls.
         fill_prices(*reply, m);
-        // Weapon DPS first; totals and ticked mods always shown, the rest
-        // folded behind "+ N more mods" until expanded.
-        if (pc.check_id() != shown_all_check) show_all_mods = false;
+        // Groups in panel order; the top one takes its name from what's in it.
+        auto has = [&](const char* section) {
+            return std::any_of(reply->filters.begin(), reply->filters.end(),
+                               [&](const TradeFilter& f) { return f.section == section; });
+        };
+        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : "Item";
+        m.filter_groups = {{top, {}}, {"Enchant", {}}, {"Implicit", {}}, {"Totals", {}}, {"Mods", {}}};
         for (const TradeFilter& f : reply->filters) {
             UiFilter u{f.index, f.enabled, f.label, f.min};
             u.has_slider = f.hi > f.lo && !f.min.empty();
@@ -674,20 +681,14 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             u.max_roll = f.max_roll;
             if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
             u.section = f.section;
-            if (f.section == "weapon" || f.section == "base" || f.section == "armour" || f.section == "sockets") {
-                m.weapon_filters.push_back(u);
-                continue;
-            }
-            u.visible = f.section == "total" || f.section == "roll" || f.section == "fractured" || f.enabled || show_all_mods;
-            if (!u.visible) m.more_mods++;
-            m.mod_filters.push_back(u);
+            const std::string& sec = f.section;
+            size_t group = sec == "enchant" ? 1 : sec == "implicit" ? 2 : sec == "total" ? 3
+                         : sec == "mod" || sec == "fractured" ? 4 : 0;
+            m.filter_groups[group].filters.push_back(u);
         }
-        // Folding is for hiding the less important mods next to the shown
-        // ones; with nothing shown (e.g. a rare map), just list them all.
-        if (m.weapon_filters.empty() && m.more_mods == (int)m.mod_filters.size()) {
-            for (UiFilter& u : m.mod_filters) u.visible = true;
-            m.more_mods = 0;
-        }
+        m.filter_groups.erase(std::remove_if(m.filter_groups.begin(), m.filter_groups.end(),
+                                             [](const UiGroup& g) { return g.filters.empty(); }),
+                              m.filter_groups.end());
         for (const TradeListing& l : reply->listings) {
             UiListing u;
             u.price = l.amount + " " + l.currency;
@@ -738,7 +739,7 @@ void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
     float ax, ay;
     if (it == docs.end() || !pc.anchor(&ax, &ay)) return;
     float panel = extent.height * 986.0f / 1600.0f;
-    float width = 300 * context->GetDensityIndependentPixelRatio();
+    float width = 340 * context->GetDensityIndependentPixelRatio();
     bool by_inventory = ax > extent.width / 2.0f;
     float left = by_inventory ? extent.width - panel - width : panel;
     // Listing previews open away from the inventory/stash the panel sits on.

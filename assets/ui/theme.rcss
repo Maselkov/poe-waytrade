@@ -37,7 +37,7 @@ body {
     position: absolute;
     left: 40dp;
     top: 40dp;
-    width: 300dp;
+    width: 340dp;
     font-family: Inter;
     font-size: 12dp;
     color: $text;
@@ -98,36 +98,25 @@ body {
 
 /* Trade filters */
 .filters { padding: 6dp 14dp; }
-.filter { padding: 2dp 0; }
-.filter-main { display: flex; align-items: center; padding: 3dp 0; cursor: pointer; }
-.switch {
-    width: 26dp;
-    height: 15dp;
-    border-radius: 8dp;
-    background-color: $accent;
-    margin-right: 8dp;
-    flex-shrink: 0;
-    transition: background-color 0.12s cubic-out;
-}
-.knob {
-    width: 11dp;
-    height: 11dp;
-    margin: 2dp 0 0 13dp;
-    border-radius: 6dp;
-    background-color: $accent-text;
-    transition: margin-left background-color 0.12s cubic-out;
-}
-.filter.off .switch { background-color: $off; }
-.filter.off .knob { margin-left: 2dp; background-color: #6b707a; }
-.mod { flex: 1; color: $mod; }
+/* A filter row is its own toggle: ticked rows get an accent bar and lit
+   text, unticked ones are dimmed. Tier and value sit in columns on the right;
+   the mod text stays on one line. */
+.filter { margin: 0 -14dp 0 -14dp; padding: 0 14dp 0 11dp; border-left: 3dp transparent; }
+.filter.on { border-left-color: $accent; background-color: #16171f; }
+.filter:hover { background-color: #1a1c23; }
+.filter-main { display: flex; align-items: center; padding: 4dp 0; cursor: pointer; }
+.mod { flex: 1 1 0; min-width: 0; color: $mod; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .filter.off .mod { color: $text-muted; }
-.min { background-color: $chip; border-radius: 6dp; padding: 2dp 8dp; color: $text-strong; margin-left: 8dp; }
-.max-tag { font-size: 10dp; font-weight: 500; color: $price; border: 1dp #5a4a22; border-radius: 6dp; padding: 1dp 5dp; margin-left: 6dp; }
+.filter-main .tier { width: 22dp; flex-shrink: 0; text-align: right; font-size: 11dp; color: $text-faint; margin-left: 6dp; }
+.min { flex-shrink: 0; min-width: 40dp; text-align: center; background-color: $chip; border: 1dp transparent; border-radius: 6dp; padding: 1dp 6dp; color: $text-strong; margin-left: 8dp; }
+.filter.off .min { background-color: transparent; color: $text-faint; }
+.star { color: $price; }
+.filter.off .star { color: #8a7a4c; }
 
 /* Min/max range slider under a ticked filter. The handles centre on their
    value; the padding keeps both ends reachable. A maximum at the right end
    means none. */
-.slider-row { padding: 2dp 0 4dp 34dp; }
+.slider-row { padding: 0 0 4dp 0; }
 .range { height: 16dp; padding: 0 8dp; drag: drag; cursor: pointer; }
 .range-inner { position: relative; height: 16dp; }
 .range-track, .range-fill { position: absolute; top: 6dp; height: 4dp; border-radius: 2dp; }
@@ -146,8 +135,6 @@ body {
 .range:hover .range-handle { background-color: #ffffff; }
 
 .section-label { font-size: 10dp; letter-spacing: 0.5dp; color: $text-faint; margin: 6dp 0 2dp; }
-.more-mods { color: $text-muted; padding: 4dp 0 2dp; cursor: pointer; }
-.more-mods:hover { color: $text-strong; }
 
 /* Price summary */
 .summary { display: flex; align-items: center; margin: 10dp 14dp 0; padding: 10dp 12dp; background-color: #1a1d24; border-radius: 10dp; }
@@ -159,8 +146,6 @@ body {
 .summary-price .sub { font-size: 12dp; font-weight: 400; color: $text-muted; }
 .summary-range { font-size: 11dp; color: $text-muted; margin-top: 2dp; }
 .summary .tag { margin: 0 0 0 8dp; }
-.filter.off .min { background-color: transparent; color: $text-faint; }
-
 /* Trade search options */
 .options { display: flex; align-items: center; padding: 10dp 14dp 2dp; }
 /* Fixed layout: labels never wrap, and the corrupted button keeps one width,
@@ -329,28 +314,17 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .pv-line.corrupted, .pv-line.unidentified { color: $danger; margin-top: 4dp; }
 .pv-more { color: $text-faint; font-size: 11dp; margin-top: 6dp; }
 
-/* Affix tiers: [T1] a subtle gold, [T2] silver, [T3] bronze, lower ones grey. */
-.tier { font-size: 10dp; color: $text-faint; }
+/* Affix tiers: T1 a subtle gold, T2 silver, T3 bronze, lower ones grey. */
 .tier.T1 { color: #c9a85a; }
 .tier.T2 { color: #a9b0ba; }
 .tier.T3 { color: #a87a55; }
 
-/* Fractured mods, like in game: PoE's fractured gold, in a thin gold frame.
+/* Fractured mods in PoE's fractured gold, with a gold bar when ticked.
    Row classes are "sec-" + the filter's section (plain "base" would pick up
    the item header's .base style). */
-.filter.sec-fractured {
-    border: 1dp #6b5c32;
-    border-radius: 8dp;
-    background-color: #1a1710;
-    padding-left: 6dp;
-    padding-right: 6dp;
-    margin: 2dp -7dp;
-}
 .filter.sec-fractured .mod { color: #c6b07a; }
-.filter.sec-fractured.off { border-color: #4a4026; background-color: #15130e; }
+.filter.sec-fractured.on { border-left-color: #a88f52; background-color: #1a1710; }
 .filter.sec-fractured.off .mod { color: #8e7f57; }
-.filter.sec-fractured .switch { background-color: #8a7440; }
-.filter.sec-fractured.off .switch { background-color: $off; }
 .filter.sec-fractured .range-fill { background-color: #a88f52; }
 .filter.sec-fractured .range-handle { border-color: #a88f52; background-color: #efe3c2; }
 .pv-line.fractured { color: #c6b07a; }

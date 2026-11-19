@@ -20,10 +20,11 @@
 //!
 //!   Rare/magic items get trade site search filters instead of a poe.ninja
 //!   price (status "trade"); so do identified uniques, with their poe.ninja
-//!   "price" lines too (if found) and filters only for mods that roll
-//!   (section "roll"). Nothing is searched until the layer asks:
+//!   "price" lines too (if found) and filters only for mods that roll.
+//!   Nothing is searched until the layer asks:
 //!     filter   <index> <1|0 enabled> <label> <minimum|""> <slider low>
-//!              <slider high> <step> <1|0 max roll> <weapon|total|mod|roll|fractured|base>
+//!              <slider high> <step> <1|0 max roll> <weapon|base|armour|sockets|total|enchant|
+//!              implicit|mod|fractured>
 //!              <maximum|""> <affix tier|"">
 //!     option   base <base type> <category label>   (if the base can be
 //!                                                  searched on its own)

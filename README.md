@@ -71,15 +71,22 @@ mod's tier range. A ticked filter gets a two-handle slider over that range,
 like APT's: the left handle sets the minimum, the right one a maximum (at the
 far right: none). The minimum defaults to your roll minus 10% (the slider
 reaches down to it even below the tier), and a roll at the top of its tier defaults to exactly that value
-(tagged "Max"). Weapons
+(marked with a gold star). Scrolling the mouse wheel over a filter's value
+moves its minimum one step; there's no typing in numbers, because the game
+receives every key too (digits would drink flasks). Weapons
 also get physical/elemental DPS, attack speed and critical strike chance
 filters from their properties; armour pieces get armour, evasion, energy
 shield, ward and block filters (unticked), scaled to 20% quality the way the
 trade site searches them. 5- and 6-links get a links filter, ticked except
-on a rare 5-link, and an unlinked 6-socket gets a sockets filter. Unticked mods fold behind "+ N more mods". Each mod shows its affix tier from the
-advanced copy ([T1] gold, [T2] silver, [T3] bronze, lower ones grey).
+on a rare 5-link, and an unlinked 6-socket gets a sockets filter.
+
+Every filter is listed, grouped under headings (weapon/armour/base item,
+enchant, implicit, totals, mods); clicking a row ticks it, and ticked rows
+get an accent bar. Each mod's affix tier from the advanced copy sits in a
+column on the right (T1 gold, T2 silver, T3 bronze, lower ones grey), next
+to its value.
 Fractured mods count in the totals and also get a filter of their own that
-searches them as fractured, styled in PoE's fractured gold.
+searches them as fractured, shown in PoE's fractured gold.
 
 Like APT, unfinished bases with crafting value (fractured, synthesised,
 influenced, cluster or magic jewels, or item level 82+, without crafted
