@@ -34,6 +34,8 @@
 //!     summary  <amount> <currency name> <currency id> <chaos|""> <range>
 //!     listing  <amount> <currency name> <chaos value|""> <age, e.g. "5m"
 //!              or "41h–5d"|""> <count> <currency id>   (same prices grouped)
+//!     preview  <kind> <text>   (lines describing the first item of the
+//!              listing above, for a hover preview: see trade::Preview)
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
 //!   request:  "TRADE\n" + comma-separated enabled filters, each "index",
@@ -456,6 +458,9 @@ fn trade_response(
                     l.count,
                     clean(&l.currency_id)
                 );
+                for (kind, text) in &l.preview {
+                    let _ = writeln!(out, "preview\t{kind}\t{}", clean(text));
+                }
             }
             let _ = writeln!(out, "total\t{}\nurl\t{}", r.total, clean(&r.url));
             out

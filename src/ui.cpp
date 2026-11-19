@@ -149,8 +149,15 @@ struct UiFilter {
     bool has_slider = false, max_roll = false;
     bool visible = true;  // extra mods fold away until "+ N more"
 };
+struct UiPreviewLine {
+    Rml::String kind, text;  // kind: enchant, implicit, explicit, ..., divider
+};
 struct UiListing {
     Rml::String price, sub, age, count, icon;
+    // Hover preview of the first listed item.
+    bool has_preview = false;
+    Rml::String rarity, name, base, meta, more;
+    Rml::Vector<UiPreviewLine> lines;
 };
 
 struct UiMapStat {
@@ -284,6 +291,7 @@ struct OverlayUi::Impl {
     bool keep_on_screen(VkExtent2D extent);
     void sync_map(const PriceReply& reply, uint64_t check_id, Model& m);
     void fill_prices(const PriceReply& reply, Model& m);
+    void fill_preview(const TradeListing& l, UiListing& u);
     // Map mod display order, fixed when a check opens so rows don't jump
     // around while you mark them.
     uint64_t map_order_check = 0;
@@ -356,7 +364,19 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("max_roll", &UiFilter::max_roll);
         h.RegisterMember("visible", &UiFilter::visible);
     }
+    if (auto h = c.RegisterStruct<UiPreviewLine>()) {
+        h.RegisterMember("kind", &UiPreviewLine::kind);
+        h.RegisterMember("text", &UiPreviewLine::text);
+    }
+    c.RegisterArray<Rml::Vector<UiPreviewLine>>();
     if (auto h = c.RegisterStruct<UiListing>()) {
+        h.RegisterMember("has_preview", &UiListing::has_preview);
+        h.RegisterMember("rarity", &UiListing::rarity);
+        h.RegisterMember("name", &UiListing::name);
+        h.RegisterMember("base", &UiListing::base);
+        h.RegisterMember("meta", &UiListing::meta);
+        h.RegisterMember("more", &UiListing::more);
+        h.RegisterMember("lines", &UiListing::lines);
         h.RegisterMember("price", &UiListing::price);
         h.RegisterMember("sub", &UiListing::sub);
         h.RegisterMember("age", &UiListing::age);
@@ -648,6 +668,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             u.age = l.age;
             if (l.count > 1) u.count = "×" + std::to_string(l.count);
             if (icons_get(l.currency_id)) u.icon = l.currency_id;
+            fill_preview(l, u);
             m.listings.push_back(u);
         }
         if (reply->summary) {
@@ -690,7 +711,10 @@ void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
     if (it == docs.end() || !pc.anchor(&ax, &ay)) return;
     float panel = extent.height * 986.0f / 1600.0f;
     float width = 300 * context->GetDensityIndependentPixelRatio();
-    float left = ax > extent.width / 2.0f ? extent.width - panel - width : panel;
+    bool by_inventory = ax > extent.width / 2.0f;
+    float left = by_inventory ? extent.width - panel - width : panel;
+    // Listing previews open away from the inventory/stash the panel sits on.
+    it->second->SetClass("preview-right", !by_inventory);
     it->second->SetProperty(Rml::PropertyId::Left, Rml::Property(left, Rml::Unit::PX));
     it->second->SetProperty(Rml::PropertyId::Top, Rml::Property(extent.height * 0.08f, Rml::Unit::PX));
 }
@@ -713,6 +737,33 @@ bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
 // Marks for the active profile, dangerous mods first, and a one-line verdict
 // readable at a glance. Both stay one line/one order while the panel is open,
 // so marking a mod doesn't move anything.
+// Like a PoE tooltip: name and base, item level (and DPS), then the mods
+// with a divider after the enchants/implicits.
+void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
+    Rml::String ilvl, dps;
+    bool before_explicits = false;
+    for (const auto& [kind, text] : l.preview) {
+        if (kind == "rarity") u.rarity = text;
+        else if (kind == "name") u.name = text;
+        else if (kind == "base") u.base = text;
+        else if (kind == "ilvl") ilvl = "Item level " + text;
+        else if (kind == "dps") dps = text;
+        else {
+            bool top = kind == "enchant" || kind == "implicit";
+            if (top) before_explicits = true;
+            else if (before_explicits) {
+                u.lines.push_back({"divider", ""});
+                before_explicits = false;
+            }
+            u.lines.push_back({kind, text});
+        }
+    }
+    u.meta = ilvl.empty() ? dps : dps.empty() ? ilvl : ilvl + " · " + dps;
+    u.has_preview = !u.base.empty();
+    if (l.count > 1)
+        u.more = "+ " + std::to_string(l.count - 1) + " more at this price";
+}
+
 void OverlayUi::Impl::fill_prices(const PriceReply& reply, Model& m) {
     for (const PriceLine& p : reply.prices) {
         UiPrice u;

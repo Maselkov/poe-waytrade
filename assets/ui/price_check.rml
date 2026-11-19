@@ -102,6 +102,14 @@
                         <div class="amount">{{l.price}} <span class="sub">{{l.sub}}</span></div>
                         <div class="count" data-if="l.count != ''">{{l.count}}</div>
                         <div class="age">{{l.age}}</div>
+                        <div class="preview" data-if="l.has_preview">
+                            <div data-if="l.name != ''" data-attr-class="'pv-name ' + l.rarity">{{l.name}}</div>
+                            <div data-attr-class="'pv-name ' + l.rarity">{{l.base}}</div>
+                            <div class="pv-meta" data-if="l.meta != ''">{{l.meta}}</div>
+                            <div class="pv-divider"/>
+                            <div data-for="p : l.lines" data-attr-class="'pv-line ' + p.kind">{{p.text}}</div>
+                            <div class="pv-more" data-if="l.more != ''">{{l.more}}</div>
+                        </div>
                     </div>
                     <div class="empty" data-if="listings.size == 0">No listings. Turn off a filter to widen the search.</div>
                 </div>

@@ -66,14 +66,15 @@ like APT's: the left handle sets the minimum, the right one a maximum (at the
 far right: none). The minimum defaults to your roll minus 10% (the slider
 reaches down to it even below the tier), and a roll at the top of its tier defaults to exactly that value
 (tagged "Max"). Weapons
-also get physical/elemental DPS and attack speed filters from their
-properties. Unticked mods fold behind "+ N more mods".
+also get physical/elemental DPS, attack speed and critical strike chance
+filters from their properties. Unticked mods fold behind "+ N more mods".
 
 After a search, the panel shows a one-line estimate (the median of the 10
 cheapest listings, with the price range and a "Low value" tag under 5c), then
 the listings grouped by price with currency icons, how many there are, and
 how long ago they were listed, plus a button to open the same search in your
-browser.
+browser. Hovering a listing shows the listed item (name, item level, DPS and
+mods, like PoE's tooltip) beside the panel.
 
 ## How it works
 

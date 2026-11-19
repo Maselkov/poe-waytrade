@@ -292,3 +292,35 @@ body {
 .ninja-price { color: $price; margin-right: 10dp; }
 .ninja-price .label { color: $text-muted; }
 .ninja-price .sub { color: $text-muted; font-size: 11dp; }
+
+/* Hover preview of a listed item, beside the panel (away from the inventory
+   or stash it sits against), PoE-tooltip style. */
+.listing { position: relative; }
+.listing:hover { background-color: #171a20; }
+.preview {
+    display: none;
+    position: absolute;
+    right: 100%;
+    bottom: -6dp;
+    margin-right: 23dp;
+    width: 280dp;
+    padding: 10dp 12dp;
+    background-color: $panel;
+    border: 1dp $panel-border;
+    border-radius: 10dp;
+    text-align: center;
+}
+body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-left: 23dp; }
+.listing:hover .preview { display: block; }
+.pv-name { font-weight: 500; font-size: 13dp; color: $normal; }
+.pv-name.magic { color: $magic; }
+.pv-name.rare { color: $rare; }
+.pv-name.unique { color: $unique; }
+.pv-meta { color: $text-muted; font-size: 11dp; margin-top: 2dp; }
+.pv-divider, .pv-line.divider { height: 1dp; background-color: $divider; margin: 6dp 20dp; }
+.pv-line { color: #8888ff; padding: 1dp 0; }
+.pv-line.enchant { color: #b8daf2; }
+.pv-line.crafted { color: #b4b4ff; }
+.pv-line.fractured { color: #a29162; }
+.pv-line.corrupted, .pv-line.unidentified { color: $danger; margin-top: 4dp; }
+.pv-more { color: $text-faint; font-size: 11dp; margin-top: 6dp; }

@@ -30,6 +30,8 @@ pub struct Item {
     pub physical_damage: Option<f64>,
     pub elemental_damage: f64,
     pub attacks_per_second: Option<f64>,
+    /// "Critical Strike Chance: 6.50%", in percent.
+    pub critical_chance: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -263,6 +265,8 @@ pub fn parse(text: &str) -> Option<Item> {
             item.elemental_damage += average_damage(v);
         } else if let Some(v) = line.strip_prefix("Attacks per Second: ") {
             item.attacks_per_second = v.trim_end_matches(" (augmented)").parse().ok();
+        } else if let Some(v) = line.strip_prefix("Critical Strike Chance: ") {
+            item.critical_chance = v.trim_end_matches(" (augmented)").trim_end_matches('%').parse().ok();
         }
         if let Some((label, value)) = line.split_once(": ")
             && MAP_PROPS.contains(&label)

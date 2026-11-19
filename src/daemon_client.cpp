@@ -65,6 +65,8 @@ PriceReply parse_reply(const std::string& body) {
             TradeListing l{f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]};
             if (f.size() >= 7) l.count = atoi(f[5].c_str()), l.currency_id = f[6];
             reply.listings.push_back(l);
+        } else if (f[0] == "preview" && f.size() >= 3 && !reply.listings.empty()) {
+            reply.listings.back().preview.emplace_back(f[1], f[2]);
         } else if (f[0] == "summary" && f.size() >= 6)
             reply.summary = TradeSummary{f[1], f[2], f[3], f[5], f[4].empty() ? -1 : strtod(f[4].c_str(), nullptr)};
         else if (f[0] == "png") reply.png = f[1];

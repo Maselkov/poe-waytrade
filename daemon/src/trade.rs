@@ -76,7 +76,7 @@ impl Filter {
         on: bool,
         section: Section,
     ) -> Filter {
-        let (min, slider, step, max_roll) = defaults(value, bounds);
+        let (min, slider, step, max_roll) = defaults(value, bounds, false);
         Filter { label, target, min, slider, step, max_roll, default_on: on, section }
     }
 
@@ -85,7 +85,8 @@ impl Filter {
     fn unique(label: String, target: Target, value: f64, (lo, hi): (f64, f64)) -> Filter {
         let mut f = Filter::new(label, target, value, Some((lo, hi)), false, Section::Roll);
         if let (Some(_), false) = (f.min, f.max_roll) {
-            let min = ((round_down(value - (hi - lo) * (1.0 - MIN_FRACTION), f.step)) / f.step).round() * f.step;
+            let min =
+                ((round_down(value - (hi - lo) * (1.0 - MIN_FRACTION), f.step)) / f.step).round() / (1.0 / f.step);
             f.min = Some(min);
             f.slider = Some((lo.min(min), hi));
         }
@@ -172,6 +173,8 @@ pub struct Listing {
     pub count: usize,
     /// How long ago they were listed: "5d", or a range "41h–5d".
     pub age: String,
+    /// The first of them.
+    pub preview: Preview,
 }
 
 /// A one-line answer: the median of the fetched listings.
@@ -309,11 +312,11 @@ impl Trade {
                 let chaos =
                     if currency == "chaos" { Some(amount) } else { prices.exchange.get(&name).map(|c| c * amount) };
                 let minutes = listing["indexed"].as_str().and_then(listing_minutes);
-                singles.push((amount, currency.to_string(), name, chaos, minutes));
+                singles.push((amount, currency.to_string(), name, chaos, minutes, item_preview(&entry["item"])));
             }
         }
 
-        let summary = singles.get(singles.len() / 2).map(|(amount, id, name, chaos, _)| {
+        let summary = singles.get(singles.len() / 2).map(|(amount, id, name, chaos, _, _)| {
             let same_currency = singles.iter().all(|s| s.1 == *id);
             let (first, last) = (&singles[0], &singles[singles.len() - 1]);
             let range = if same_currency {
@@ -327,7 +330,7 @@ impl Trade {
 
         let mut listings: Vec<Listing> = Vec::new();
         let mut ages: Vec<Vec<i64>> = Vec::new();
-        for (amount, id, name, chaos, minutes) in singles {
+        for (amount, id, name, chaos, minutes, preview) in singles {
             match listings.last_mut() {
                 Some(last) if last.amount == amount && last.currency_id == id => {
                     last.count += 1;
@@ -341,6 +344,7 @@ impl Trade {
                         chaos,
                         count: 1,
                         age: String::new(),
+                        preview,
                     });
                     ages.push(minutes.into_iter().collect());
                 }
@@ -669,15 +673,19 @@ fn round_down(v: f64, step: f64) -> f64 {
 }
 
 /// Minimum, slider range, step and max-roll flag for a filter's value.
-fn defaults(value: f64, bounds: Option<(f64, f64)>) -> (Option<f64>, Option<(f64, f64)>, f64, bool) {
+/// `fine`: hundredths even for a whole-number value (crit chance: 7.00%).
+fn defaults(value: f64, bounds: Option<(f64, f64)>, fine: bool) -> (Option<f64>, Option<(f64, f64)>, f64, bool) {
     if value <= 0.0 {
         // "reduced"/negative stats are searched without a minimum.
         return (None, None, 1.0, false);
     }
     let fractional = |v: f64| (v - v.round()).abs() > 1e-6;
-    let step =
-        if fractional(value) || bounds.is_some_and(|(lo, hi)| fractional(lo) || fractional(hi)) { 0.01 } else { 1.0 };
-    let tidy = |v: f64| (v / step).round() * step;
+    let step = if fine || fractional(value) || bounds.is_some_and(|(lo, hi)| fractional(lo) || fractional(hi)) {
+        0.01
+    } else {
+        1.0
+    };
+    let tidy = |v: f64| (v / step).round() / (1.0 / step);
     match bounds {
         Some((lo, hi)) if hi > lo => {
             if value >= hi - 1e-9 {
@@ -739,6 +747,20 @@ fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
         }
         let label = format!("Attacks per second {aps:.2}");
         filters.push(Filter::new(label, Target::Property("weapon_filters", "aps"), aps, None, false, Section::Weapon));
+        if let Some(crit) = item.critical_chance {
+            let label = format!("Critical strike chance {crit:.2}%");
+            let (min, slider, step, max_roll) = defaults(crit, None, true);
+            filters.push(Filter {
+                label,
+                target: Target::Property("weapon_filters", "crit"),
+                min,
+                slider,
+                step,
+                max_roll,
+                default_on: false,
+                section: Section::Weapon,
+            });
+        }
     }
     filters
 }
@@ -856,8 +878,79 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
 }
 
 /// One fetched listing: amount, currency id, currency name, chaos value,
-/// minutes since it was listed.
-type Single = (f64, String, String, Option<f64>, Option<i64>);
+/// minutes since it was listed, the item.
+type Single = (f64, String, String, Option<f64>, Option<i64>, Preview);
+
+/// A listed item for the hover preview, as (kind, text) lines: "rarity"
+/// (normal/magic/rare/unique), "name", "base", "ilvl", "dps", "enchant",
+/// "implicit", "fractured", "explicit", "crafted", "corrupted",
+/// "unidentified".
+pub type Preview = Vec<(&'static str, String)>;
+
+fn item_preview(item: &Value) -> Preview {
+    let mut out: Preview = Vec::new();
+    let rarity = match item["frameType"].as_u64() {
+        Some(1) => "magic",
+        Some(2) => "rare",
+        Some(3) => "unique",
+        _ => "normal",
+    };
+    out.push(("rarity", rarity.to_string()));
+    for (kind, key) in [("name", "name"), ("base", "typeLine")] {
+        if let Some(text) = item[key].as_str().filter(|t| !t.is_empty()) {
+            out.push((kind, strip_markup(text)));
+        }
+    }
+    if let Some(ilvl) = item["ilvl"].as_u64() {
+        out.push(("ilvl", ilvl.to_string()));
+    }
+    let ext = &item["extended"];
+    let dps: Vec<String> = [("pDPS", "pdps"), ("eDPS", "edps")]
+        .iter()
+        .filter_map(|(label, key)| ext[*key].as_f64().filter(|v| *v > 0.0).map(|v| format!("{label} {v:.0}")))
+        .collect();
+    if !dps.is_empty() {
+        out.push(("dps", dps.join(" · ")));
+    }
+    for (kind, key) in [
+        ("enchant", "enchantMods"),
+        ("implicit", "implicitMods"),
+        ("fractured", "fracturedMods"),
+        ("explicit", "explicitMods"),
+        ("crafted", "craftedMods"),
+    ] {
+        // Plain strings, or (lately) objects with the text as "description".
+        let texts = item[key].as_array().into_iter().flatten().filter_map(|m| m.as_str().or(m["description"].as_str()));
+        for m in texts {
+            // Some mods span lines ("…\nhave 20% reduced …").
+            for line in strip_markup(m).lines() {
+                out.push((kind, line.to_string()));
+            }
+        }
+    }
+    if item["identified"].as_bool() == Some(false) {
+        out.push(("unidentified", "Unidentified".to_string()));
+    }
+    if item["corrupted"].as_bool() == Some(true) {
+        out.push(("corrupted", "Corrupted".to_string()));
+    }
+    out
+}
+
+/// "[Strength|Strength]" / "[Life]" link markup -> plain text.
+fn strip_markup(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find('[') {
+        let Some(len) = rest[start..].find(']') else { break };
+        out.push_str(&rest[..start]);
+        let inner = &rest[start + 1..start + len];
+        out.push_str(inner.rsplit('|').next().unwrap_or(inner));
+        rest = &rest[start + len + 1..];
+    }
+    out.push_str(rest);
+    out
+}
 
 /// A filter the layer wants searched, with the bounds it chose (no minimum:
 /// the filter's default; no maximum: unbounded).
@@ -1147,9 +1240,39 @@ mod tests {
     }
 
     #[test]
+    fn listing_preview() {
+        let item = serde_json::json!({
+            "frameType": 2, "name": "Doom Loop", "typeLine": "Sapphire Ring", "ilvl": 84, "identified": true,
+            "implicitMods": ["+25% to Cold Resistance"],
+            "explicitMods": [
+                { "description": "+60 to maximum [Life]", "mods": [{ "tier": "P4" }] },
+                "+30 to [Strength|Strength]"
+            ],
+            "craftedMods": ["Enemies within 5 metres\nhave 10% reduced Life Regeneration"],
+            "corrupted": true,
+            "extended": { "pdps": 0.0 }
+        });
+        let got = item_preview(&item);
+        let want: Vec<(&str, &str)> = vec![
+            ("rarity", "rare"),
+            ("name", "Doom Loop"),
+            ("base", "Sapphire Ring"),
+            ("ilvl", "84"),
+            ("implicit", "+25% to Cold Resistance"),
+            ("explicit", "+60 to maximum Life"),
+            ("explicit", "+30 to Strength"),
+            ("crafted", "Enemies within 5 metres"),
+            ("crafted", "have 10% reduced Life Regeneration"),
+            ("corrupted", "Corrupted"),
+        ];
+        assert_eq!(got.iter().map(|(k, t)| (*k, t.as_str())).collect::<Vec<_>>(), want);
+    }
+
+    #[test]
     fn weapon_dps() {
         let text = "Item Class: Warstaves\nRarity: Rare\nBramble Mast\nEzomyte Staff\n--------\n\
-                    Physical Damage: 100-200 (augmented)\nAttacks per Second: 1.30 (augmented)\n--------\n\
+                    Physical Damage: 100-200 (augmented)\nCritical Strike Chance: 6.50%\n\
+                    Attacks per Second: 1.30 (augmented)\n--------\n\
                     Item Level: 68\n--------\n47% increased Physical Damage\n";
         let item = crate::item::parse(text).unwrap();
         let filters = build_filters(&item, &test_data());
@@ -1160,6 +1283,14 @@ mod tests {
         assert_eq!(filters[1].label, "Attacks per second 1.30");
         assert_eq!(filters[1].min, Some(1.17));
         assert!(!filters[1].default_on);
+        assert_eq!(filters[2].label, "Critical strike chance 6.50%");
+        assert_eq!(filters[2].target, Target::Property("weapon_filters", "crit"));
+        assert_eq!(filters[2].min, Some(5.85));
+        assert!(!filters[2].default_on);
+        // A whole-number crit chance still slides in hundredths.
+        let text = text.replace("6.50%", "7.00%");
+        let filters = build_filters(&crate::item::parse(&text).unwrap(), &test_data());
+        assert_eq!((filters[2].min, filters[2].step), (Some(6.3), 0.01));
 
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
         let q = query(&item, &filters, &chosen, SearchOptions { base_only: false, corrupted: Corrupted::Any });

@@ -34,6 +34,10 @@ struct TradeListing {
     std::string age;    // "2m", "41h–5d"; empty if unknown
     int count = 1;      // listings at this price
     std::string currency_id;
+    // The first listed item, as (kind, text) lines: rarity, name, base, ilvl,
+    // dps, enchant, implicit, fractured, explicit, crafted, corrupted,
+    // unidentified.
+    std::vector<std::pair<std::string, std::string>> preview;
 };
 
 // The median of the fetched listings.
