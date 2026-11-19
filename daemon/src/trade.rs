@@ -201,7 +201,8 @@ impl Preset {
 /// Like APT: the "base item" preset is offered for unfinished gear with
 /// crafting value (fractured, synthesised, influenced, cluster or magic
 /// jewels, or item level 82+).
-/// Also offered for any 5- or 6-link, which sells as a linked base.
+/// Also offered for any white item and any 5- or 6-link, which sell as a
+/// (linked) base.
 pub fn base_preset_available(item: &Item) -> bool {
     let class = item.class.as_str();
     let gear = category(item).is_some()
@@ -212,7 +213,8 @@ pub fn base_preset_available(item: &Item) -> bool {
     if !gear {
         return false;
     }
-    if item.links >= 5 && matches!(item.rarity.as_str(), "Normal" | "Magic" | "Rare") {
+    // A white item is only its base (and implicits, sockets, quality).
+    if item.rarity == "Normal" || (item.links >= 5 && matches!(item.rarity.as_str(), "Magic" | "Rare")) {
         return true;
     }
     let finished =
@@ -232,13 +234,12 @@ fn crafting_value(item: &Item) -> bool {
 }
 
 /// The preset a price check starts with: a white or magic 5/6-link is
-/// worth its links and base, not its mods.
+/// worth its links and base, not its mods; a white item without mods has
+/// nothing but its base to compare.
 pub fn default_preset(item: &Item) -> Preset {
-    if item.links >= 5 && matches!(item.rarity.as_str(), "Normal" | "Magic") && base_preset_available(item) {
-        Preset::Base
-    } else {
-        Preset::Normal
-    }
+    let linked = item.links >= 5 && matches!(item.rarity.as_str(), "Normal" | "Magic");
+    let plain = item.rarity == "Normal" && item.mods.is_empty();
+    if (linked || plain) && base_preset_available(item) { Preset::Base } else { Preset::Normal }
 }
 
 /// What the panel shows before anything is searched.
@@ -329,10 +330,12 @@ pub struct Trade {
     last_used: Instant,
 }
 
-/// Items worth a trade search: anything non-unique with mods.
+/// Items worth a trade search: anything non-unique with mods, and white
+/// gear (searched as a base).
 pub fn searchable(item: &Item) -> bool {
     match item.rarity.as_str() {
-        "Rare" | "Magic" | "Normal" => !item.mods.is_empty() || item.links >= 5,
+        "Rare" | "Magic" => !item.mods.is_empty() || item.links >= 5,
+        "Normal" => !item.mods.is_empty() || base_preset_available(item),
         // Identified uniques: searched by name, with their rolls.
         "Unique" => item.name.is_some() && !item.mods.is_empty(),
         _ => false,
@@ -1834,14 +1837,24 @@ mod tests {
         // priced as a base by default.
         let unlinked = crate::item::parse(&text.replace("R-R-G-G-B-B", "R R G G B B")).unwrap();
         assert_eq!(default_preset(&unlinked), Preset::Normal);
-        assert!(!searchable(
-            &crate::item::parse(
-                &text
-                    .replace("+12% to all Elemental Resistances (implicit)\n", "")
-                    .replace("R-R-G-G-B-B", "R R G G B B")
-            )
-            .unwrap()
-        ));
+        assert!(searchable(&unlinked) && base_preset_available(&unlinked));
+
+        // A plain white base, no mods or links: searched as the base, item
+        // level ticked when it's 82+.
+        let plain = crate::item::parse(
+            "Item Class: Body Armours\nRarity: Normal\nDesert Brigandine\n--------\n\
+             Armour: 412\nEvasion Rating: 412\n--------\nRequirements:\nLevel: 60\nStr: 96\nDex: 96\n\
+             --------\nSockets: R-R B \n--------\nItem Level: 84\n",
+        )
+        .unwrap();
+        assert!(plain.mods.is_empty() && searchable(&plain));
+        assert_eq!(default_preset(&plain), Preset::Base);
+        let filters = build_filters(&plain, &test_data(), Preset::Base);
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
+        let opts = SearchOptions { base_only: true, corrupted: Corrupted::No, preset: Preset::Base };
+        let q = query(&plain, &filters, &chosen, opts);
+        assert_eq!(q["query"]["type"], "Desert Brigandine");
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["ilvl"]["min"], 84.0);
         let got: Vec<_> = socket_filters(&unlinked).iter().map(|f| (f.label.clone(), f.default_on)).collect();
         assert_eq!(got, vec![("6 sockets".to_string(), false)]);
 

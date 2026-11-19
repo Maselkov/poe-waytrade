@@ -74,7 +74,7 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
     }
 
     if matches!(item.rarity.as_str(), "Rare" | "Magic" | "Normal") {
-        return Outcome::Unsupported("Rare and magic items need a trade search (not implemented yet)".into());
+        return Outcome::Unsupported("No trade search for this kind of item".into());
     }
     Outcome::NotFound(format!("No poe.ninja price for {title}"))
 }
