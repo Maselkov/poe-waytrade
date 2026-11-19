@@ -66,6 +66,15 @@ pub struct ModLine {
     /// For each number in `text`, in order: its tier's roll range, if the
     /// text came from advanced copy.
     pub ranges: Vec<Option<(f64, f64)>>,
+    /// The affix tier from its advanced-copy header ("(Tier: 3)"); 1 is best.
+    pub tier: Option<u32>,
+}
+
+/// `{ Prefix Modifier "Virile" (Tier: 3) — Life }` -> 3. Crafted mods have
+/// a "(Rank: n)" instead, which isn't a tier.
+fn header_tier(header: &str) -> Option<u32> {
+    let rest = &header[header.find("(Tier: ")? + "(Tier: ".len()..];
+    rest[..rest.find(')')?].trim().parse().ok()
 }
 
 fn mod_line(line: &str) -> ModLine {
@@ -77,10 +86,10 @@ fn mod_line(line: &str) -> ModLine {
     ];
     for (marker, kind) in MARKERS {
         if let Some(text) = line.strip_suffix(marker) {
-            return ModLine { kind: *kind, text: text.to_string(), headed: false, ranges: Vec::new() };
+            return ModLine { kind: *kind, text: text.to_string(), headed: false, ranges: Vec::new(), tier: None };
         }
     }
-    ModLine { kind: ModKind::Explicit, text: line.to_string(), headed: false, ranges: Vec::new() }
+    ModLine { kind: ModKind::Explicit, text: line.to_string(), headed: false, ranges: Vec::new(), tier: None }
 }
 
 /// Map properties shown in the map check, in this order.
@@ -219,10 +228,12 @@ pub fn parse(text: &str) -> Option<Item> {
                 continue;
             }
             let mut headed = false;
+            let mut tier = None;
             for line in section {
                 if line.starts_with("{ ") && line.ends_with(" }") {
                     item.advanced = true;
                     headed = true;
+                    tier = header_tier(line);
                     continue;
                 }
                 // Advanced copy's reminder text, e.g. "(Ignited enemies take…)".
@@ -235,6 +246,7 @@ pub fn parse(text: &str) -> Option<Item> {
                 let mut m = mod_line(&text);
                 m.headed = headed;
                 m.ranges = ranges;
+                m.tier = tier;
                 item.mods.push(m);
             }
         } else if let Some(v) = section.iter().find_map(|l| l.strip_prefix("Item Level: ")) {
@@ -367,6 +379,8 @@ mod tests {
                 (ModKind::Explicit, "+30% to Fire Resistance", true),
             ]
         );
+        let tiers: Vec<_> = item.mods.iter().map(|m| m.tier).collect();
+        assert_eq!(tiers, vec![None, Some(3), Some(4)]);
     }
 
     #[test]

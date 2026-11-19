@@ -24,7 +24,7 @@
 //!   (section "roll"). Nothing is searched until the layer asks:
 //!     filter   <index> <1|0 enabled> <label> <minimum|""> <slider low>
 //!              <slider high> <step> <1|0 max roll> <weapon|total|mod|roll>
-//!              <maximum|"">
+//!              <maximum|""> <affix tier|"">
 //!     option   base <base type> <category label>   (if the base can be
 //!                                                  searched on its own)
 //!     option   base_only <1|0>
@@ -34,7 +34,7 @@
 //!     summary  <amount> <currency name> <currency id> <chaos|""> <range>
 //!     listing  <amount> <currency name> <chaos value|""> <age, e.g. "5m"
 //!              or "41h–5d"|""> <count> <currency id>   (same prices grouped)
-//!     preview  <kind> <text>   (lines describing the first item of the
+//!     preview  <kind> <text> <affix tier|"">   (lines describing the first item of the
 //!              listing above, for a hover preview: see trade::Preview)
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
@@ -414,12 +414,13 @@ fn trade_response(
             .map_or((String::new(), String::new()), |(lo, hi)| (trade::trim_number(lo), trade::trim_number(hi)));
         let _ = writeln!(
             out,
-            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}\t{max}",
+            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}\t{max}\t{}",
             on as u8,
             clean(&f.label),
             trade::trim_number(f.step),
             f.max_roll as u8,
-            f.section.as_str()
+            f.section.as_str(),
+            f.tier.map(|t| t.to_string()).unwrap_or_default()
         );
     }
     if let Some(label) = prepared.category_label {
@@ -458,8 +459,9 @@ fn trade_response(
                     l.count,
                     clean(&l.currency_id)
                 );
-                for (kind, text) in &l.preview {
-                    let _ = writeln!(out, "preview\t{kind}\t{}", clean(text));
+                for (kind, text, tier) in &l.preview {
+                    let tier = tier.map(|t| t.to_string()).unwrap_or_default();
+                    let _ = writeln!(out, "preview\t{kind}\t{}\t{tier}", clean(text));
                 }
             }
             let _ = writeln!(out, "total\t{}\nurl\t{}", r.total, clean(&r.url));

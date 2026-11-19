@@ -50,7 +50,7 @@
             <div data-for="f : weapon_filters" data-if="f.visible" data-attr-class="f.enabled ? 'filter' : 'filter off'">
                 <div class="filter-main" data-event-click="toggle_filter(f.index)">
                     <div class="switch"><div class="knob"/></div>
-                    <div class="mod">{{f.label}}</div>
+                    <div class="mod">{{f.label}}<span data-if="f.tier != ''" data-attr-class="'tier ' + f.tier"> [{{f.tier}}]</span></div>
                     <div class="max-tag" data-if="f.max_roll">Max</div>
                     <div class="min" data-if="f.bounds != ''">{{f.bounds}}</div>
                 </div>
@@ -69,7 +69,7 @@
             <div data-for="f : mod_filters" data-if="f.visible" data-attr-class="f.enabled ? 'filter' : 'filter off'">
                 <div class="filter-main" data-event-click="toggle_filter(f.index)">
                     <div class="switch"><div class="knob"/></div>
-                    <div class="mod">{{f.label}}</div>
+                    <div class="mod">{{f.label}}<span data-if="f.tier != ''" data-attr-class="'tier ' + f.tier"> [{{f.tier}}]</span></div>
                     <div class="max-tag" data-if="f.max_roll">Max</div>
                     <div class="min" data-if="f.bounds != ''">{{f.bounds}}</div>
                 </div>
@@ -107,7 +107,7 @@
                             <div data-attr-class="'pv-name ' + l.rarity">{{l.base}}</div>
                             <div class="pv-meta" data-if="l.meta != ''">{{l.meta}}</div>
                             <div class="pv-divider"/>
-                            <div data-for="p : l.lines" data-attr-class="'pv-line ' + p.kind">{{p.text}}</div>
+                            <div data-for="p : l.lines" data-attr-class="'pv-line ' + p.kind">{{p.text}}<span data-if="p.tier != ''" data-attr-class="'tier ' + p.tier"> [{{p.tier}}]</span></div>
                             <div class="pv-more" data-if="l.more != ''">{{l.more}}</div>
                         </div>
                     </div>

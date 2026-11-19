@@ -147,10 +147,12 @@ struct UiFilter {
     Rml::String bounds;            // "185+" or "185–220"
     float min_pct = 0, max_pct = 100;  // handle positions on the slider
     bool has_slider = false, max_roll = false;
+    Rml::String tier;     // "T1"; empty: none
     bool visible = true;  // extra mods fold away until "+ N more"
 };
 struct UiPreviewLine {
     Rml::String kind, text;  // kind: enchant, implicit, explicit, ..., divider
+    Rml::String tier;        // "T1"; empty: none
 };
 struct UiListing {
     Rml::String price, sub, age, count, icon;
@@ -363,10 +365,12 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("has_slider", &UiFilter::has_slider);
         h.RegisterMember("max_roll", &UiFilter::max_roll);
         h.RegisterMember("visible", &UiFilter::visible);
+        h.RegisterMember("tier", &UiFilter::tier);
     }
     if (auto h = c.RegisterStruct<UiPreviewLine>()) {
         h.RegisterMember("kind", &UiPreviewLine::kind);
         h.RegisterMember("text", &UiPreviewLine::text);
+        h.RegisterMember("tier", &UiPreviewLine::tier);
     }
     c.RegisterArray<Rml::Vector<UiPreviewLine>>();
     if (auto h = c.RegisterStruct<UiListing>()) {
@@ -646,6 +650,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             if (!f.min.empty()) u.bounds = f.min + (f.max.empty() ? "+" : "\u2013" + f.max);
             else if (!f.max.empty()) u.bounds = "\u2264 " + f.max;
             u.max_roll = f.max_roll;
+            if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
             if (f.section == "weapon") {
                 m.weapon_filters.push_back(u);
                 continue;
@@ -742,7 +747,7 @@ bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
 void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
     Rml::String ilvl, dps;
     bool before_explicits = false;
-    for (const auto& [kind, text] : l.preview) {
+    for (const auto& [kind, text, tier] : l.preview) {
         if (kind == "rarity") u.rarity = text;
         else if (kind == "name") u.name = text;
         else if (kind == "base") u.base = text;
@@ -752,10 +757,10 @@ void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
             bool top = kind == "enchant" || kind == "implicit";
             if (top) before_explicits = true;
             else if (before_explicits) {
-                u.lines.push_back({"divider", ""});
+                u.lines.push_back({"divider", "", ""});
                 before_explicits = false;
             }
-            u.lines.push_back({kind, text});
+            u.lines.push_back({kind, text, tier > 0 ? "T" + std::to_string(tier) : ""});
         }
     }
     u.meta = ilvl.empty() ? dps : dps.empty() ? ilvl : ilvl + " · " + dps;

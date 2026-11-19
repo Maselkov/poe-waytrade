@@ -25,6 +25,7 @@ struct TradeFilter {
     bool max_roll = false;
     std::string section;  // weapon | total | mod
     std::string max;      // empty if none
+    int tier = 0;         // affix tier, 1 best; 0: none
 };
 
 struct TradeListing {
@@ -37,7 +38,11 @@ struct TradeListing {
     // The first listed item, as (kind, text) lines: rarity, name, base, ilvl,
     // dps, enchant, implicit, fractured, explicit, crafted, corrupted,
     // unidentified.
-    std::vector<std::pair<std::string, std::string>> preview;
+    struct PreviewLine {
+        std::string kind, text;
+        int tier = 0;  // affix tier, 1 best; 0: none
+    };
+    std::vector<PreviewLine> preview;
 };
 
 // The median of the fetched listings.

@@ -64,6 +64,8 @@ pub struct Filter {
     /// resistance totals and the main weapon DPS; everything else unticked).
     pub default_on: bool,
     pub section: Section,
+    /// The mod's affix tier (1 is best), for listed mods from advanced copy.
+    pub tier: Option<u32>,
 }
 
 impl Filter {
@@ -77,7 +79,7 @@ impl Filter {
         section: Section,
     ) -> Filter {
         let (min, slider, step, max_roll) = defaults(value, bounds, false);
-        Filter { label, target, min, slider, step, max_roll, default_on: on, section }
+        Filter { label, target, min, slider, step, max_roll, default_on: on, section, tier: None }
     }
 
     /// A unique's rolled mod, unticked. Like APT, the minimum is the roll
@@ -759,6 +761,7 @@ fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
                 max_roll,
                 default_on: false,
                 section: Section::Weapon,
+                tier: None,
             });
         }
     }
@@ -835,7 +838,9 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             ModKind::Explicit => m.text.clone(),
             kind => format!("{} ({})", m.text, kind.trade_group()),
         };
-        listed.push(Filter::new(label, Target::Stat(stat_id), value * sign, range, false, Section::Mod));
+        let mut filter = Filter::new(label, Target::Stat(stat_id), value * sign, range, false, Section::Mod);
+        filter.tier = m.tier;
+        listed.push(filter);
     }
 
     let mut filters = Vec::new();
@@ -881,11 +886,12 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
 /// minutes since it was listed, the item.
 type Single = (f64, String, String, Option<f64>, Option<i64>, Preview);
 
-/// A listed item for the hover preview, as (kind, text) lines: "rarity"
+/// A listed item for the hover preview, as (kind, text, affix tier) lines:
+/// "rarity"
 /// (normal/magic/rare/unique), "name", "base", "ilvl", "dps", "enchant",
 /// "implicit", "fractured", "explicit", "crafted", "corrupted",
 /// "unidentified".
-pub type Preview = Vec<(&'static str, String)>;
+pub type Preview = Vec<(&'static str, String, Option<u32>)>;
 
 fn item_preview(item: &Value) -> Preview {
     let mut out: Preview = Vec::new();
@@ -895,14 +901,14 @@ fn item_preview(item: &Value) -> Preview {
         Some(3) => "unique",
         _ => "normal",
     };
-    out.push(("rarity", rarity.to_string()));
+    out.push(("rarity", rarity.to_string(), None));
     for (kind, key) in [("name", "name"), ("base", "typeLine")] {
         if let Some(text) = item[key].as_str().filter(|t| !t.is_empty()) {
-            out.push((kind, strip_markup(text)));
+            out.push((kind, strip_markup(text), None));
         }
     }
     if let Some(ilvl) = item["ilvl"].as_u64() {
-        out.push(("ilvl", ilvl.to_string()));
+        out.push(("ilvl", ilvl.to_string(), None));
     }
     let ext = &item["extended"];
     let dps: Vec<String> = [("pDPS", "pdps"), ("eDPS", "edps")]
@@ -910,7 +916,7 @@ fn item_preview(item: &Value) -> Preview {
         .filter_map(|(label, key)| ext[*key].as_f64().filter(|v| *v > 0.0).map(|v| format!("{label} {v:.0}")))
         .collect();
     if !dps.is_empty() {
-        out.push(("dps", dps.join(" · ")));
+        out.push(("dps", dps.join(" · "), None));
     }
     for (kind, key) in [
         ("enchant", "enchantMods"),
@@ -919,22 +925,30 @@ fn item_preview(item: &Value) -> Preview {
         ("explicit", "explicitMods"),
         ("crafted", "craftedMods"),
     ] {
-        // Plain strings, or (lately) objects with the text as "description".
-        let texts = item[key].as_array().into_iter().flatten().filter_map(|m| m.as_str().or(m["description"].as_str()));
-        for m in texts {
-            // Some mods span lines ("…\nhave 20% reduced …").
-            for line in strip_markup(m).lines() {
-                out.push((kind, line.to_string()));
+        // Plain strings, or (lately) objects with the text as "description"
+        // and the affixes behind it, with tiers like "P7" (prefix tier 7).
+        for m in item[key].as_array().into_iter().flatten() {
+            let Some(text) = m.as_str().or(m["description"].as_str()) else { continue };
+            let tier = m["mods"].as_array().into_iter().flatten().filter_map(|a| affix_tier(a["tier"].as_str()?)).min();
+            // Some mods span lines ("…\nhave 20% reduced …"); the tier goes on the first.
+            for (i, line) in strip_markup(text).lines().enumerate() {
+                out.push((kind, line.to_string(), if i == 0 { tier } else { None }));
             }
         }
     }
     if item["identified"].as_bool() == Some(false) {
-        out.push(("unidentified", "Unidentified".to_string()));
+        out.push(("unidentified", "Unidentified".to_string(), None));
     }
     if item["corrupted"].as_bool() == Some(true) {
-        out.push(("corrupted", "Corrupted".to_string()));
+        out.push(("corrupted", "Corrupted".to_string(), None));
     }
     out
+}
+
+/// The trade site's affix tier: "P7" (prefix) or "S4" (suffix) -> 7 / 4.
+/// Others (crafted "R1" ranks, uniques' empty tier) aren't tiers.
+fn affix_tier(tier: &str) -> Option<u32> {
+    tier.strip_prefix('P').or_else(|| tier.strip_prefix('S'))?.parse().ok()
 }
 
 /// "[Strength|Strength]" / "[Life]" link markup -> plain text.
@@ -1195,7 +1209,7 @@ mod tests {
         let text = "Item Class: Rings\nRarity: Rare\nDoom Loop\nSapphire Ring\n--------\nItem Level: 84\n--------\n\
                     { Prefix Modifier \"Virile\" (Tier: 3) — Life }\n+69(55-69) to maximum Life\n\
                     { Suffix Modifier \"of the Furnace\" (Tier: 4) }\n+30(30-35)% to Fire Resistance\n\
-                    { Suffix Modifier \"of Plenty\" }\n12(8-14)% increased Rarity of Items found\n";
+                    { Suffix Modifier \"of Plenty\" (Tier: 2) }\n12(8-14)% increased Rarity of Items found\n";
         let item = crate::item::parse(text).unwrap();
         let filters = build_filters(&item, &test_data());
         let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.min, f.slider, f.max_roll)).collect();
@@ -1209,6 +1223,9 @@ mod tests {
                 ("12% increased Rarity of Items found", Some(10.0), Some((8.0, 14.0)), false),
             ]
         );
+        // Totals sum several mods, so only listed mods carry a tier.
+        let tiers: Vec<_> = filters.iter().map(|f| f.tier).collect();
+        assert_eq!(tiers, vec![None, None, Some(2)]);
     }
 
     #[test]
@@ -1245,7 +1262,7 @@ mod tests {
             "frameType": 2, "name": "Doom Loop", "typeLine": "Sapphire Ring", "ilvl": 84, "identified": true,
             "implicitMods": ["+25% to Cold Resistance"],
             "explicitMods": [
-                { "description": "+60 to maximum [Life]", "mods": [{ "tier": "P4" }] },
+                { "description": "+60 to maximum [Life]", "mods": [{ "tier": "P4" }, { "tier": "S2" }] },
                 "+30 to [Strength|Strength]"
             ],
             "craftedMods": ["Enemies within 5 metres\nhave 10% reduced Life Regeneration"],
@@ -1265,7 +1282,11 @@ mod tests {
             ("crafted", "have 10% reduced Life Regeneration"),
             ("corrupted", "Corrupted"),
         ];
-        assert_eq!(got.iter().map(|(k, t)| (*k, t.as_str())).collect::<Vec<_>>(), want);
+        assert_eq!(got.iter().map(|(k, t, _)| (*k, t.as_str())).collect::<Vec<_>>(), want);
+        // Tiers: the best of the affixes behind a line; none for plain strings.
+        let tiers: Vec<_> = got.iter().filter(|l| l.0 == "explicit").map(|l| l.2).collect();
+        assert_eq!(tiers, vec![Some(2), None]);
+        assert_eq!(affix_tier("R1"), None);
     }
 
     #[test]

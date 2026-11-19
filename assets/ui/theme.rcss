@@ -324,3 +324,9 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .pv-line.fractured { color: #a29162; }
 .pv-line.corrupted, .pv-line.unidentified { color: $danger; margin-top: 4dp; }
 .pv-more { color: $text-faint; font-size: 11dp; margin-top: 6dp; }
+
+/* Affix tiers: [T1] a subtle gold, [T2] silver, [T3] bronze, lower ones grey. */
+.tier { font-size: 10dp; color: $text-faint; }
+.tier.T1 { color: #c9a85a; }
+.tier.T2 { color: #a9b0ba; }
+.tier.T3 { color: #a87a55; }
