@@ -33,6 +33,8 @@ pub enum Section {
     Weapon,
     Total,
     Mod,
+    /// A unique's mod that rolls: always shown, since rolls set its price.
+    Roll,
 }
 
 impl Section {
@@ -41,6 +43,7 @@ impl Section {
             Section::Weapon => "weapon",
             Section::Total => "total",
             Section::Mod => "mod",
+            Section::Roll => "roll",
         }
     }
 }
@@ -68,6 +71,18 @@ impl Filter {
     fn new(label: String, target: Target, value: f64, bounds: Option<(f64, f64)>, on: bool, section: Section) -> Filter {
         let (min, slider, step, max_roll) = defaults(value, bounds);
         Filter { label, target, min, slider, step, max_roll, default_on: on, section }
+    }
+
+    /// A unique's rolled mod, unticked. Like APT, the minimum is the roll
+    /// minus 10% of the mod's range (a perfect roll: exactly the roll).
+    fn unique(label: String, target: Target, value: f64, (lo, hi): (f64, f64)) -> Filter {
+        let mut f = Filter::new(label, target, value, Some((lo, hi)), false, Section::Roll);
+        if let (Some(_), false) = (f.min, f.max_roll) {
+            let min = ((round_down(value - (hi - lo) * (1.0 - MIN_FRACTION), f.step)) / f.step).round() * f.step;
+            f.min = Some(min);
+            f.slider = Some((lo.min(min), hi));
+        }
+        f
     }
 }
 
@@ -187,7 +202,12 @@ pub struct Trade {
 
 /// Items worth a trade search: anything non-unique with mods.
 pub fn searchable(item: &Item) -> bool {
-    matches!(item.rarity.as_str(), "Rare" | "Magic" | "Normal") && !item.mods.is_empty()
+    match item.rarity.as_str() {
+        "Rare" | "Magic" | "Normal" => !item.mods.is_empty(),
+        // Identified uniques: searched by name, with their rolls.
+        "Unique" => item.name.is_some() && !item.mods.is_empty(),
+        _ => false,
+    }
 }
 
 impl Trade {
@@ -640,11 +660,14 @@ fn defaults(value: f64, bounds: Option<(f64, f64)>) -> (Option<f64>, Option<(f64
     let tidy = |v: f64| (v / step).round() * step;
     match bounds {
         Some((lo, hi)) if hi > lo => {
-            let lo = lo.min(value);
             if value >= hi - 1e-9 {
-                (Some(tidy(value)), Some((lo, hi)), step, true)
+                (Some(tidy(value)), Some((lo.min(value), hi)), step, true)
             } else {
-                (Some(tidy(round_down(value * MIN_FRACTION, step).max(lo))), Some((lo, hi)), step, false)
+                // Roll - 10% like APT, even below the tier: a roll at the
+                // bottom of its tier still gets some slack, and the slider
+                // reaches down to it.
+                let min = tidy(round_down(value * MIN_FRACTION, step));
+                (Some(min), Some((lo.min(min), hi)), step, false)
             }
         }
         // A fixed roll: nothing to slide.
@@ -663,7 +686,54 @@ fn defaults(value: f64, bounds: Option<(f64, f64)>) -> (Option<f64>, Option<(f64
 /// start ticked. Other mods are listed, unticked; crafted ones aren't (they
 /// can be redone, so only their contribution to the totals matters).
 /// Weapons also get DPS filters, from their properties.
+/// Weapon DPS, from the properties the item shows. `ticked`: the main
+/// damage type starts ticked.
+fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
+    let mut filters = Vec::new();
+    if category(item).is_some_and(|(c, _)| c.starts_with("weapon.")) {
+        if let Some(aps) = item.attacks_per_second {
+            let pdps = (item.physical_damage.unwrap_or(0.0) * aps).round();
+            let edps = (item.elemental_damage * aps).round();
+            if pdps > 0.0 {
+                let label = format!("Physical DPS {pdps}");
+                filters.push(Filter::new(label, Target::Property("weapon_filters", "pdps"), pdps, None, ticked && pdps >= edps, Section::Weapon));
+            }
+            if edps > 0.0 {
+                let label = format!("Elemental DPS {edps}");
+                filters.push(Filter::new(label, Target::Property("weapon_filters", "edps"), edps, None, ticked && edps > pdps, Section::Weapon));
+            }
+            let label = format!("Attacks per second {aps:.2}");
+            filters.push(Filter::new(label, Target::Property("weapon_filters", "aps"), aps, None, false, Section::Weapon));
+        }
+    }
+    filters
+}
+
+/// Like APT for uniques: no totals, only the mods that roll (fixed ones
+/// don't tell copies apart), all unticked.
+fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
+    let local = category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."));
+    let mut filters = weapon_filters(item, false);
+    for m in &item.mods {
+        let (template, values) = templatize(&m.text);
+        let Some((value, Some((lo, hi)))) = mod_value(&values, &m.ranges) else { continue };
+        if hi <= lo {
+            continue;
+        }
+        let Some((stat_id, sign)) = find_stat(data, m.kind, &template, local) else { continue };
+        let label = match m.kind {
+            ModKind::Explicit => m.text.clone(),
+            kind => format!("{} ({})", m.text, kind.trade_group()),
+        };
+        filters.push(Filter::unique(label, Target::Stat(stat_id), value * sign, (lo, hi)));
+    }
+    filters
+}
+
 fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
+    if item.rarity == "Unique" {
+        return unique_filters(item, data);
+    }
     let local = category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."));
     let mut listed = Vec::new();
     let (mut elemental, mut chaos, mut life, mut mana) = (Amount::default(), Amount::default(), Amount::default(), Amount::default());
@@ -713,23 +783,7 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
 
     let mut filters = Vec::new();
 
-    // Weapon DPS, from the properties the item shows.
-    if category(item).is_some_and(|(c, _)| c.starts_with("weapon.")) {
-        if let Some(aps) = item.attacks_per_second {
-            let pdps = (item.physical_damage.unwrap_or(0.0) * aps).round();
-            let edps = (item.elemental_damage * aps).round();
-            if pdps > 0.0 {
-                let label = format!("Physical DPS {pdps}");
-                filters.push(Filter::new(label, Target::Property("weapon_filters", "pdps"), pdps, None, pdps >= edps, Section::Weapon));
-            }
-            if edps > 0.0 {
-                let label = format!("Elemental DPS {edps}");
-                filters.push(Filter::new(label, Target::Property("weapon_filters", "edps"), edps, None, edps > pdps, Section::Weapon));
-            }
-            let label = format!("Attacks per second {aps:.2}");
-            filters.push(Filter::new(label, Target::Property("weapon_filters", "aps"), aps, None, false, Section::Weapon));
-        }
-    }
+    filters.extend(weapon_filters(item, true));
 
     // Strength gives 1 life per 2, intelligence 1 mana per 2.
     let [strength, dexterity, intelligence] = attributes;
@@ -793,9 +847,10 @@ fn bounds_json((min, max): Bounds) -> Value {
 /// `chosen[i]`: whether filter i is used, and its bounds.
 fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: SearchOptions) -> Value {
     let mut stats = Vec::new();
+    let unique = item.rarity == "Unique";
     let mut q = json!({
         "status": { "option": "online" },
-        "filters": { "type_filters": { "filters": { "rarity": { "option": "nonunique" } } } },
+        "filters": { "type_filters": { "filters": { "rarity": { "option": if unique { "unique" } else { "nonunique" } } } } },
     });
     for (f, choice) in filters.iter().zip(chosen) {
         let Some(bounds) = *choice else { continue };
@@ -808,9 +863,14 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
         }
     }
     q["stats"] = json!([{ "type": "and", "filters": stats }]);
-    match category(item) {
-        Some((c, _)) if !options.base_only => q["filters"]["type_filters"]["filters"]["category"] = json!({ "option": c }),
-        _ => q["type"] = json!(item.base),
+    if unique {
+        q["name"] = json!(item.name);
+        q["type"] = json!(item.base);
+    } else {
+        match category(item) {
+            Some((c, _)) if !options.base_only => q["filters"]["type_filters"]["filters"]["category"] = json!({ "option": c }),
+            _ => q["type"] = json!(item.base),
+        }
     }
     match options.corrupted {
         Corrupted::Any => {}
@@ -936,6 +996,13 @@ mod tests {
         }
         // Like GGG's list: rarity is only searchable as a pseudo stat.
         stats.insert(("pseudo".into(), "#% increased Rarity of Items found".into()), "pseudo.rarity".into());
+        for (text, id) in [
+            ("+# to maximum Life", "explicit.life"),
+            ("#% increased Fire Damage", "explicit.fire_damage"),
+            ("+#% to Fire Resistance", "explicit.fire_res"),
+        ] {
+            stats.insert(("explicit".to_string(), text.to_string()), id.to_string());
+        }
         TradeData { stats, currencies: HashMap::new(), images: HashMap::new() }
     }
 
@@ -1002,11 +1069,38 @@ mod tests {
             vec![
                 // max roll: searched at exactly the roll
                 ("+69 total maximum Life", Some(69.0), Some((55.0, 69.0)), true),
-                // 30 - 10% = 27, but the tier starts at 30
-                ("+30% total Elemental Resistance", Some(30.0), Some((30.0, 35.0)), false),
+                // 30 - 10% = 27, below the tier: the slider reaches down to it
+                ("+30% total Elemental Resistance", Some(27.0), Some((27.0, 35.0)), false),
                 ("12% increased Rarity of Items found", Some(10.0), Some((8.0, 14.0)), false),
             ]
         );
+    }
+
+    #[test]
+    fn unique_rolls() {
+        let text = "Item Class: Body Armours\nRarity: Unique\nKaom's Heart\nGlorious Plate\n--------\nItem Level: 80\n--------\n\
+                    { Unique Modifier — Life }\n+500 to maximum Life\n\
+                    { Unique Modifier — Damage, Elemental, Fire }\n35(20-40)% increased Fire Damage\n\
+                    { Unique Modifier — Elemental, Fire, Resistance }\n+40(30-40)% to Fire Resistance\n";
+        let item = crate::item::parse(text).unwrap();
+        assert!(searchable(&item));
+        let filters = build_filters(&item, &test_data());
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.min, f.slider, f.max_roll, f.default_on, f.section)).collect();
+        assert_eq!(
+            got,
+            vec![
+                // fixed life isn't listed; no totals; 35 - 10% of 20 = 33
+                ("35% increased Fire Damage", Some(33.0), Some((20.0, 40.0)), false, false, Section::Roll),
+                ("+40% to Fire Resistance", Some(40.0), Some((30.0, 40.0)), true, false, Section::Roll),
+            ]
+        );
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
+        let q = query(&item, &filters, &chosen, SearchOptions { base_only: false, corrupted: Corrupted::No });
+        assert_eq!(q["query"]["name"], "Kaom's Heart");
+        assert_eq!(q["query"]["type"], "Glorious Plate");
+        assert_eq!(q["query"]["filters"]["type_filters"]["filters"]["rarity"]["option"], "unique");
+        assert!(q["query"]["filters"]["type_filters"]["filters"]["category"].is_null());
+        assert_eq!(q["query"]["stats"][0]["filters"][0]["value"]["min"], 33.0);
     }
 
     #[test]

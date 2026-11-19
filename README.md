@@ -41,6 +41,12 @@ fossils, tattoos and other exchange items; uniques (incl. 5L/6L and
 unidentified); skill gems (level/quality/corruption); maps, invitations,
 beasts.
 
+Identified uniques show their poe.ninja price too, but since that ignores
+rolls, they also get trade filters like APT's: one for each mod that rolls
+(fixed mods are left out), unticked, with a minimum 10% of the mod's range
+below your roll (or exactly a perfect roll). The search finds that unique by
+name.
+
 Rare and magic items get filters for the official trade site instead, set up
 like Awakened PoE Trade's defaults: life, mana, attributes and resistances
 from any mod (crafted ones included) become totals, and only total life and
@@ -54,8 +60,8 @@ until you search again.
 Every price check uses PoE's advanced copy (Ctrl+Alt+C), which includes each
 mod's tier range. A ticked filter gets a two-handle slider over that range,
 like APT's: the left handle sets the minimum, the right one a maximum (at the
-far right: none). The minimum defaults to your roll minus 10%, kept within
-the tier, and a roll at the top of its tier defaults to exactly that value
+far right: none). The minimum defaults to your roll minus 10% (the slider
+reaches down to it even below the tier), and a roll at the top of its tier defaults to exactly that value
 (tagged "Max"). Weapons
 also get physical/elemental DPS and attack speed filters from their
 properties. Unticked mods fold behind "+ N more mods".

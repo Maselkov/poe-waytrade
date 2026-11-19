@@ -283,6 +283,7 @@ struct OverlayUi::Impl {
     void place(PriceCheck& pc, VkExtent2D extent);
     bool keep_on_screen(VkExtent2D extent);
     void sync_map(const PriceReply& reply, uint64_t check_id, Model& m);
+    void fill_prices(const PriceReply& reply, Model& m);
     // Map mod display order, fixed when a check opens so rows don't jump
     // around while you mark them.
     uint64_t map_order_check = 0;
@@ -609,6 +610,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.corrupted = reply->corrupted;
         m.corrupted_label = reply->corrupted == "no" ? "Uncorrupted" : reply->corrupted == "yes" ? "Corrupted" : "Any";
         m.source = reply->league;
+        // A unique's poe.ninja price, which doesn't know its rolls.
+        fill_prices(*reply, m);
         // Weapon DPS first; totals and ticked mods always shown, the rest
         // folded behind "+ N more mods" until expanded.
         if (pc.check_id() != shown_all_check) show_all_mods = false;
@@ -627,7 +630,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
                 m.weapon_filters.push_back(u);
                 continue;
             }
-            u.visible = f.section == "total" || f.enabled || show_all_mods;
+            u.visible = f.section == "total" || f.section == "roll" || f.enabled || show_all_mods;
             if (!u.visible) m.more_mods++;
             m.mod_filters.push_back(u);
         }
@@ -652,17 +655,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         }
     } else if (reply->status == "ok") {
         m.state = "prices";
-        for (const PriceLine& p : reply->prices) {
-            UiPrice u;
-            u.label = p.label;
-            if (p.divine >= 1.0) {
-                u.main = format(p.divine >= 10 ? "%.0f div" : "%.1f div", p.divine);
-                u.sub = chaos_text(p.chaos);
-            } else {
-                u.main = chaos_text(p.chaos);
-            }
-            m.prices.push_back(u);
-        }
+        fill_prices(*reply, m);
         Rml::String listed = reply->prices.empty() ? "" : reply->prices[0].listings;
         bool thin = !listed.empty() && atoi(listed.c_str()) < 5;
         if (thin) m.thin = listed + " listed · thin";
@@ -714,6 +707,20 @@ bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
 // Marks for the active profile, dangerous mods first, and a one-line verdict
 // readable at a glance. Both stay one line/one order while the panel is open,
 // so marking a mod doesn't move anything.
+void OverlayUi::Impl::fill_prices(const PriceReply& reply, Model& m) {
+    for (const PriceLine& p : reply.prices) {
+        UiPrice u;
+        u.label = p.label;
+        if (p.divine >= 1.0) {
+            u.main = format(p.divine >= 10 ? "%.0f div" : "%.1f div", p.divine);
+            u.sub = chaos_text(p.chaos);
+        } else {
+            u.main = chaos_text(p.chaos);
+        }
+        m.prices.push_back(u);
+    }
+}
+
 void OverlayUi::Impl::sync_map(const PriceReply& reply, uint64_t check_id, Model& m) {
     m.profile = std::clamp(reply.profile, 1, 3);
     for (const MapStat& s : reply.map_stats) {

@@ -285,3 +285,10 @@ body {
 /* Debug panel */
 #debug { left: auto; right: 40dp; width: 340dp; }
 #debug .line { padding: 1dp 14dp; font-size: 11dp; }
+
+/* A unique's poe.ninja price above its trade filters */
+.ninja { display: flex; flex-wrap: wrap; align-items: baseline; padding: 10dp 14dp 0; color: $text-muted; }
+.ninja-source { font-size: 11dp; margin-right: 8dp; }
+.ninja-price { color: $price; margin-right: 10dp; }
+.ninja-price .label { color: $text-muted; }
+.ninja-price .sub { color: $text-muted; font-size: 11dp; }

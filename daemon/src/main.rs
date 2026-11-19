@@ -19,9 +19,11 @@
 //!   response: status ready | loading
 //!
 //!   Rare/magic items get trade site search filters instead of a poe.ninja
-//!   price (status "trade"). Nothing is searched until the layer asks:
+//!   price (status "trade"); so do identified uniques, with their poe.ninja
+//!   "price" lines too (if found) and filters only for mods that roll
+//!   (section "roll"). Nothing is searched until the layer asks:
 //!     filter   <index> <1|0 enabled> <label> <minimum|""> <slider low>
-//!              <slider high> <step> <1|0 max roll> <weapon|total|mod>
+//!              <slider high> <step> <1|0 max roll> <weapon|total|mod|roll>
 //!              <maximum|"">
 //!     option   base <base type> <category label>   (if the base can be
 //!                                                  searched on its own)
@@ -445,7 +447,16 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>) -> St
         return format!("status\t{status}\nmessage\t{}\n", clean(&message));
     };
 
-    if trade_search.is_some() {
+    if item.rarity == "Unique" && trade::searchable(&item) {
+        // Identified uniques: trade filters for their rolls, with the
+        // poe.ninja price (which ignores rolls) alongside.
+        out = trade_response(state, &item, trade_search, Some(&db));
+        if out.starts_with("status\ttrade") {
+            if let lookup::Outcome::Found { prices, .. } = lookup::lookup(&db, &item) {
+                write_prices(&mut out, prices);
+            }
+        }
+    } else if trade_search.is_some() {
         out = trade_response(state, &item, trade_search, Some(&db));
     } else {
         match lookup::lookup(&db, &item) {
@@ -464,16 +475,7 @@ fn write_lookup(out: &mut String, outcome: lookup::Outcome) {
     match outcome {
         lookup::Outcome::Found { title, prices } => {
             let _ = writeln!(out, "status\tok\ntitle\t{}", clean(&title));
-            for p in prices {
-                let listings = p.listings.map(|n| n.to_string()).unwrap_or_default();
-                let _ = writeln!(
-                    out,
-                    "price\t{}\t{:.2}\t{:.4}\t{listings}",
-                    clean(&p.label),
-                    p.chaos,
-                    p.divine
-                );
-            }
+            write_prices(out, prices);
         }
         lookup::Outcome::NotFound(m) => {
             let _ = writeln!(out, "status\tnot_found\nmessage\t{}", clean(&m));
@@ -481,6 +483,13 @@ fn write_lookup(out: &mut String, outcome: lookup::Outcome) {
         lookup::Outcome::Unsupported(m) => {
             let _ = writeln!(out, "status\tunsupported\nmessage\t{}", clean(&m));
         }
+    }
+}
+
+fn write_prices(out: &mut String, prices: Vec<lookup::Price>) {
+    for p in prices {
+        let listings = p.listings.map(|n| n.to_string()).unwrap_or_default();
+        let _ = writeln!(out, "price\t{}\t{:.2}\t{:.4}\t{listings}", clean(&p.label), p.chaos, p.divine);
     }
 }
 

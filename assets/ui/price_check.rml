@@ -27,6 +27,10 @@
     </div>
 
     <div data-if="state == 'trade'">
+        <div class="ninja" data-if="prices.size > 0">
+            <span class="ninja-source">poe.ninja</span>
+            <span data-for="p : prices" class="ninja-price"><span class="label" data-if="p.label != ''">{{p.label}} </span>{{p.main}}<span class="sub" data-if="p.sub != ''"> {{p.sub}}</span></span>
+        </div>
         <div data-if="searched &amp;&amp; has_summary" data-attr-class="stale ? 'summary stale' : 'summary'">
             <img class="summary-icon" data-if="summary_icon != ''" data-attr-src="'icon:' + summary_icon"/>
             <div class="coin big" data-if="summary_icon == ''"/>
