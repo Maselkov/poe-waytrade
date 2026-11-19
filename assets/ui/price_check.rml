@@ -66,7 +66,10 @@
                 <div class="section-label">{{g.label}}</div>
                 <div data-for="f : g.filters" data-attr-class="'filter sec-' + f.section + (f.enabled ? ' on' : ' off')">
                     <div class="filter-main" data-event-click="toggle_filter(f.index)">
-                        <div class="mod">{{f.label}}</div>
+                        <div class="mod-cell">
+                            <div class="mod">{{f.label}}</div>
+                            <div class="mod-full">{{f.label}}</div>
+                        </div>
                         <div data-attr-class="'tier ' + f.tier">{{f.tier}}</div>
                         <div class="min" data-event-mousescroll="bounds_scroll(f.index)">{{f.bounds}}<span class="star" data-if="f.max_roll"> ★</span></div>
                     </div>

@@ -105,7 +105,27 @@ body {
 .filter.on { border-left-color: $accent; background-color: #16171f; }
 .filter:hover { background-color: #1a1c23; }
 .filter-main { display: flex; align-items: center; padding: 4dp 0; cursor: pointer; }
-.mod { flex: 1 1 0; min-width: 0; color: $mod; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mod-cell { flex: 1 1 0; min-width: 0; position: relative; }
+.mod { color: $mod; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Like APT: a long mod is one line ending in "…"; hovering it shows the whole
+   text, wrapped, over the rows below, so nothing moves. The pointer goes
+   through it, so moving down still reaches the next row. */
+.mod-full {
+    display: none;
+    position: absolute;
+    left: -6dp;
+    right: -6dp;
+    top: -4dp;
+    z-index: 10;
+    padding: 3dp 5dp;
+    background-color: #262935;
+    border: 1dp #3a3e4c;
+    border-radius: 6dp;
+    color: $text-strong;
+    white-space: normal;
+    pointer-events: none;
+}
+.mod-cell:hover .mod-full { display: block; }
 .filter.off .mod { color: $text-muted; }
 .filter-main .tier { width: 22dp; flex-shrink: 0; text-align: right; font-size: 11dp; color: $text-faint; margin-left: 6dp; }
 .min { flex-shrink: 0; min-width: 40dp; text-align: center; background-color: $chip; border: 1dp transparent; border-radius: 6dp; padding: 1dp 6dp; color: $text-strong; margin-left: 8dp; }
