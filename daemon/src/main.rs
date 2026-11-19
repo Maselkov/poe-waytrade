@@ -76,6 +76,7 @@
 //! stay up; if something already holds it (another daemon, or systemd's
 //! socket), we exit successfully, since the layer has a daemon to talk to.
 //! `--exit-with-parent` (the launcher) makes us exit when our parent does.
+//! `--version` prints this build's version (see build.rs) and exits.
 
 mod cdp;
 mod item;
@@ -93,6 +94,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+/// This build's version, from `git describe` (see build.rs).
+const VERSION: &str = env!("WAYTRADE_VERSION");
 const SOCKET_NAME: &str = "poe-waytrade";
 const MAX_FRAME: usize = 256 * 1024;
 const REFRESH: Duration = Duration::from_secs(15 * 60);
@@ -110,6 +113,10 @@ struct State {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("--version") {
+        println!("poe-waytrade-daemon {VERSION}");
+        return;
+    }
     if args.get(1).map(String::as_str) == Some("query") {
         std::process::exit(match query(&args[2..]) {
             Ok(()) => 0,
@@ -123,6 +130,7 @@ fn main() {
     if args.iter().any(|a| a == "--exit-with-parent") {
         exit_with_parent();
     }
+    eprintln!("poe-waytrade-daemon {VERSION}");
 
     let state = Arc::new(State {
         db: RwLock::new(None),
