@@ -14,15 +14,15 @@
 
     <div class="status" data-if="state == 'status'" data-class-error="status_error">{{status}}</div>
 
-    <div class="section" data-if="state == 'prices'">
-        <div data-for="p : prices" data-attr-class="prices.size > 1 ? 'price compact' : 'price'">
-            <span class="label" data-if="p.label != ''">{{p.label}}</span>
-            <span class="main">{{p.main}}</span>
-            <span class="sub" data-if="p.sub != ''">{{p.sub}}</span>
+    <div class="summary ninja-card" data-if="state == 'prices'">
+        <div data-for="p : prices" data-attr-class="prices.size > 1 ? 'summary-line compact' : 'summary-line'">
+            <img class="summary-icon" data-if="p.icon != ''" data-attr-src="'icon:' + p.icon"/>
+            <div class="coin big" data-if="p.icon == ''"/>
+            <div class="summary-price"><span class="label" data-if="p.label != ''">{{p.label}} </span>≈ {{p.main}} <span class="sub">{{p.sub}}</span></div>
         </div>
-        <div class="meta">
-            <span class="tag" data-if="thin != ''">{{thin}}</span>
-            <span>{{source}}</span>
+        <div class="summary-foot">
+            <div class="summary-range">{{source}}</div>
+            <div class="tag" data-if="thin != ''">{{thin}}</div>
         </div>
     </div>
 

@@ -15,6 +15,9 @@ struct PriceLine {
     std::string listings;  // empty if unknown
 };
 
+// The currency a poe.ninja price is shown in (and its icon): divine from 1 up.
+inline const char* price_icon(const PriceLine& p) { return p.divine >= 1.0 ? "divine" : "chaos"; }
+
 struct TradeFilter {
     int index = 0;
     bool enabled = false;

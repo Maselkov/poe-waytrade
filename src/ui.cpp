@@ -139,6 +139,7 @@ private:
 
 struct UiPrice {
     Rml::String label, main, sub;
+    Rml::String icon;  // currency id, once its icon has arrived
 };
 struct UiFilter {
     int index = 0;
@@ -378,6 +379,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("label", &UiPrice::label);
         h.RegisterMember("main", &UiPrice::main);
         h.RegisterMember("sub", &UiPrice::sub);
+        h.RegisterMember("icon", &UiPrice::icon);
     }
     if (auto h = c.RegisterStruct<UiFilter>()) {
         h.RegisterMember("index", &UiFilter::index);
@@ -694,8 +696,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         fill_prices(*reply, m);
         if (!reply->prices.empty()) {
             const PriceLine& p = reply->prices[0];
-            Rml::String id = p.divine >= 1.0 ? "divine" : "chaos";
-            if (icons_get(id)) m.ninja_icon = id;
+            m.ninja_icon = m.prices[0].icon;
             const Rml::String& listed = p.listings;
             if (!listed.empty() && atoi(listed.c_str()) < 5) m.thin = listed + " listed";
             m.ninja_meta = (listed.empty() ? "" : listed + " listed \u00b7 ") + "poe.ninja \u00b7 rolls not counted";
@@ -856,6 +857,7 @@ void OverlayUi::Impl::fill_prices(const PriceReply& reply, Model& m) {
         } else {
             u.main = chaos_text(p.chaos);
         }
+        if (const char* id = price_icon(p); icons_get(id)) u.icon = id;
         m.prices.push_back(u);
     }
 }
