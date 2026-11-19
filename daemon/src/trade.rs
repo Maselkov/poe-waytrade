@@ -397,7 +397,13 @@ impl Trade {
             _ => None,
         };
         // Like APT: an uncorrupted item is compared with uncorrupted ones.
-        let corrupted = if item.corrupted { Corrupted::Any } else { Corrupted::No };
+        // A base or a unique is worth something else corrupted (no more
+        // crafting, a different implicit), so it's compared like for like.
+        let corrupted = match (item.corrupted, preset == Preset::Base || item.rarity == "Unique") {
+            (false, _) => Corrupted::No,
+            (true, true) => Corrupted::Yes,
+            (true, false) => Corrupted::Any,
+        };
         // A map's base names its tier ("Map (Tier 16)"): search that base.
         let base_only = preset == Preset::Base || tiered_map_base(item);
         Ok(Prepared {
