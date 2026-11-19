@@ -572,6 +572,8 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
             case PointerEvent::Motion: d.context->ProcessMouseMove((int)ev.x, (int)ev.y, 0); break;
             case PointerEvent::Leave: d.context->ProcessMouseLeave(); break;
             case PointerEvent::Button:
+                // Clicking the panel keeps it open (see PriceCheck::lock).
+                if (ev.down) pc.lock();
                 ev.down ? d.context->ProcessMouseButtonDown(ev.button, 0)
                         : d.context->ProcessMouseButtonUp(ev.button, 0);
                 break;
