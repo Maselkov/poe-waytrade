@@ -187,7 +187,7 @@ struct Model {
     Rml::Vector<UiFilter> weapon_filters, mod_filters;
     Rml::Vector<UiListing> listings;
     int more_mods = 0;  // folded away
-    // Price summary (median of the fetched listings)
+    // Price summary (the low end of the fetched listings)
     bool has_summary = false, low_value = false;
     Rml::String summary_price, summary_icon, summary_sub, summary_range;
     Rml::Vector<Rml::String> debug_lines;
@@ -702,7 +702,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         if (reply->summary) {
             const TradeSummary& s = *reply->summary;
             m.has_summary = true;
-            m.summary_price = "≈ " + s.amount + " " + s.currency;
+            m.summary_price = (s.capped ? "≤ " : "≈ ") + s.amount + " " + s.currency;
             if (icons_get(s.currency_id)) m.summary_icon = s.currency_id;
             if (s.chaos >= 0.1 && s.currency != "Chaos Orb") m.summary_sub = chaos_text(s.chaos);
             m.low_value = s.chaos >= 0 && s.chaos < 5;
