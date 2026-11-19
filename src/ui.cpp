@@ -146,6 +146,7 @@ struct UiFilter {
     Rml::String label, min;
     Rml::String bounds;            // "185+" or "185–220"
     float min_pct = 0, max_pct = 100;  // handle positions on the slider
+    float roll_pct = -1;               // the item's own value; < 0: none
     bool has_slider = false, max_roll = false;
     Rml::String tier;     // "T1"; empty: none
     Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | mod | fractured
@@ -256,6 +257,12 @@ struct OverlayUi::Impl {
         for (const TradeFilter& f : price_check->reply()->filters)
             if (f.index == index) filter = &f;
         if (!filter || filter->hi <= filter->lo) return;
+        // An unticked row's strip only shows the range: pressing it ticks
+        // the row, like clicking its text.
+        if (!filter->enabled) {
+            if (press) price_check->toggle_filter(index);
+            return;
+        }
         Rml::Element* track = ev.GetCurrentElement();
         float left = track->GetAbsoluteOffset(Rml::BoxArea::Content).x;
         float width = track->GetBox().GetSize(Rml::BoxArea::Content).x;
@@ -373,6 +380,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("min", &UiFilter::min);
         h.RegisterMember("bounds", &UiFilter::bounds);
         h.RegisterMember("min_pct", &UiFilter::min_pct);
+        h.RegisterMember("roll_pct", &UiFilter::roll_pct);
         h.RegisterMember("max_pct", &UiFilter::max_pct);
         h.RegisterMember("has_slider", &UiFilter::has_slider);
         h.RegisterMember("max_roll", &UiFilter::max_roll);
@@ -675,6 +683,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
                 auto pct = [&](double v) { return (float)std::clamp((v - f.lo) / (f.hi - f.lo) * 100, 0.0, 100.0); };
                 u.min_pct = pct(atof(f.min.c_str()));
                 u.max_pct = f.max.empty() ? 100 : pct(atof(f.max.c_str()));
+                if (!f.roll.empty()) u.roll_pct = pct(atof(f.roll.c_str()));
             }
             if (!f.min.empty()) u.bounds = f.min + (f.max.empty() ? "+" : "\u2013" + f.max);
             else if (!f.max.empty()) u.bounds = "\u2264 " + f.max;
@@ -739,7 +748,7 @@ void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
     float ax, ay;
     if (it == docs.end() || !pc.anchor(&ax, &ay)) return;
     float panel = extent.height * 986.0f / 1600.0f;
-    float width = 340 * context->GetDensityIndependentPixelRatio();
+    float width = 370 * context->GetDensityIndependentPixelRatio();
     bool by_inventory = ax > extent.width / 2.0f;
     float left = by_inventory ? extent.width - panel - width : panel;
     // Listing previews open away from the inventory/stash the panel sits on.

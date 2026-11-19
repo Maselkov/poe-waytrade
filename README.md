@@ -67,7 +67,9 @@ rate limit; changing anything afterwards marks the listings as out of date
 until you search again.
 
 Every price check uses PoE's advanced copy (Ctrl+Alt+C), which includes each
-mod's tier range. A ticked filter gets a two-handle slider over that range,
+mod's tier range. Every filter with a range has a slim slider strip under
+it, so ticking a row never moves the others: unticked, it's a faint track
+marking where your item's value sits; ticked, it's a two-handle slider,
 like APT's: the left handle sets the minimum, the right one a maximum (at the
 far right: none). The minimum defaults to your roll minus 10% (the slider
 reaches down to it even below the tier), and a roll at the top of its tier defaults to exactly that value

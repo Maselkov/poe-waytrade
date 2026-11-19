@@ -56,10 +56,11 @@
                         <div data-attr-class="'tier ' + f.tier">{{f.tier}}</div>
                         <div class="min" data-event-mousescroll="bounds_scroll(f.index)">{{f.bounds}}<span class="star" data-if="f.max_roll"> ★</span></div>
                     </div>
-                    <div class="slider-row" data-if="f.enabled &amp;&amp; f.has_slider">
+                    <div class="slider-row" data-if="f.has_slider">
                         <div class="range" data-event-mousedown="range_press(f.index)" data-event-drag="range_drag(f.index)">
                             <div class="range-inner">
                                 <div class="range-track"/>
+                                <div class="range-roll" data-if="!f.enabled &amp;&amp; f.roll_pct &gt;= 0" data-style-left="f.roll_pct + '%'"/>
                                 <div class="range-fill" data-style-left="f.min_pct + '%'" data-style-width="(f.max_pct - f.min_pct) + '%'"/>
                                 <div class="range-handle" data-style-left="f.min_pct + '%'"/>
                                 <div class="range-handle" data-style-left="f.max_pct + '%'"/>

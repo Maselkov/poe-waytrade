@@ -26,6 +26,7 @@ struct TradeFilter {
     std::string section;  // weapon | total | mod
     std::string max;      // empty if none
     int tier = 0;         // affix tier, 1 best; 0: none
+    std::string roll;     // the item's own value; empty if none
 };
 
 struct TradeListing {

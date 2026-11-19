@@ -37,7 +37,7 @@ body {
     position: absolute;
     left: 40dp;
     top: 40dp;
-    width: 340dp;
+    width: 370dp;
     font-family: Inter;
     font-size: 12dp;
     color: $text;
@@ -113,22 +113,27 @@ body {
 .star { color: $price; }
 .filter.off .star { color: #8a7a4c; }
 
-/* Min/max range slider under a ticked filter. The handles centre on their
-   value; the padding keeps both ends reachable. A maximum at the right end
-   means none. */
-.slider-row { padding: 0 0 4dp 0; }
-.range { height: 16dp; padding: 0 8dp; drag: drag; cursor: pointer; }
-.range-inner { position: relative; height: 16dp; }
-.range-track, .range-fill { position: absolute; top: 6dp; height: 4dp; border-radius: 2dp; }
+/* Min/max range slider: a slim strip under every filter with a range, so
+   ticking a row never moves the rows below. Unticked, it's a faint track
+   with a mark where the item's own value sits; ticked, it gets its fill and
+   handles. The handles centre on their value; the padding keeps both ends
+   reachable. A maximum at the right end means none. */
+.slider-row { padding: 0 0 3dp 0; margin-top: -2dp; }
+.range { height: 12dp; padding: 0 7dp; drag: drag; cursor: pointer; }
+.range-inner { position: relative; height: 12dp; }
+.range-track, .range-fill { position: absolute; top: 5dp; height: 2dp; border-radius: 1dp; }
 .range-track { left: 0; right: 0; background-color: $off; }
+.filter.off .range-track { background-color: #1f2128; }
+.filter.off .range-fill, .filter.off .range-handle { display: none; }
 .range-fill { background-color: $accent; }
+.range-roll { position: absolute; top: 3dp; width: 2dp; height: 6dp; margin-left: -1dp; background-color: #4a4d5a; }
 .range-handle {
     position: absolute;
-    top: 1dp;
-    width: 14dp;
-    height: 14dp;
-    margin-left: -7dp;
-    border-radius: 7dp;
+    top: 0dp;
+    width: 12dp;
+    height: 12dp;
+    margin-left: -6dp;
+    border-radius: 6dp;
     background-color: $accent-text;
     border: 2dp $accent;
 }

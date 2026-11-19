@@ -81,6 +81,8 @@ pub struct Filter {
     pub section: Section,
     /// The mod's affix tier (1 is best), for listed mods from advanced copy.
     pub tier: Option<u32>,
+    /// The item's own value, marked on the slider.
+    pub roll: Option<f64>,
 }
 
 impl Filter {
@@ -94,7 +96,7 @@ impl Filter {
         section: Section,
     ) -> Filter {
         let (min, slider, step, max_roll) = defaults(value, bounds, false);
-        Filter { label, target, min, slider, step, max_roll, default_on: on, section, tier: None }
+        Filter { label, target, min, slider, step, max_roll, default_on: on, section, tier: None, roll: Some(value) }
     }
 
     /// A unique's rolled mod, unticked. Like APT, the minimum is the roll
@@ -878,6 +880,7 @@ fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
                 default_on: false,
                 section: Section::Weapon,
                 tier: None,
+                roll: Some(crit),
             });
         }
     }
@@ -1030,6 +1033,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         default_on: true,
         section: Section::Base,
         tier: None,
+        roll: None,
     };
     filters.extend(socket_filters(item));
     if let Some(ilvl) = item.item_level {
@@ -1046,6 +1050,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             default_on: crafting_value(item),
             section: Section::Base,
             tier: None,
+            roll: Some(ilvl as f64),
         });
     }
     if item.fractured_item {
