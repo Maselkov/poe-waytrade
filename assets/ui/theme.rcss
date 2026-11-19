@@ -279,10 +279,22 @@ body {
 .mapmod.warning { background-color: $warn-bg; border-left-color: $warn; color: #f0dcc0; }
 .mapmod.good { background-color: $good-bg; border-left-color: $good; color: #cfe9d8; }
 .mapmod-text { flex: 1; }
-.mapmod-tag { font-size: 10dp; font-weight: 500; margin-left: 8dp; }
-.deadly .mapmod-tag { color: $danger; }
-.warning .mapmod-tag { color: $warn; }
-.good .mapmod-tag { color: $good; }
+/* The mark as a pill in a fixed column on the right (like the price check's
+   value pills), there even when unmarked, so marking never rewraps text. */
+.mapmod-tag {
+    flex-shrink: 0;
+    width: 58dp;
+    margin-left: 8dp;
+    padding: 1dp 0;
+    text-align: center;
+    font-size: 11dp;
+    font-weight: 500;
+    border: 1dp transparent;
+    border-radius: 6dp;
+}
+.deadly .mapmod-tag { color: $danger; background-color: #4a1c1a; border-color: #6a2a26; }
+.warning .mapmod-tag { color: $warn; background-color: #3a2a16; border-color: #5c4322; }
+.good .mapmod-tag { color: $good; background-color: #1a3a28; border-color: #2a5a3c; }
 
 /* Debug panel */
 #debug { left: auto; right: 40dp; width: 340dp; }
