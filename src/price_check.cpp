@@ -266,6 +266,13 @@ void PriceCheck::open() {
     changed();
 }
 
+void PriceCheck::lock() {
+    if (!visible_ || mode_ == Mode::Locked) return;
+    mode_ = Mode::Locked;
+    left_panel_at_.reset();
+    changed();
+}
+
 void PriceCheck::set_visible(bool v) {
     if (visible_ == v) return;
     visible_ = v;

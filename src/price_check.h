@@ -25,8 +25,8 @@ public:
     //           held; moving onto the panel while holding Ctrl pins it.
     //   Pinned: a quick panel the mouse moved onto. Closes when it leaves,
     //           unless Ctrl is held.
-    //   Locked: Ctrl+Alt+D. Stays until its close button or a click on the
-    //           game.
+    //   Locked: Ctrl+Alt+D, or a quick/pinned panel that was clicked. Stays
+    //           until its close button or a click on the game.
     enum class Mode { Quick, Pinned, Locked };
     // What the panel shows: a price, or the map mod danger check. Ctrl+D
     // picks from the item (maps, contracts and invitations open the map
@@ -56,6 +56,9 @@ public:
 
     // Actions from the UI.
     void close() { set_visible(false); }
+    // A click on the panel: the user is working in it, so it stays until
+    // dismissed instead of closing when the pointer slips off.
+    void lock();
     // Trade filters and options only change locally; search() sends them.
     // stale(): they changed since the listings on screen were searched.
     void toggle_filter(int index);
