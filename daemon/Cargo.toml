@@ -3,6 +3,7 @@ name = "poe-overlay-daemon"
 version = "0.3.0"
 edition = "2024"
 description = "Price lookups for the poe-overlay Vulkan layer"
+license = "GPL-3.0-or-later"
 
 [dependencies]
 libc = "0.2"

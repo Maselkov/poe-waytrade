@@ -2,10 +2,10 @@
 #   cd packaging/arch && makepkg -si
 pkgname=poe-overlay
 pkgver=0.11.1
-pkgrel=1
+pkgrel=2
 pkgdesc="In-game Vulkan price-check overlay for Path of Exile on Wayland"
 arch=('x86_64')
-license=('unknown')
+license=('GPL-3.0-or-later')
 depends=('vulkan-icd-loader' 'wayland' 'freetype2' 'gcc-libs' 'glibc')
 makedepends=('cmake' 'ninja' 'vulkan-headers' 'wayland-protocols' 'shaderc' 'cargo')
 optdepends=('chromium: trade search for rare items (or google-chrome)'

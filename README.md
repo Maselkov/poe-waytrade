@@ -213,8 +213,11 @@ testing a new daemon next to the installed one.
 - Trade search: no item level, influence or socket filters yet, and magic
   items can't be searched by exact base (their name hides it among affixes).
 
-## License note
+## License
 
-`third_party/rmlui` is RmlUi 6.3 core (MIT); `third_party/stb` has
+poe-overlay is free software under the GNU General Public License, version
+3 or (at your option) any later version; see [LICENSE](LICENSE).
+
+Bundled third-party code keeps its own license: `third_party/rmlui` is RmlUi 6.3 core (MIT); `third_party/stb` has
 stb_image (public domain). `assets/fonts` has Inter and
 Cinzel, both under the SIL Open Font License (licence files alongside).
