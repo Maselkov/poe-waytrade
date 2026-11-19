@@ -387,7 +387,7 @@ fn map_check(state: &State, text: &str) -> String {
         && let lookup::Outcome::Found { mut prices, .. } = lookup::lookup(&db, &item)
     {
         prices.truncate(1);
-        if item.rarity != "Normal" && item.name.as_ref().is_none_or(|n| db.items.get(n).is_none()) {
+        if item.rarity != "Normal" && item.name.as_ref().is_none_or(|n| !db.items.contains_key(n)) {
             for p in &mut prices {
                 p.label = "white map".to_string();
             }

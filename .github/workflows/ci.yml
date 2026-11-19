@@ -10,39 +10,57 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Three independent jobs, so each shows its own status and one failing
+# doesn't hide the others. All run in Arch, so clippy is the same version
+# everywhere.
 jobs:
-  build:
+  lint:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    defaults:
+      run:
+        working-directory: daemon
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        working-directory: .
+        run: .github/scripts/arch-setup.sh rust gcc
+      - name: Formatting
+        run: cargo fmt --check
+      # Runs even when formatting fails, so both problems show at once.
+      - name: Clippy
+        if: ${{ !cancelled() }}
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+  test:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: .github/scripts/arch-setup.sh rust gcc
+      - name: Daemon tests
+        working-directory: daemon
+        run: cargo test --locked
+      - name: Launcher
+        if: ${{ !cancelled() }}
+        run: |
+          cargo build --locked --manifest-path daemon/Cargo.toml
+          .github/scripts/test-launcher.sh daemon/target/debug/poe-waytrade-daemon
+
+  # makepkg builds the layer and the daemon, so this is also the layer build.
+  package:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: .github/scripts/arch-setup.sh
-
-      - name: Daemon formatting
-        working-directory: daemon
-        run: cargo fmt --check
-      - name: Daemon lints
-        working-directory: daemon
-        run: cargo clippy --locked --all-targets -- -D warnings
-      - name: Daemon tests
-        working-directory: daemon
-        run: cargo test --locked
-      - name: Launcher
-        run: |
-          cargo build --locked --manifest-path daemon/Cargo.toml
-          .github/scripts/test-launcher.sh daemon/target/debug/poe-waytrade-daemon
-
-      - name: Build layer
-        run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          cmake --build build
-      - name: Layer exports only Vulkan entry points
-        run: .github/scripts/check-exports.sh build/libVkLayer_poe_waytrade.so
-
       - name: Arch package
         working-directory: packaging/arch
         run: su builder -c 'makepkg --noconfirm'
+      - name: Layer exports only Vulkan entry points
+        run: .github/scripts/check-exports.sh packaging/arch/pkg/poe-waytrade/usr/lib/libVkLayer_poe_waytrade.so
       - uses: actions/upload-artifact@v4
         with:
           name: arch-package

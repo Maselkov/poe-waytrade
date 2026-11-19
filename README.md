@@ -220,11 +220,13 @@ current softcore league; set `POE_LEAGUE` in the service
 
 ## CI and releases
 
-GitHub Actions builds everything in an Arch container (the layer needs GCC
-15 for `#embed`) on every push to main and every pull request: rustfmt,
-clippy with warnings as errors, the daemon's tests, the `waytrade`
-launcher, the layer, a check that the layer exports only the three Vulkan
-loader entry points, and the Arch package.
+GitHub Actions runs three jobs in Arch containers (the layer needs GCC 15
+for `#embed`) on every push to main and every pull request: `lint`
+(rustfmt, clippy with warnings as errors), `test` (the daemon's tests, the
+`waytrade` launcher) and `package` (the Arch package, which builds the
+layer and the daemon, and a check that the layer exports only the three
+Vulkan loader entry points). [AGENTS.md](AGENTS.md) lists the commands to
+run them locally.
 
 To release, bump `pkgver` in `packaging/arch/PKGBUILD`, commit, and push a
 matching tag:

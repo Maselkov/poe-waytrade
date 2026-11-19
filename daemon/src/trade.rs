@@ -968,7 +968,14 @@ fn map_filters(item: &Item) -> Vec<Filter> {
     if let Some(tier) = item.map_tier.filter(|_| !tiered_map_base(item)) {
         let t = tier as f64;
         let label = format!("Tier {tier}");
-        filters.push(Filter::new(label, Target::Property("map_filters", "map_tier"), t, Some((t, t)), true, Section::Map));
+        filters.push(Filter::new(
+            label,
+            Target::Property("map_filters", "map_tier"),
+            t,
+            Some((t, t)),
+            true,
+            Section::Map,
+        ));
     }
     // Since 3.25 a map's worth is mostly its "More ..." drop bonuses; old
     // maps still have item quantity.
