@@ -11,6 +11,8 @@ pub struct Item {
     pub base: String,
     pub corrupted: bool,
     pub gem_level: Option<u32>,
+    /// "Level: 20 (Max)": the gem can't level further.
+    pub gem_max_level: bool,
     pub quality: u32,
     /// Size of the largest linked socket group.
     pub links: u32,
@@ -42,6 +44,10 @@ pub struct Item {
     pub mirrored: bool,
     /// Influences from "Shaper Item"-style lines, as trade keys ("shaper").
     pub influences: Vec<&'static str>,
+    /// "Searing Exarch Item" / "Eater of Worlds Item": an eldritch implicit,
+    /// with its tier (Lesser 1 … Perfect 6) when advanced copy names it.
+    pub searing: Option<Option<u32>>,
+    pub tangled: Option<Option<u32>>,
     /// Armour properties as shown (with the item's quality).
     pub armour: Option<f64>,
     pub evasion: Option<f64>,
@@ -102,6 +108,17 @@ pub struct ModLine {
 fn header_tier(header: &str) -> Option<u32> {
     let rest = &header[header.find("(Tier: ")? + "(Tier: ".len()..];
     rest[..rest.find(')')?].trim().parse().ok()
+}
+
+/// `{ Searing Exarch Implicit Modifier (Grand) — … }` -> (searing, 3).
+fn eldritch_header(header: &str) -> Option<(bool, u32)> {
+    let searing = header.starts_with("{ Searing Exarch Implicit Modifier");
+    if !searing && !header.starts_with("{ Eater of Worlds Implicit Modifier") {
+        return None;
+    }
+    let tiers = ["Lesser", "Greater", "Grand", "Exceptional", "Exquisite", "Perfect"];
+    let tier = tiers.iter().position(|t| header.contains(&format!("({t})")))? as u32 + 1;
+    Some((searing, tier))
 }
 
 /// Advanced copy marks fractured and crafted mods in their header only
@@ -274,7 +291,10 @@ pub fn parse(text: &str) -> Option<Item> {
             let mut header_kind = None;
             for line in section {
                 // A property, wherever the game puts it.
-                if line.starts_with("Memory Strands: ") {
+                if line.starts_with("Memory Strands: ")
+                    || *line == "Searing Exarch Item"
+                    || *line == "Eater of Worlds Item"
+                {
                     continue;
                 }
                 if line.starts_with("{ ") && line.ends_with(" }") {
@@ -282,6 +302,11 @@ pub fn parse(text: &str) -> Option<Item> {
                     headed = true;
                     tier = header_tier(line);
                     header_kind = kind_from_header(line);
+                    match eldritch_header(line) {
+                        Some((true, t)) => item.searing = Some(Some(t)),
+                        Some((false, t)) => item.tangled = Some(Some(t)),
+                        None => {}
+                    }
                     if let Some(affix) = header_affix(line) {
                         affixes.push(affix);
                     }
@@ -320,12 +345,17 @@ pub fn parse(text: &str) -> Option<Item> {
             item.synthesised = true;
         } else if *line == "Mirrored" {
             item.mirrored = true;
+        } else if *line == "Searing Exarch Item" {
+            item.searing.get_or_insert(None);
+        } else if *line == "Eater of Worlds Item" {
+            item.tangled.get_or_insert(None);
         } else if let Some(&(_, key)) = INFLUENCES.iter().find(|(text, _)| text == line) {
             item.influences.push(key);
         } else if let Some(v) = line.strip_prefix("Level: ") {
             // Only gems have a bare "Level:" line ("Level: 20 (Max)").
             if item.rarity == "Gem" {
                 item.gem_level = leading_number(v);
+                item.gem_max_level = v.contains("(Max)");
             }
         } else if let Some(v) = line.strip_prefix("Quality: ") {
             item.quality = leading_number(v).unwrap_or(0);

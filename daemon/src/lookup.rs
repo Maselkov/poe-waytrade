@@ -79,6 +79,76 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
     Outcome::NotFound(format!("No poe.ninja price for {title}"))
 }
 
+/// poe.ninja's price for what an unfinished item is worth as a base, shown
+/// next to its trade filters: plain bases of item level 82+ (by item level
+/// and influences) and white or magic cluster jewels (by enchant, passive
+/// count and item level bracket). Empty for anything else.
+pub fn base_prices(db: &PriceDb, item: &Item) -> Vec<Price> {
+    if item.base.contains("Cluster Jewel") && matches!(item.rarity.as_str(), "Normal" | "Magic") {
+        return cluster_price(db, item).into_iter().collect();
+    }
+    let plain = item.rarity == "Normal" && !item.corrupted && !item.fractured_item && !item.synthesised;
+    let Some(ilvl) = item.item_level.filter(|&l| plain && l >= 82) else { return Vec::new() };
+    let Some(lines) = db.bases.get(&item.base) else { return Vec::new() };
+    // "Shaper/Elder" or "Warlord/Hunter": poe.ninja's order varies.
+    let mut want: Vec<String> = item.influences.iter().map(|i| i.to_string()).collect();
+    want.sort();
+    let line = lines.iter().find(|l| {
+        let mut have: Vec<String> =
+            l.variant.iter().flat_map(|v| v.split('/')).map(|s| s.trim().to_lowercase()).collect();
+        have.sort();
+        l.level_required == Some(ilvl.min(86)) && have == want
+    });
+    line.map(|l| {
+        let mut price = line_price(db, l);
+        let level = if ilvl >= 86 { "86+".to_string() } else { ilvl.to_string() };
+        price.label = match &l.variant {
+            Some(v) => format!("ilvl {level} {}", v.replace('/', " + ")),
+            None => format!("ilvl {level}"),
+        };
+        price
+    })
+    .into_iter()
+    .collect()
+}
+
+/// "Adds 8 Passive Skills" and "Added Small Passive Skills grant: ..."
+/// (one line per grant; poe.ninja joins them with ", ").
+fn cluster_price(db: &PriceDb, item: &Item) -> Option<Price> {
+    let passives = item.mods.iter().find_map(|m| {
+        m.text
+            .strip_prefix("Adds ")?
+            .strip_suffix(" Passive Skills")
+            .or_else(|| m.text.strip_prefix("Adds ")?.strip_suffix(" Passive Skill"))?
+            .parse::<u32>()
+            .ok()
+    })?;
+    let grants: Vec<&str> =
+        item.mods.iter().filter_map(|m| m.text.strip_prefix("Added Small Passive Skills grant: ")).collect();
+    if grants.is_empty() {
+        return None;
+    }
+    let enchant = grants.join(", ");
+    let bracket = cluster_bracket(item.item_level.unwrap_or(1));
+    let variant = format!("{passives} passive{}", if passives == 1 { "" } else { "s" });
+    let lines = db.clusters.get(&item.base)?;
+    let line = lines
+        .iter()
+        .filter(|l| l.name == enchant && l.variant.as_deref() == Some(variant.as_str()))
+        // Its own bracket, or the best one below it.
+        .filter(|l| l.level_required.unwrap_or(1) <= bracket)
+        .max_by_key(|l| l.level_required.unwrap_or(1))?;
+    let mut price = line_price(db, line);
+    price.label = format!("ilvl {}+", line.level_required.unwrap_or(1));
+    Some(price)
+}
+
+/// The item level brackets clusters are sold by (they decide which notables
+/// can roll): 1, 50, 68, 75 and 84.
+fn cluster_bracket(ilvl: u32) -> u32 {
+    [84, 75, 68, 50].into_iter().find(|&b| ilvl >= b).unwrap_or(1)
+}
+
 fn found(title: String, prices: Vec<Price>) -> Outcome {
     Outcome::Found { title, prices }
 }
@@ -285,6 +355,63 @@ mod tests {
         let want: Vec<(String, f64)> =
             lines.iter().take(MAX_PRICES).map(|l| (l["variant"].as_str().unwrap().to_string(), chaos(l))).collect();
         assert_eq!(got, want);
+    }
+
+    fn fixture_chaos(kind: &str, base: &str, pick: impl Fn(&Value) -> bool) -> f64 {
+        let json = match kind {
+            "BaseType" => include_str!("../fixtures/ninja-base-type.json"),
+            _ => include_str!("../fixtures/ninja-cluster-jewel.json"),
+        };
+        let v: Value = serde_json::from_str(json).unwrap();
+        let line = v["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| (l["baseType"] == base || l["name"] == base) && pick(l))
+            .unwrap()
+            .clone();
+        chaos(&line)
+    }
+
+    fn regalia(rarity: &str, ilvl: u32, extra: &str) -> Vec<(String, f64)> {
+        let text = format!(
+            "Item Class: Body Armours\nRarity: {rarity}\nVaal Regalia\n--------\nItem Level: {ilvl}\n--------\n{extra}"
+        );
+        base_prices(&fixture_db(), &parse(&text).unwrap()).into_iter().map(|p| (p.label, p.chaos)).collect()
+    }
+
+    #[test]
+    fn base_type_by_level_and_influence() {
+        let plain = fixture_chaos("BaseType", "Vaal Regalia", |l| l["levelRequired"] == 86 && l["variant"].is_null());
+        assert_eq!(regalia("Normal", 87, ""), vec![("ilvl 86+".to_string(), plain)]);
+        let hunter =
+            fixture_chaos("BaseType", "Vaal Regalia", |l| l["levelRequired"] == 85 && l["variant"] == "Hunter");
+        assert_eq!(regalia("Normal", 85, "Hunter Item\n"), vec![("ilvl 85 Hunter".to_string(), hunter)]);
+        // Not a plain base: no base price.
+        assert!(regalia("Normal", 85, "Corrupted\n").is_empty());
+        assert!(regalia("Magic", 85, "").is_empty());
+        assert!(regalia("Normal", 81, "").is_empty());
+    }
+
+    #[test]
+    fn cluster_by_enchant_passives_and_bracket() {
+        let jewel = |ilvl: u32, passives: u32| {
+            let text = format!(
+                "Item Class: Jewels\nRarity: Normal\nLarge Cluster Jewel\n--------\nItem Level: {ilvl}\n--------\n\
+                 Adds {passives} Passive Skills (enchant)\n2 Added Passive Skills are Jewel Sockets (enchant)\n\
+                 Added Small Passive Skills grant: 10% increased Spell Damage (enchant)\n"
+            );
+            base_prices(&fixture_db(), &parse(&text).unwrap())
+                .into_iter()
+                .map(|p| (p.label, p.chaos))
+                .collect::<Vec<_>>()
+        };
+        let want = fixture_chaos("ClusterJewel", "Large Cluster Jewel", |l| {
+            l["name"] == "10% increased Spell Damage" && l["variant"] == "8 passives" && l["levelRequired"] == 75
+        });
+        // Item level 80 sells in the 75+ bracket.
+        assert_eq!(jewel(80, 8), vec![("ilvl 75+".to_string(), want)]);
+        assert!(jewel(80, 7).is_empty());
     }
 
     #[test]

@@ -361,13 +361,22 @@ void PriceCheck::cycle_corrupted() {
     changed();
 }
 
+void PriceCheck::cycle_status() {
+    if (!reply_ || reply_->status != "trade") return;
+    std::string& s = reply_->listing_status;
+    s = s == "instant" ? "available" : s == "available" ? "any" : "instant";
+    stale_ = reply_->searched;
+    changed();
+}
+
 void PriceCheck::search() {
     if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
     std::vector<TradeFilter> enabled;
     for (const TradeFilter& f : reply_->filters)
         if (f.enabled) enabled.push_back(f);
     status_.clear();
-    daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, reply_->preset, item_text_);
+    daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, reply_->preset, reply_->listing_status,
+                         item_text_);
     changed();
 }
 

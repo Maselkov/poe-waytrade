@@ -31,6 +31,7 @@
 //!                                                  searched on its own)
 //!     option   base_only <1|0>
 //!     option   corrupted <any|no|yes>
+//!     option   status <instant|available|any>   (instant buyout, + in person, any)
 //!     option   base_preset <1|0>   (the "base item" preset is offered)
 //!     option   preset <normal|base>
 //!     searched <1|0>
@@ -47,7 +48,8 @@
 //!             "index:minimum" or "index:minimum:maximum" (either may be
 //!             empty: default minimum, no maximum) + "\n" +
 //!             "base" or "category" + "\n" + any|no|yes + "\n" +
-//!             normal|base (preset) + "\n" + item text: search with those
+//!             normal|base (preset) + "\n" + instant|available|any (status)
+//!             + "\n" + item text: search with those
 //!             filters and options.
 //!   request:  "PREPARE\n" + normal|base + "\n" + item text: the trade
 //!             filters for that preset, without searching ("base": the item
@@ -285,8 +287,9 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         let (preset, text) = rest.split_once('\n').unwrap_or((rest, ""));
         respond(state, text, None, trade::Preset::parse(preset))
     } else if let Some(rest) = request.strip_prefix("TRADE\n") {
-        let mut parts = rest.splitn(5, '\n');
-        let (indices, base, corrupted, preset, text) = (
+        let mut parts = rest.splitn(6, '\n');
+        let (indices, base, corrupted, preset, status, text) = (
+            parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
@@ -308,6 +311,7 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
                 base_only: base == "base",
                 corrupted: trade::Corrupted::parse(corrupted),
                 preset: trade::Preset::parse(preset),
+                status: trade::Status::parse(status),
             },
         };
         respond(state, text, Some(&search), search.options.preset)
@@ -477,6 +481,7 @@ fn trade_response(
     }
     let _ = writeln!(out, "option\tbase_only\t{}", options.base_only as u8);
     let _ = writeln!(out, "option\tcorrupted\t{}", options.corrupted.as_str());
+    let _ = writeln!(out, "option\tstatus\t{}", options.status.as_str());
     let _ = writeln!(out, "option\tbase_preset\t{}", prepared.base_preset as u8);
     let _ = writeln!(out, "option\tpreset\t{}", options.preset.as_str());
 
@@ -539,7 +544,11 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
     // Rares never have a poe.ninja price, and the base item preset doesn't
     // use one: show their filters right away, even while poe.ninja loads.
     if trade_search.is_none() && trade::searchable(&item) && (item.rarity == "Rare" || preset == trade::Preset::Base) {
-        return trade_response(state, &item, None, preset, db.as_deref());
+        let mut out = trade_response(state, &item, None, preset, db.as_deref());
+        if let Some(db) = &db {
+            write_base_prices(&mut out, db, &item);
+        }
+        return out;
     }
     let Some(db) = db else {
         let message = match &*state.last_error.lock().unwrap() {
@@ -550,9 +559,10 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
         return format!("status\t{status}\nmessage\t{}\n", clean(&message));
     };
 
-    if (item.rarity == "Unique" || item.class == "Viscera") && trade::searchable(&item) {
-        // Identified uniques and Viscera limbs: trade filters for their
-        // rolls, with the poe.ninja price (which ignores rolls) alongside.
+    if (item.rarity == "Unique" || item.rarity == "Gem" || item.class == "Viscera") && trade::searchable(&item) {
+        // Identified uniques, gems and Viscera limbs: trade filters for
+        // their rolls (a gem's level and quality), with the poe.ninja price
+        // alongside.
         out = trade_response(state, &item, trade_search, preset, Some(&db));
         if out.starts_with("status\ttrade")
             && let lookup::Outcome::Found { prices, .. } = lookup::lookup(&db, &item)
@@ -561,10 +571,12 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
         }
     } else if trade_search.is_some() {
         out = trade_response(state, &item, trade_search, preset, Some(&db));
+        write_base_prices(&mut out, &db, &item);
     } else {
         match lookup::lookup(&db, &item) {
             lookup::Outcome::Unsupported(_) if trade::searchable(&item) => {
                 out = trade_response(state, &item, None, preset, Some(&db));
+                write_base_prices(&mut out, &db, &item);
             }
             outcome => write_lookup(&mut out, outcome),
         }
@@ -572,6 +584,13 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
     let _ = writeln!(out, "league\t{}", clean(&db.league));
     let _ = writeln!(out, "age\t{}", db.fetched_at.elapsed().as_secs() / 60);
     out
+}
+
+/// A base's or cluster jewel's poe.ninja price next to its trade filters.
+fn write_base_prices(out: &mut String, db: &ninja::PriceDb, item: &item::Item) {
+    if out.starts_with("status\ttrade") {
+        write_prices(out, lookup::base_prices(db, item));
+    }
 }
 
 fn write_lookup(out: &mut String, outcome: lookup::Outcome) {

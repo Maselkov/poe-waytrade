@@ -83,6 +83,7 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "option" && f.size() >= 4 && f[1] == "base") reply.base_type = f[2], reply.category_label = f[3];
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "base_only") reply.base_only = f[2] == "1";
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "corrupted") reply.corrupted = f[2];
+        else if (f[0] == "option" && f.size() >= 3 && f[1] == "status") reply.listing_status = f[2];
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "base_preset") reply.base_preset = f[2] == "1";
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "preset") reply.preset = f[2];
         else if (f[0] == "url") reply.url = f[1];
@@ -94,11 +95,12 @@ PriceReply parse_reply(const std::string& body) {
 
 void DaemonClient::request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                                  const std::string& corrupted, const std::string& preset,
-                                 const std::string& item_text) {
+                                 const std::string& listing_status, const std::string& item_text) {
     std::string indices;
     for (const TradeFilter& f : enabled)
         indices += (indices.empty() ? "" : ",") + std::to_string(f.index) + ":" + f.min + ":" + f.max;
-    start("TRADE\n" + indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + preset + "\n" + item_text);
+    start("TRADE\n" + indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + preset + "\n" + listing_status +
+          "\n" + item_text);
 }
 
 void DaemonClient::start(const std::string& body) {

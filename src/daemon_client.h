@@ -85,6 +85,8 @@ struct PriceReply {
     std::string category_label;  // e.g. "Ring"; empty: no base/category choice
     bool base_only = false;
     std::string corrupted = "any";  // any | no | yes
+    // Which listings: instant (buyout, merchant tabs) | available (+ in person) | any
+    std::string listing_status = "instant";
     bool base_preset = false;       // the "Base item" preset is offered
     std::string preset = "normal";  // normal | base
     bool searched = false;
@@ -111,7 +113,8 @@ public:
     // Each enabled filter by index, with its minimum ("" for the default).
     // `enabled`: the filters to search with, by index, with their min/max.
     void request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
-                       const std::string& corrupted, const std::string& preset, const std::string& item_text);
+                       const std::string& corrupted, const std::string& preset,
+                       const std::string& listing_status, const std::string& item_text);
     // Trade filters for a preset (normal | base), without searching.
     void request_prepare(const std::string& preset, const std::string& item_text) {
         start("PREPARE\n" + preset + "\n" + item_text);

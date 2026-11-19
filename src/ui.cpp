@@ -162,6 +162,7 @@ struct UiPreviewLine {
 };
 struct UiListing {
     Rml::String price, sub, age, count, icon;
+    Rml::String tag;  // a gem's level and quality
     // Hover preview of the first listed item.
     bool has_preview = false;
     Rml::String rarity, name, base, meta, more;
@@ -184,7 +185,7 @@ struct Model {
     Rml::String status, source, thin, total, hint;
     bool status_error = false, searching = false, has_url = false, closable = false;
     // Trade search options
-    Rml::String base_label, category_label, corrupted, corrupted_label;
+    Rml::String base_label, category_label, corrupted, corrupted_label, listing_status, listing_status_label;
     bool base_preset = false, preset_base = false;  // offered / active
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
@@ -414,6 +415,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("age", &UiListing::age);
         h.RegisterMember("count", &UiListing::count);
         h.RegisterMember("icon", &UiListing::icon);
+        h.RegisterMember("tag", &UiListing::tag);
     }
     c.RegisterArray<Rml::Vector<UiPrice>>();
     c.RegisterArray<Rml::Vector<UiFilter>>();
@@ -455,6 +457,8 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("preset_base", &model.preset_base);
     c.Bind("corrupted", &model.corrupted);
     c.Bind("corrupted_label", &model.corrupted_label);
+    c.Bind("listing_status", &model.listing_status);
+    c.Bind("listing_status_label", &model.listing_status_label);
     c.Bind("base_only", &model.base_only);
     c.Bind("searched", &model.searched);
     c.Bind("stale", &model.stale);
@@ -490,6 +494,9 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("toggle_base", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check && price_check->reply()) price_check->set_base_only(!price_check->reply()->base_only);
+    });
+    c.BindEventCallback("cycle_status", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->cycle_status();
     });
     c.BindEventCallback("cycle_corrupted", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->cycle_corrupted();
@@ -691,6 +698,10 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         // Short, so the button keeps its size; its colour tells the state too.
         m.corrupted = reply->corrupted;
         m.corrupted_label = reply->corrupted == "no" ? "Uncorrupted" : reply->corrupted == "yes" ? "Corrupted" : "Any";
+        m.listing_status = reply->listing_status;
+        m.listing_status_label = reply->listing_status == "available" ? "+ In person"
+                                 : reply->listing_status == "any"  ? "Any seller"
+                                                                   : "Instant buyout";
         m.source = reply->league;
         // A unique's poe.ninja price, which doesn't know its rolls.
         fill_prices(*reply, m);
@@ -699,14 +710,17 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             m.ninja_icon = m.prices[0].icon;
             const Rml::String& listed = p.listings;
             if (!listed.empty() && atoi(listed.c_str()) < 5) m.thin = listed + " listed";
-            m.ninja_meta = (listed.empty() ? "" : listed + " listed \u00b7 ") + "poe.ninja \u00b7 rolls not counted";
+            m.ninja_meta = (listed.empty() ? "" : listed + " listed \u00b7 ") + "poe.ninja";
+            if (item && item->rarity == "Unique") m.ninja_meta += " \u00b7 rolls not counted";
         }
         // Groups in panel order; the top one takes its name from what's in it.
         auto has = [&](const char* section) {
             return std::any_of(reply->filters.begin(), reply->filters.end(),
                                [&](const TradeFilter& f) { return f.section == section; });
         };
-        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? "Map" : "Item";
+        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? "Map"
+                        : has("gem")       ? "Gem"
+                                           : "Item";
         m.filter_groups = {{top, {}}, {"Enchant", {}}, {"Implicit", {}}, {"Totals", {}}, {"Mods", {}}};
         for (const TradeFilter& f : reply->filters) {
             UiFilter u{f.index, f.enabled, f.label, f.min};
@@ -717,7 +731,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
                 u.max_pct = f.max.empty() ? 100 : pct(atof(f.max.c_str()));
                 if (!f.roll.empty()) u.roll_pct = pct(atof(f.roll.c_str()));
             }
-            if (!f.min.empty()) u.bounds = f.min + (f.max.empty() ? "+" : "\u2013" + f.max);
+            if (!f.min.empty() && f.max == f.min) u.bounds = f.min;  // exactly (a gem at its cap)
+            else if (!f.min.empty()) u.bounds = f.min + (f.max.empty() ? "+" : "\u2013" + f.max);
             else if (!f.max.empty()) u.bounds = "\u2264 " + f.max;
             u.max_roll = f.max_roll;
             if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
@@ -738,6 +753,9 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             u.age = l.age;
             if (l.count > 1) u.count = "×" + std::to_string(l.count);
             if (icons_get(l.currency_id)) u.icon = l.currency_id;
+            // A gem's level and quality, on its row (like APT's columns).
+            for (const auto& p : l.preview)
+                if (p.kind == "gem") u.tag = p.text;
             fill_preview(l, u);
             m.listings.push_back(u);
         }
@@ -829,7 +847,8 @@ void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
         if (kind == "rarity") u.rarity = text;
         else if (kind == "name") u.name = text;
         else if (kind == "base") u.base = text;
-        else if (kind == "ilvl") ilvl = "Item level " + text;
+        else if (kind == "ilvl" && u.rarity != "gem") ilvl = "Item level " + text;
+        else if (kind == "gem") ilvl = text;  // "Level 20 · 23%"
         else if (kind == "dps") dps = text;
         else {
             bool top = kind == "enchant" || kind == "implicit";

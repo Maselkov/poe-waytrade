@@ -45,6 +45,8 @@ const ITEM_TYPES: &[&str] = &[
     "Invitation",
     "Beast",
     "Viscera",
+    "ClusterJewel",
+    "BaseType",
 ];
 
 #[derive(Deserialize)]
@@ -99,6 +101,9 @@ pub struct ItemLine {
     pub gem_level: Option<u32>,
     pub gem_quality: Option<u32>,
     pub corrupted: Option<bool>,
+    /// Item level for base types (82-86, 86 meaning 86+) and cluster
+    /// jewels (the bracket: 1, 50, 68, 75 or 84).
+    pub level_required: Option<u32>,
     pub chaos_value: f64,
     pub divine_value: Option<f64>,
     pub listing_count: Option<u32>,
@@ -115,6 +120,12 @@ pub struct PriceDb {
     pub items: HashMap<String, Vec<ItemLine>>,
     /// Unique item lines by base type, for unidentified uniques.
     pub uniques_by_base: HashMap<String, Vec<ItemLine>>,
+    /// Plain bases of item level 82+ by base type, one line per item level
+    /// and influences (the variant: "Hunter", "Shaper/Elder", none).
+    pub bases: HashMap<String, Vec<ItemLine>>,
+    /// Cluster jewels by base type; the name is the enchant ("10% increased
+    /// Spell Damage") and the variant the passive count ("8 passives").
+    pub clusters: HashMap<String, Vec<ItemLine>>,
 }
 
 impl PriceDb {
@@ -126,6 +137,8 @@ impl PriceDb {
             exchange: HashMap::new(),
             items: HashMap::new(),
             uniques_by_base: HashMap::new(),
+            bases: HashMap::new(),
+            clusters: HashMap::new(),
         }
     }
 
@@ -147,6 +160,21 @@ impl PriceDb {
 
     /// `kind`: the poe.ninja type the lines came from ("UniqueArmour", ...).
     fn add_items(&mut self, kind: &str, ov: ItemOverview) {
+        // Named by their base or enchant, so they get maps of their own:
+        // `items` is looked up by name, and a rare "Vaal Regalia" mustn't
+        // find the plain base's price there.
+        let by_base = match kind {
+            "BaseType" => Some(&mut self.bases),
+            "ClusterJewel" => Some(&mut self.clusters),
+            _ => None,
+        };
+        if let Some(map) = by_base {
+            for line in ov.lines {
+                let base = line.base_type.clone().unwrap_or_else(|| line.name.clone());
+                map.entry(base).or_default().push(line);
+            }
+            return;
+        }
         for line in ov.lines {
             if kind.starts_with("Unique")
                 && let Some(base) = &line.base_type
@@ -240,6 +268,8 @@ pub(crate) mod tests {
         ("SkillGem", include_str!("../fixtures/ninja-skill-gem.json")),
         ("Map", include_str!("../fixtures/ninja-map.json")),
         ("Viscera", include_str!("../fixtures/ninja-viscera.json")),
+        ("ClusterJewel", include_str!("../fixtures/ninja-cluster-jewel.json")),
+        ("BaseType", include_str!("../fixtures/ninja-base-type.json")),
     ];
 
     /// A price list built from the fixtures the way `fetch` builds it.
@@ -299,7 +329,8 @@ pub(crate) mod tests {
                 serde_json::from_str::<serde_json::Value>(json).unwrap()["lines"].as_array().unwrap().len()
             })
             .sum();
-        assert_eq!(db.items.values().map(Vec::len).sum::<usize>(), sent);
+        let kept = [&db.items, &db.bases, &db.clusters].iter().flat_map(|m| m.values()).map(Vec::len).sum::<usize>();
+        assert_eq!(kept, sent);
         let gem = &db.items["Arc"];
         assert!(gem.iter().all(|l| l.gem_level.is_some()), "gem lines without a level");
         assert!(gem.iter().any(|l| l.corrupted == Some(true)) && gem.iter().any(|l| l.gem_quality.is_some()));

@@ -15,7 +15,7 @@
    }
   ],
   "rates": {
-   "divine": 0.004481
+   "divine": 0.004468
   },
   "primary": "chaos",
   "secondary": "divine"
@@ -24,37 +24,128 @@
   {
    "id": "chaos",
    "primaryValue": 1,
-   "volumePrimaryValue": 13036175,
+   "volumePrimaryValue": 14578638,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 223.2
+   "maxVolumeRate": 223.8
   },
   {
    "id": "divine",
-   "primaryValue": 223.2,
-   "volumePrimaryValue": 13036175,
+   "primaryValue": 223.8,
+   "volumePrimaryValue": 14578638,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.004481
+   "maxVolumeRate": 0.004468
+  },
+  {
+   "id": "blessed",
+   "primaryValue": 0.1526,
+   "volumePrimaryValue": 2071,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 6.55
   },
   {
    "id": "alch",
-   "primaryValue": 0.04846,
-   "volumePrimaryValue": 10416,
+   "primaryValue": 0.04371,
+   "volumePrimaryValue": 9890,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 20.64
+   "maxVolumeRate": 22.88
+  },
+  {
+   "id": "alt",
+   "primaryValue": 0.1526,
+   "volumePrimaryValue": 142933,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 6.55
+  },
+  {
+   "id": "annul",
+   "primaryValue": 6.74,
+   "volumePrimaryValue": 184445,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 0.1484
+  },
+  {
+   "id": "aug",
+   "primaryValue": 0.1172,
+   "volumePrimaryValue": 16554,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 8.53
+  },
+  {
+   "id": "chance",
+   "primaryValue": 1.0,
+   "volumePrimaryValue": 33433,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 0.9976
   },
   {
    "id": "exalted",
-   "primaryValue": 0.7987,
-   "volumePrimaryValue": 89525,
+   "primaryValue": 0.8165,
+   "volumePrimaryValue": 101798,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 1.25
+   "maxVolumeRate": 1.22
+  },
+  {
+   "id": "fusing",
+   "primaryValue": 0.154,
+   "volumePrimaryValue": 125774,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 6.49
+  },
+  {
+   "id": "regal",
+   "primaryValue": 0.2185,
+   "volumePrimaryValue": 9412,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 4.58
+  },
+  {
+   "id": "regret",
+   "primaryValue": 1.57,
+   "volumePrimaryValue": 155982,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 0.6351
+  },
+  {
+   "id": "scour",
+   "primaryValue": 0.7839,
+   "volumePrimaryValue": 174723,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 1.28
+  },
+  {
+   "id": "chrome",
+   "primaryValue": 1.23,
+   "volumePrimaryValue": 117298,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 0.81
+  },
+  {
+   "id": "gcp",
+   "primaryValue": 3.28,
+   "volumePrimaryValue": 283184,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 0.305
   },
   {
    "id": "mirror",
-   "primaryValue": 90938,
-   "volumePrimaryValue": 3213140,
+   "primaryValue": 92795,
+   "volumePrimaryValue": 3618986,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 0.002454
+   "maxVolumeRate": 0.002412
+  },
+  {
+   "id": "transmute",
+   "primaryValue": 0.02753,
+   "volumePrimaryValue": 5201,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 36.32
+  },
+  {
+   "id": "vaal",
+   "primaryValue": 0.5316,
+   "volumePrimaryValue": 93667,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 1.88
   }
  ],
  "items": [
@@ -71,10 +162,40 @@
    "detailsId": "divine-orb"
   },
   {
+   "id": "blessed",
+   "name": "Blessed Orb",
+   "category": "Currency",
+   "detailsId": "blessed-orb"
+  },
+  {
    "id": "alch",
    "name": "Orb of Alchemy",
    "category": "Currency",
    "detailsId": "orb-of-alchemy"
+  },
+  {
+   "id": "alt",
+   "name": "Orb of Alteration",
+   "category": "Currency",
+   "detailsId": "orb-of-alteration"
+  },
+  {
+   "id": "annul",
+   "name": "Orb of Annulment",
+   "category": "Currency",
+   "detailsId": "orb-of-annulment"
+  },
+  {
+   "id": "aug",
+   "name": "Orb of Augmentation",
+   "category": "Currency",
+   "detailsId": "orb-of-augmentation"
+  },
+  {
+   "id": "chance",
+   "name": "Orb of Chance",
+   "category": "Currency",
+   "detailsId": "orb-of-chance"
   },
   {
    "id": "exalted",
@@ -83,10 +204,58 @@
    "detailsId": "exalted-orb"
   },
   {
+   "id": "fusing",
+   "name": "Orb of Fusing",
+   "category": "Currency",
+   "detailsId": "orb-of-fusing"
+  },
+  {
+   "id": "regal",
+   "name": "Regal Orb",
+   "category": "Currency",
+   "detailsId": "regal-orb"
+  },
+  {
+   "id": "regret",
+   "name": "Orb of Regret",
+   "category": "Currency",
+   "detailsId": "orb-of-regret"
+  },
+  {
+   "id": "scour",
+   "name": "Orb of Scouring",
+   "category": "Currency",
+   "detailsId": "orb-of-scouring"
+  },
+  {
+   "id": "chrome",
+   "name": "Chromatic Orb",
+   "category": "Currency",
+   "detailsId": "chromatic-orb"
+  },
+  {
+   "id": "gcp",
+   "name": "Gemcutter's Prism",
+   "category": "Currency",
+   "detailsId": "gemcutters-prism"
+  },
+  {
    "id": "mirror",
    "name": "Mirror of Kalandra",
    "category": "Currency",
    "detailsId": "mirror-of-kalandra"
+  },
+  {
+   "id": "transmute",
+   "name": "Orb of Transmutation",
+   "category": "Currency",
+   "detailsId": "orb-of-transmutation"
+  },
+  {
+   "id": "vaal",
+   "name": "Vaal Orb",
+   "category": "Currency",
+   "detailsId": "vaal-orb"
   }
  ]
 }

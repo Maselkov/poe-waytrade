@@ -7,12 +7,12 @@
    "baseType": "Spidersilk Robe",
    "itemClass": 3,
    "itemType": "Body Armour",
-   "chaosValue": 8.0,
-   "exaltedValue": 10.02,
+   "chaosValue": 9.0,
+   "exaltedValue": 11.02,
    "divineValue": 0.04,
    "count": 399,
    "detailsId": "soul-mantle-spidersilk-robe",
-   "listingCount": 1694
+   "listingCount": 1636
   },
   {
    "id": 992,
@@ -25,11 +25,11 @@
    ],
    "itemType": "Body Armour",
    "chaosValue": 2.0,
-   "exaltedValue": 2.5,
+   "exaltedValue": 2.45,
    "divineValue": 0.01,
    "count": 399,
    "detailsId": "queen-of-the-forest-destiny-leather",
-   "listingCount": 641
+   "listingCount": 637
   },
   {
    "id": 1463,
@@ -41,12 +41,12 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 211.0,
-   "exaltedValue": 264.2,
-   "divineValue": 0.95,
+   "chaosValue": 223.8,
+   "exaltedValue": 274.1,
+   "divineValue": 1.0,
    "count": 399,
    "detailsId": "the-covenant-spidersilk-robe",
-   "listingCount": 539
+   "listingCount": 441
   },
   {
    "id": 135186,
@@ -57,10 +57,25 @@
    "itemClass": 3,
    "itemType": "Body Armour",
    "chaosValue": 1.0,
-   "exaltedValue": 1.25,
+   "exaltedValue": 1.22,
    "count": 399,
    "detailsId": "foulborn-soul-mantle-flamewood-spidersilk-robe",
-   "listingCount": 412
+   "listingCount": 435
+  },
+  {
+   "id": 1333,
+   "name": "Soul Mantle",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "links": 6,
+   "itemClass": 3,
+   "itemType": "Body Armour",
+   "chaosValue": 230.0,
+   "exaltedValue": 281.7,
+   "divineValue": 1.03,
+   "count": 192,
+   "detailsId": "soul-mantle-spidersilk-robe-6l",
+   "listingCount": 192
   },
   {
    "id": 1465,
@@ -73,27 +88,12 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 526.0,
-   "exaltedValue": 658.6,
-   "divineValue": 2.36,
-   "count": 159,
+   "chaosValue": 500.0,
+   "exaltedValue": 612.4,
+   "divineValue": 2.23,
+   "count": 182,
    "detailsId": "the-covenant-spidersilk-robe-6l",
-   "listingCount": 159
-  },
-  {
-   "id": 1333,
-   "name": "Soul Mantle",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
-   "links": 6,
-   "itemClass": 3,
-   "itemType": "Body Armour",
-   "chaosValue": 260.0,
-   "exaltedValue": 325.5,
-   "divineValue": 1.16,
-   "count": 159,
-   "detailsId": "soul-mantle-spidersilk-robe-6l",
-   "listingCount": 159
+   "listingCount": 182
   },
   {
    "id": 1332,
@@ -104,11 +104,11 @@
    "itemClass": 3,
    "itemType": "Body Armour",
    "chaosValue": 30.0,
-   "exaltedValue": 37.56,
+   "exaltedValue": 36.74,
    "divineValue": 0.13,
-   "count": 147,
+   "count": 152,
    "detailsId": "soul-mantle-spidersilk-robe-5l",
-   "listingCount": 147
+   "listingCount": 152
   },
   {
    "id": 135094,
@@ -121,12 +121,12 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 45.0,
-   "exaltedValue": 56.34,
-   "divineValue": 0.2,
-   "count": 118,
+   "chaosValue": 50.0,
+   "exaltedValue": 61.24,
+   "divineValue": 0.22,
+   "count": 106,
    "detailsId": "foulborn-queen-of-the-forest-damage-taken-destiny-leather",
-   "listingCount": 118
+   "listingCount": 106
   },
   {
    "id": 993,
@@ -140,11 +140,11 @@
    ],
    "itemType": "Body Armour",
    "chaosValue": 9.0,
-   "exaltedValue": 11.27,
+   "exaltedValue": 11.02,
    "divineValue": 0.04,
-   "count": 89,
+   "count": 97,
    "detailsId": "queen-of-the-forest-destiny-leather-5l",
-   "listingCount": 89
+   "listingCount": 97
   },
   {
    "id": 135360,
@@ -158,11 +158,11 @@
    ],
    "itemType": "Body Armour",
    "chaosValue": 2.0,
-   "exaltedValue": 2.5,
+   "exaltedValue": 2.45,
    "divineValue": 0.01,
-   "count": 79,
+   "count": 83,
    "detailsId": "foulborn-queen-of-the-forest-projectile-speed-destiny-leather",
-   "listingCount": 79
+   "listingCount": 83
   },
   {
    "id": 1464,
@@ -175,29 +175,12 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 223.2,
-   "exaltedValue": 279.4,
-   "divineValue": 1.0,
-   "count": 64,
+   "chaosValue": 225.0,
+   "exaltedValue": 275.6,
+   "divineValue": 1.01,
+   "count": 63,
    "detailsId": "the-covenant-spidersilk-robe-5l",
-   "listingCount": 64
-  },
-  {
-   "id": 109184,
-   "name": "Replica Covenant",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
-   "itemClass": 3,
-   "statIds": [
-    "additional_intelligence"
-   ],
-   "itemType": "Body Armour",
-   "chaosValue": 28.4,
-   "exaltedValue": 35.56,
-   "divineValue": 0.13,
-   "count": 45,
-   "detailsId": "replica-covenant-spidersilk-robe",
-   "listingCount": 45
+   "listingCount": 63
   },
   {
    "id": 135494,
@@ -209,11 +192,11 @@
    "itemClass": 3,
    "itemType": "Body Armour",
    "chaosValue": 10.0,
-   "exaltedValue": 12.52,
+   "exaltedValue": 12.25,
    "divineValue": 0.04,
-   "count": 41,
+   "count": 45,
    "detailsId": "foulborn-soul-mantle-flamewood-spidersilk-robe-5l",
-   "listingCount": 41
+   "listingCount": 45
   },
   {
    "id": 994,
@@ -226,12 +209,29 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 223.2,
-   "exaltedValue": 279.4,
+   "chaosValue": 223.8,
+   "exaltedValue": 274.1,
    "divineValue": 1.0,
-   "count": 32,
+   "count": 40,
    "detailsId": "queen-of-the-forest-destiny-leather-6l",
-   "listingCount": 32
+   "listingCount": 40
+  },
+  {
+   "id": 109184,
+   "name": "Replica Covenant",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "itemClass": 3,
+   "statIds": [
+    "additional_intelligence"
+   ],
+   "itemType": "Body Armour",
+   "chaosValue": 32.5,
+   "exaltedValue": 39.8,
+   "divineValue": 0.15,
+   "count": 38,
+   "detailsId": "replica-covenant-spidersilk-robe",
+   "listingCount": 38
   },
   {
    "id": 109712,
@@ -244,8 +244,8 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 399.9,
-   "exaltedValue": 500.7,
+   "chaosValue": 400.3,
+   "exaltedValue": 490.2,
    "divineValue": 1.79,
    "count": 24,
    "detailsId": "replica-covenant-spidersilk-robe-6l",
@@ -263,11 +263,11 @@
    ],
    "itemType": "Body Armour",
    "chaosValue": 60.0,
-   "exaltedValue": 75.12,
+   "exaltedValue": 73.48,
    "divineValue": 0.27,
-   "count": 15,
+   "count": 16,
    "detailsId": "replica-covenant-spidersilk-robe-5l",
-   "listingCount": 15
+   "listingCount": 16
   },
   {
    "id": 135903,
@@ -280,30 +280,29 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 11026,
-   "exaltedValue": 13805,
-   "divineValue": 49.4,
-   "count": 5,
+   "chaosValue": 10071,
+   "exaltedValue": 12334,
+   "divineValue": 45.0,
+   "count": 8,
    "detailsId": "foulborn-the-covenant-blood-magic-spidersilk-robe",
-   "listingCount": 5
+   "listingCount": 8
   },
   {
-   "id": 136299,
+   "id": 136065,
    "name": "Foulborn Queen of the Forest",
    "levelRequired": 59,
    "baseType": "Destiny Leather",
-   "variant": "Damage Taken",
-   "links": 5,
+   "variant": "Damage Taken, Projectile Speed",
    "itemClass": 3,
    "statIds": [
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 74.0,
-   "exaltedValue": 92.65,
-   "divineValue": 0.33,
+   "chaosValue": 716.2,
+   "exaltedValue": 877.1,
+   "divineValue": 3.2,
    "count": 5,
-   "detailsId": "foulborn-queen-of-the-forest-damage-taken-destiny-leather-5l",
+   "detailsId": "foulborn-queen-of-the-forest-damage-taken-projectile-speed-destiny-leather",
    "listingCount": 5
   },
   {
@@ -319,11 +318,46 @@
    ],
    "itemType": "Body Armour",
    "chaosValue": 10.0,
-   "exaltedValue": 12.52,
+   "exaltedValue": 12.25,
    "divineValue": 0.04,
    "count": 5,
    "detailsId": "foulborn-queen-of-the-forest-projectile-speed-destiny-leather-5l",
    "listingCount": 5
+  },
+  {
+   "id": 135713,
+   "name": "Foulborn Soul Mantle",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "variant": "Flamewood",
+   "links": 6,
+   "itemClass": 3,
+   "itemType": "Body Armour",
+   "chaosValue": 281.3,
+   "exaltedValue": 344.5,
+   "divineValue": 1.26,
+   "count": 4,
+   "detailsId": "foulborn-soul-mantle-flamewood-spidersilk-robe-6l",
+   "listingCount": 4
+  },
+  {
+   "id": 136299,
+   "name": "Foulborn Queen of the Forest",
+   "levelRequired": 59,
+   "baseType": "Destiny Leather",
+   "variant": "Damage Taken",
+   "links": 5,
+   "itemClass": 3,
+   "statIds": [
+    "movement_velocity_+1%_per_X_evasion_rating"
+   ],
+   "itemType": "Body Armour",
+   "chaosValue": 79.0,
+   "exaltedValue": 96.75,
+   "divineValue": 0.35,
+   "count": 4,
+   "detailsId": "foulborn-queen-of-the-forest-damage-taken-destiny-leather-5l",
+   "listingCount": 4
   },
   {
    "id": 136340,
@@ -337,46 +371,31 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 10937,
-   "exaltedValue": 13693,
-   "divineValue": 49.0,
-   "count": 4,
+   "chaosValue": 11190,
+   "exaltedValue": 13705,
+   "divineValue": 50.0,
+   "count": 2,
    "detailsId": "foulborn-the-covenant-blood-magic-spidersilk-robe-6l",
-   "listingCount": 4
+   "listingCount": 2
   },
   {
-   "id": 136065,
+   "id": 136114,
    "name": "Foulborn Queen of the Forest",
    "levelRequired": 59,
    "baseType": "Destiny Leather",
-   "variant": "Damage Taken, Projectile Speed",
+   "variant": "Damage Taken",
+   "links": 6,
    "itemClass": 3,
    "statIds": [
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 647.3,
-   "exaltedValue": 810.4,
-   "divineValue": 2.9,
-   "count": 4,
-   "detailsId": "foulborn-queen-of-the-forest-damage-taken-projectile-speed-destiny-leather",
-   "listingCount": 4
-  },
-  {
-   "id": 135713,
-   "name": "Foulborn Soul Mantle",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
-   "variant": "Flamewood",
-   "links": 6,
-   "itemClass": 3,
-   "itemType": "Body Armour",
-   "chaosValue": 580.3,
-   "exaltedValue": 726.6,
-   "divineValue": 2.6,
-   "count": 3,
-   "detailsId": "foulborn-soul-mantle-flamewood-spidersilk-robe-6l",
-   "listingCount": 3
+   "chaosValue": 447.6,
+   "exaltedValue": 548.2,
+   "divineValue": 2.0,
+   "count": 2,
+   "detailsId": "foulborn-queen-of-the-forest-damage-taken-destiny-leather-6l",
+   "listingCount": 2
   },
   {
    "id": 135904,
@@ -390,30 +409,30 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 29016,
-   "exaltedValue": 36329,
+   "chaosValue": 29094,
+   "exaltedValue": 35633,
    "divineValue": 130.0,
    "count": 1,
    "detailsId": "foulborn-queen-of-the-forest-damage-taken-projectile-speed-destiny-leather-5l",
    "listingCount": 1
   },
   {
-   "id": 136507,
-   "name": "Foulborn Queen of the Forest",
-   "levelRequired": 59,
-   "baseType": "Destiny Leather",
-   "variant": "Projectile Speed",
-   "links": 6,
+   "id": 136485,
+   "name": "Foulborn The Covenant",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "variant": "Blood Magic",
+   "links": 5,
    "itemClass": 3,
    "statIds": [
-    "movement_velocity_+1%_per_X_evasion_rating"
+    "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 3348,
-   "exaltedValue": 4192,
-   "divineValue": 15.0,
+   "chaosValue": 10966,
+   "exaltedValue": 13431,
+   "divineValue": 49.0,
    "count": 1,
-   "detailsId": "foulborn-queen-of-the-forest-projectile-speed-destiny-leather-6l",
+   "detailsId": "foulborn-the-covenant-blood-magic-spidersilk-robe-5l",
    "listingCount": 1
   },
   {
@@ -428,11 +447,30 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 2232,
-   "exaltedValue": 2795,
+   "chaosValue": 2238,
+   "exaltedValue": 2741,
    "divineValue": 10.0,
    "count": 1,
    "detailsId": "foulborn-queen-of-the-forest-damage-taken-projectile-speed-destiny-leather-6l",
+   "listingCount": 1
+  },
+  {
+   "id": 136507,
+   "name": "Foulborn Queen of the Forest",
+   "levelRequired": 59,
+   "baseType": "Destiny Leather",
+   "variant": "Projectile Speed",
+   "links": 6,
+   "itemClass": 3,
+   "statIds": [
+    "movement_velocity_+1%_per_X_evasion_rating"
+   ],
+   "itemType": "Body Armour",
+   "chaosValue": 1790,
+   "exaltedValue": 2193,
+   "divineValue": 8.0,
+   "count": 1,
+   "detailsId": "foulborn-queen-of-the-forest-projectile-speed-destiny-leather-6l",
    "listingCount": 1
   }
  ]

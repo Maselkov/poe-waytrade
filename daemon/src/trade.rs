@@ -25,6 +25,11 @@ const LISTINGS: usize = 10;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Target {
     Stat(String),
+    /// A stat whose value is one of a list (a cluster jewel's grant, an
+    /// anointed notable): its id and the option's number. The stat list
+    /// names each option in full ("Allocates Charisma" is
+    /// "enchant.stat_2954116742|6799").
+    StatOption(String, u64),
     Property(&'static str, &'static str),
     /// A yes/no item filter, e.g. misc_filters.fractured_item.
     Flag(&'static str, &'static str),
@@ -49,6 +54,8 @@ pub enum Section {
     Sockets,
     /// A map's tier, quantity, rarity, pack size, blight.
     Map,
+    /// A gem's level and quality.
+    Gem,
 }
 
 impl Section {
@@ -65,6 +72,7 @@ impl Section {
             Section::Armour => "armour",
             Section::Sockets => "sockets",
             Section::Map => "map",
+            Section::Gem => "gem",
         }
     }
 }
@@ -185,6 +193,45 @@ impl Corrupted {
     }
 }
 
+/// Which listings to search: the trade site's "status" option.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Status {
+    /// Merchant tabs only ("securable"): bought on the spot, so a seller
+    /// can't list low and refuse to sell; the default, like APT's.
+    #[default]
+    Instant,
+    /// Instant buyout and sellers online in person ("available"; the
+    /// API's "online" alone would leave merchant tabs out).
+    Available,
+    /// Every listing.
+    Any,
+}
+
+impl Status {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Status::Instant => "instant",
+            Status::Available => "available",
+            Status::Any => "any",
+        }
+    }
+    pub fn parse(s: &str) -> Status {
+        match s {
+            "available" => Status::Available,
+            "any" => Status::Any,
+            _ => Status::Instant,
+        }
+    }
+    /// The trade API's name for it.
+    fn option(self) -> &'static str {
+        match self {
+            Status::Instant => "securable",
+            Status::Available => "available",
+            Status::Any => "any",
+        }
+    }
+}
+
 /// How to search, besides the stat filters.
 #[derive(Clone, Copy, Debug)]
 pub struct SearchOptions {
@@ -192,6 +239,7 @@ pub struct SearchOptions {
     pub base_only: bool,
     pub corrupted: Corrupted,
     pub preset: Preset,
+    pub status: Status,
 }
 
 /// Which filters an item gets, like APT's presets.
@@ -313,12 +361,30 @@ struct TradeData {
     currencies: HashMap<String, String>,
     /// currency id -> icon path on web.poecdn.com
     images: HashMap<String, String>,
+    /// Transfigured gems: name ("Arc of Oscillating") -> the base gem
+    /// ("Arc") and the trade site's discriminator ("alt_y").
+    transfigured: HashMap<String, (String, String)>,
 }
 
 impl TradeData {
-    /// From /api/trade/data/stats and /api/trade/data/static.
-    fn from_json(stats: &Value, statics: &Value) -> TradeData {
-        let mut data = TradeData { stats: HashMap::new(), currencies: HashMap::new(), images: HashMap::new() };
+    /// From /api/trade/data/stats, /api/trade/data/static and
+    /// /api/trade/data/items.
+    fn from_json(stats: &Value, statics: &Value, items: &Value) -> TradeData {
+        let mut data = TradeData {
+            stats: HashMap::new(),
+            currencies: HashMap::new(),
+            images: HashMap::new(),
+            transfigured: HashMap::new(),
+        };
+        for group in items["result"].as_array().into_iter().flatten().filter(|g| g["id"] == "gem") {
+            for e in group["entries"].as_array().into_iter().flatten() {
+                if let (Some(base), Some(text), Some(disc)) =
+                    (e["type"].as_str(), e["text"].as_str(), e["disc"].as_str())
+                {
+                    data.transfigured.insert(text.to_string(), (base.to_string(), disc.to_string()));
+                }
+            }
+        }
         for group in stats["result"].as_array().into_iter().flatten() {
             let group_id = group["id"].as_str().unwrap_or("");
             for e in group["entries"].as_array().into_iter().flatten() {
@@ -356,6 +422,8 @@ pub fn searchable(item: &Item) -> bool {
         "Normal" => !item.mods.is_empty() || base_preset_available(item),
         // Identified uniques: searched by name, with their rolls.
         "Unique" => item.name.is_some() && !item.mods.is_empty(),
+        // Gems by name, level and quality.
+        "Gem" => true,
         // Wickerman limbs have no rarity: searched by base and implicits.
         _ => item.class == "Viscera" && !item.mods.is_empty(),
     }
@@ -402,7 +470,8 @@ impl Trade {
         // Like APT: an uncorrupted item is compared with uncorrupted ones.
         // A base or a unique is worth something else corrupted (no more
         // crafting, a different implicit), so it's compared like for like.
-        let corrupted = match (item.corrupted, preset == Preset::Base || item.rarity == "Unique") {
+        let like_for_like = preset == Preset::Base || item.rarity == "Unique" || item.rarity == "Gem";
+        let corrupted = match (item.corrupted, like_for_like) {
             (false, _) => Corrupted::No,
             (true, true) => Corrupted::Yes,
             (true, false) => Corrupted::Any,
@@ -413,7 +482,7 @@ impl Trade {
             filters,
             category_label,
             base_preset: base_preset_available(item),
-            defaults: SearchOptions { base_only, corrupted, preset },
+            defaults: SearchOptions { base_only, corrupted, preset, status: Status::default() },
         })
     }
 
@@ -451,7 +520,11 @@ impl Trade {
             .enumerate()
             .map(|(i, f)| enabled.iter().find(|c| c.index == i).map(|c| (c.min.or(f.min), c.max)))
             .collect();
-        let body = query(item, &filters, &chosen, options).to_string();
+        let mut body = query(item, &filters, &chosen, options);
+        if let Some(t) = transfigured_type(item, data) {
+            body["query"]["type"] = t;
+        }
+        let body = body.to_string();
         let league_path = ninja::encode(league);
 
         let resp = self.request("search", "POST", &format!("/api/trade/search/{league_path}"), Some(&body))?;
@@ -512,7 +585,17 @@ impl Trade {
         body: Option<&str>,
     ) -> Result<HttpResponse, String> {
         self.limiter.check(endpoint)?;
-        let resp = self.browser()?.fetch(method, path, body)?;
+        let resp = match self.browser()?.fetch(method, path, body) {
+            Ok(resp) => resp,
+            // The browser went away since the last request (killed, or
+            // crashed): start a new one and try once more.
+            Err(e) if e == "chromium exited" || e.starts_with("chromium pipe") => {
+                eprintln!("trade: {e}; restarting the browser");
+                self.browser = None;
+                self.browser()?.fetch(method, path, body)?
+            }
+            Err(e) => return Err(e),
+        };
         self.limiter.record(endpoint, &resp);
         if resp.status == 200 {
             return Ok(resp);
@@ -533,8 +616,13 @@ impl Trade {
         }
         let stats = self.cached_json("stats")?;
         let statics = self.cached_json("static")?;
+        // Only for transfigured gems: carry on without it.
+        let items = self.cached_json("items").unwrap_or_else(|e| {
+            eprintln!("trade: item list: {e}");
+            Value::Null
+        });
 
-        let data = TradeData::from_json(&stats, &statics);
+        let data = TradeData::from_json(&stats, &statics, &items);
         eprintln!("trade: {} stat templates, {} currencies", data.stats.len(), data.currencies.len());
         self.data = Some((data, Instant::now()));
         Ok(())
@@ -589,6 +677,10 @@ fn parse_fetch(body: &str, data: &TradeData, prices: &PriceDb, now: i64) -> Resu
     Ok(singles)
 }
 
+fn gem_line(preview: &Preview) -> Option<&str> {
+    preview.iter().find(|l| l.0 == "gem").map(|l| l.1.as_str())
+}
+
 /// Listings at the same price grouped, with the estimate.
 fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -> TradeResult {
     let summary = estimate_index(&singles).map(|(i, capped)| {
@@ -608,7 +700,10 @@ fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -
     let mut ages: Vec<Vec<i64>> = Vec::new();
     for (amount, id, name, chaos, minutes, preview) in singles {
         match listings.last_mut() {
-            Some(last) if last.amount == amount && last.currency_id == id => {
+            // Gems at one price but different levels or quality stay apart.
+            Some(last)
+                if last.amount == amount && last.currency_id == id && gem_line(&last.preview) == gem_line(&preview) =>
+            {
                 last.count += 1;
                 ages.last_mut().unwrap().extend(minutes);
             }
@@ -1126,7 +1221,12 @@ fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     let mut filters = weapon_filters(item, false);
     filters.extend(socket_filters(item));
     filters.extend(memory_strands_filter(item));
-    for m in &item.mods {
+    let (options, picked) = option_filters(item, data);
+    filters.extend(options);
+    for (i, m) in item.mods.iter().enumerate() {
+        if picked.contains(&i) {
+            continue;
+        }
         let (template, values) = templatize(&m.text);
         let Some((value, Some((lo, hi)))) = mod_value(&values, &m.ranges) else { continue };
         if hi <= lo {
@@ -1139,6 +1239,113 @@ fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         filters.push(filter);
     }
     filters
+}
+
+const CLUSTER_GRANT: &str = "Added Small Passive Skills grant: ";
+/// A cluster jewel's passive count: searched exactly, since fewer passives
+/// is better on a large cluster and more on a small one.
+const CLUSTER_PASSIVES: &str = "enchant.stat_3086156145";
+
+/// Mods that are one of a list rather than a number: cluster jewel grants,
+/// anointed notables, "Allocates X if you have the matching modifier on
+/// Forbidden Flesh". They're what the item is, so they start ticked. Also
+/// returns which mods (by index) they used.
+fn option_filters(item: &Item, data: &TradeData) -> (Vec<Filter>, Vec<usize>) {
+    let mut filters = Vec::new();
+    let mut picked = Vec::new();
+    let option_stat = |group: &str, text: &str| -> Option<Target> {
+        let id = data.stats.get(&(group.to_string(), text.to_string()))?;
+        let (id, option) = id.split_once('|')?;
+        Some(Target::StatOption(id.to_string(), option.parse().ok()?))
+    };
+    let filter = |label: &str, target: Target, kind: ModKind| Filter {
+        label: label.to_string(),
+        target,
+        min: None,
+        slider: None,
+        step: 1.0,
+        max_roll: false,
+        default_on: true,
+        section: kind_section(kind, Section::Mod),
+        tier: None,
+        max: None,
+        roll: None,
+    };
+    // Some grants are two lines ("… Damage with Bows" and "… Damage Over
+    // Time with Bow Skills"): the stat list has them joined.
+    let grants: Vec<usize> = (0..item.mods.len()).filter(|&i| item.mods[i].text.starts_with(CLUSTER_GRANT)).collect();
+    if grants.len() > 1 {
+        let joined = grants.iter().map(|&i| item.mods[i].text.as_str()).collect::<Vec<_>>().join("\n");
+        if let Some(target) = option_stat("enchant", &joined) {
+            let label =
+                grants.iter().map(|&i| &item.mods[i].text[CLUSTER_GRANT.len()..]).collect::<Vec<_>>().join(", ");
+            filters.push(filter(&format!("{CLUSTER_GRANT}{label}"), target, ModKind::Enchant));
+            picked.extend(&grants);
+        }
+    }
+    for (i, m) in item.mods.iter().enumerate() {
+        if picked.contains(&i) {
+            continue;
+        }
+        if let Some(target) = option_stat(m.kind.trade_group(), &m.text) {
+            filters.push(filter(&m.text, target, m.kind));
+            picked.push(i);
+        }
+    }
+    (filters, picked)
+}
+
+/// An eldritch implicit's tier as a pseudo stat ("Searing Exarch Implicit
+/// Modifier (#)", at least this item's), or just the flag without advanced
+/// copy's tier names.
+fn eldritch_filters(item: &Item, data: &TradeData, on: bool) -> Vec<Filter> {
+    let mut filters = Vec::new();
+    let tiers = ["Lesser", "Greater", "Grand", "Exceptional", "Exquisite", "Perfect"];
+    for (seen, name, pseudo, flag) in [
+        (item.searing, "Searing Exarch", "Searing Exarch Implicit Modifier (#)", "searing_item"),
+        (item.tangled, "Eater of Worlds", "Eater of Worlds Implicit Modifier (#)", "tangled_item"),
+    ] {
+        let Some(tier) = seen else { continue };
+        let stat = data.stats.get(&("pseudo".to_string(), pseudo.to_string()));
+        let (label, target, min, slider) = match (tier, stat) {
+            (Some(t), Some(id)) => (
+                format!("{name} implicit: {}+", tiers[(t as usize - 1).min(5)]),
+                Target::Stat(id.clone()),
+                Some(t as f64),
+                Some((1.0, 6.0)),
+            ),
+            _ => (format!("{name} item"), Target::Flag("misc_filters", flag), None, None),
+        };
+        filters.push(Filter {
+            label,
+            target,
+            min,
+            slider,
+            step: 1.0,
+            max_roll: false,
+            default_on: on,
+            section: Section::Implicit,
+            tier: None,
+            max: None,
+            roll: tier.map(|t| t as f64),
+        });
+    }
+    filters
+}
+
+/// A cluster jewel's passive count and jewel sockets, searched as they are.
+fn exact_cluster_counts(filters: &mut [Filter]) {
+    for f in filters {
+        if let Target::Stat(id) = &f.target
+            && (id == CLUSTER_PASSIVES || id == "enchant.stat_4079888060")
+            && let Some(roll) = f.roll
+        {
+            f.min = Some(roll);
+            f.max = (id == CLUSTER_PASSIVES).then_some(roll);
+            f.default_on = true;
+            f.max_roll = false;
+        }
+    }
 }
 
 /// The panel groups implicits and enchants under their own headings and
@@ -1198,6 +1405,40 @@ fn has_local_mods(item: &Item) -> bool {
 }
 
 /// APT's "base item" preset: what makes the item worth as a crafting base.
+/// Like APT: the gem's level (ticked at its maximum, which is where gems
+/// sell) and quality (ticked from 16% on a plain gem, 20% on a transfigured
+/// one, whose quality is harder to come by). Corruption is an option.
+///
+/// Only minimums, like APT: a better gem listed for less is competition
+/// (and past the cap takes a corruption, so an uncorrupted gem's search
+/// never finds one). Listings show each gem's level and quality.
+fn gem_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
+    let mut filters = Vec::new();
+    let property = |label: String, key: &'static str, value: u32, hi: f64, on: bool| Filter {
+        label,
+        target: Target::Property("misc_filters", key),
+        min: Some(value as f64),
+        slider: Some((0.0f64.max(value as f64 - 10.0).min(1.0), hi.max(value as f64))),
+        step: 1.0,
+        max_roll: false,
+        default_on: on,
+        section: Section::Gem,
+        tier: None,
+        max: None,
+        roll: Some(value as f64),
+    };
+    if let Some(level) = item.gem_level {
+        let on = item.gem_max_level || level >= 20;
+        filters.push(property(format!("Gem level {level}"), "gem_level", level, 21.0, on));
+    }
+    if item.quality > 0 {
+        let transfigured = data.transfigured.contains_key(&item.base);
+        let on = item.quality >= 20 || (item.quality >= 16 && !transfigured);
+        filters.push(property(format!("Quality {}%", item.quality), "quality", item.quality, 23.0, on));
+    }
+    filters
+}
+
 fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     let local = has_local_mods(item);
     let mut filters = Vec::new();
@@ -1240,12 +1481,18 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         filters.push(flag("Synthesised item".into(), "synthesised_item"));
     }
     filters.extend(influence_filters(item, true));
+    filters.extend(eldritch_filters(item, data, true));
     filters.extend(memory_strands_filter(item));
+    let (options, picked) = option_filters(item, data);
+    filters.extend(options);
     // Influenced and fractured bases' implicits vary too much to match; a
     // linked base without crafting value is worth its links, not its rolls.
     let implicits = item.influences.is_empty() && !item.fractured_item;
     let valuable = crafting_value(item);
-    for m in &item.mods {
+    for (i, m) in item.mods.iter().enumerate() {
+        if picked.contains(&i) {
+            continue;
+        }
         let (on, section) = match m.kind {
             ModKind::Fractured => (true, Section::Fractured),
             ModKind::Enchant => (true, Section::Mod),
@@ -1257,6 +1504,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         filters.extend(mod_filter(m, data, local, on, section));
     }
     filters.extend(armour_filters(item));
+    exact_cluster_counts(&mut filters);
     filters
 }
 
@@ -1303,6 +1551,9 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     if item.class == "Viscera" {
         return viscera_filters(item, data);
     }
+    if item.rarity == "Gem" {
+        return gem_filters(item, data);
+    }
     if preset == Preset::Base {
         return base_filters(item, data);
     }
@@ -1313,8 +1564,12 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     let (mut elemental, mut chaos, mut life, mut mana) =
         (Amount::default(), Amount::default(), Amount::default(), Amount::default());
     let mut attributes = [Amount::default(); 3];
+    let (options, picked) = option_filters(item, data);
 
-    for m in &item.mods {
+    for (i, m) in item.mods.iter().enumerate() {
+        if picked.contains(&i) {
+            continue;
+        }
         if m.kind == ModKind::Fractured {
             fractured.extend(mod_filter(m, data, local, false, Section::Fractured));
         }
@@ -1360,7 +1615,9 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     filters.extend(armour_filters(item));
     filters.extend(socket_filters(item));
     filters.extend(influence_filters(item, false));
+    filters.extend(eldritch_filters(item, data, false));
     filters.extend(memory_strands_filter(item));
+    filters.extend(options);
 
     // Strength gives 1 life per 2, intelligence 1 mana per 2.
     let [strength, dexterity, intelligence] = attributes;
@@ -1395,6 +1652,7 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
 
     filters.extend(fractured);
     filters.extend(listed);
+    exact_cluster_counts(&mut filters);
     filters
 }
 
@@ -1415,9 +1673,13 @@ fn item_preview(item: &Value) -> Preview {
         Some(1) => "magic",
         Some(2) => "rare",
         Some(3) => "unique",
+        Some(4) => "gem",
         _ => "normal",
     };
     out.push(("rarity", rarity.to_string(), None));
+    if let Some(tag) = gem_tag(item) {
+        out.push(("gem", tag, None));
+    }
     for (kind, key) in [("name", "name"), ("base", "typeLine")] {
         if let Some(text) = item[key].as_str().filter(|t| !t.is_empty()) {
             out.push((kind, strip_markup(text), None));
@@ -1459,6 +1721,25 @@ fn item_preview(item: &Value) -> Preview {
         out.push(("corrupted", "Corrupted".to_string(), None));
     }
     out
+}
+
+/// A listed gem's level and quality: "Level 20 · 23%" (shown on its row,
+/// like APT's columns).
+fn gem_tag(item: &Value) -> Option<String> {
+    if item["frameType"].as_u64() != Some(4) {
+        return None;
+    }
+    let prop = |name: &str| -> Option<String> {
+        let p = item["properties"].as_array()?.iter().find(|p| p["name"] == name)?;
+        let v = p["values"][0][0].as_str()?;
+        Some(
+            v.chars().take_while(|c| c.is_ascii_digit() || *c == '+' || *c == '%').collect::<String>().replace('+', ""),
+        )
+    };
+    let level = prop("Level").map(|l| format!("Level {l}"));
+    let quality = prop("Quality").filter(|q| q != "0%" && !q.is_empty());
+    let parts: Vec<String> = level.into_iter().chain(quality).collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 /// The trade site's affix tier: "P7" (prefix) or "S4" (suffix) -> 7 / 4.
@@ -1507,12 +1788,22 @@ fn bounds_json((min, max): Bounds) -> Value {
     v
 }
 
+/// A transfigured gem's type for the query: the trade site knows "Arc of
+/// Oscillating" as Arc with a discriminator.
+fn transfigured_type(item: &Item, data: &TradeData) -> Option<Value> {
+    if item.rarity != "Gem" {
+        return None;
+    }
+    let (base, disc) = data.transfigured.get(&item.base)?;
+    Some(json!({ "option": base, "discriminator": disc }))
+}
+
 /// `chosen[i]`: whether filter i is used, and its bounds.
 fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: SearchOptions) -> Value {
     let mut stats = Vec::new();
     let unique = item.rarity == "Unique";
     let mut q = json!({
-        "status": { "option": "online" },
+        "status": { "option": options.status.option() },
         "filters": { "type_filters": { "filters": { "rarity": { "option": if unique { "unique" } else { "nonunique" } } } } },
     });
     for (f, choice) in filters.iter().zip(chosen) {
@@ -1522,6 +1813,7 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
                 (None, None) => json!({ "id": id }),
                 _ => json!({ "id": id, "value": bounds_json(bounds) }),
             }),
+            Target::StatOption(id, option) => stats.push(json!({ "id": id, "value": { "option": option } })),
             Target::Property(group, key) => q["filters"][*group]["filters"][*key] = bounds_json(bounds),
             Target::Flag(group, key) => q["filters"][*group]["filters"][*key] = json!({ "option": "true" }),
         }
@@ -1697,7 +1989,9 @@ mod tests {
             stats.insert(("explicit".to_string(), text.to_string()), id.to_string());
         }
         stats.insert(("fractured".into(), "+# to maximum Life".into()), "fractured.life".into());
-        TradeData { stats, currencies: HashMap::new(), images: HashMap::new() }
+        let mut transfigured = HashMap::new();
+        transfigured.insert("Arc of Oscillating".to_string(), ("Arc".to_string(), "alt_y".to_string()));
+        TradeData { stats, currencies: HashMap::new(), images: HashMap::new(), transfigured }
     }
 
     const RING: &str = "Item Class: Rings\nRarity: Rare\nDoom Loop\nSapphire Ring\n--------\nItem Level: 84\n--------\n\
@@ -1727,12 +2021,163 @@ mod tests {
         );
     }
 
+    fn gem(name: &str, level: &str, quality: u32, corrupted: bool) -> Item {
+        let mut text = format!("Item Class: Skill Gems\nRarity: Gem\n{name}\n--------\nLevel: {level}\n");
+        if quality > 0 {
+            text += &format!("Quality: +{quality}% (augmented)\n");
+        }
+        if corrupted {
+            text += "--------\nCorrupted\n";
+        }
+        crate::item::parse(&text).unwrap()
+    }
+
+    #[test]
+    fn gem_filters_and_query() {
+        let data = real_data();
+        let item = gem("Arc", "20 (Max)", 20, true);
+        assert!(searchable(&item));
+        let filters = build_filters(&item, &data, Preset::Normal);
+        let shown: Vec<(&str, bool, Option<f64>)> =
+            filters.iter().map(|f| (f.label.as_str(), f.default_on, f.min)).collect();
+        assert_eq!(shown, vec![("Gem level 20", true, Some(20.0)), ("Quality 20%", true, Some(20.0))]);
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, f.max))).collect();
+        let opts = SearchOptions {
+            base_only: false,
+            corrupted: Corrupted::Yes,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
+        let q = query(&item, &filters, &chosen, opts);
+        assert_eq!(q["query"]["type"], "Arc");
+        // Minimums only: a better gem listed for less is competition.
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["gem_level"], json!({ "min": 20 }));
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["quality"], json!({ "min": 20 }));
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["corrupted"]["option"], "true");
+        assert!(transfigured_type(&item, &data).is_none());
+
+        // Below max level, 16% on a plain gem: level unticked, quality ticked.
+        let filters = build_filters(&gem("Arc", "18", 16, false), &data, Preset::Normal);
+        assert_eq!(filters.iter().map(|f| f.default_on).collect::<Vec<_>>(), vec![false, true]);
+        assert!(filters.iter().all(|f| f.max.is_none()));
+    }
+
+    #[test]
+    fn transfigured_gem() {
+        let data = real_data();
+        let (base, disc) = data.transfigured.iter().next().map(|(_, v)| v.clone()).expect("a transfigured Arc");
+        let name = data.transfigured.iter().find(|(_, v)| v.1 == disc).unwrap().0.clone();
+        let item = gem(&name, "20 (Max)", 16, false);
+        assert_eq!(transfigured_type(&item, &data), Some(json!({ "option": base, "discriminator": disc })));
+        // Harder to quality: 16% isn't ticked.
+        let filters = build_filters(&item, &data, Preset::Normal);
+        assert_eq!(filters.iter().map(|f| f.default_on).collect::<Vec<_>>(), vec![true, false]);
+    }
+
+    #[test]
+    fn gem_listing_tag() {
+        let item = json!({ "frameType": 4, "typeLine": "Arc", "properties": [
+            { "name": "Level", "values": [["20 (Max)", 0]] },
+            { "name": "Quality", "values": [["+23%", 1]] }
+        ]});
+        assert_eq!(gem_tag(&item).as_deref(), Some("Level 20 · 23%"));
+        assert_eq!(item_preview(&item)[0], ("rarity", "gem".into(), None));
+        assert!(gem_tag(&json!({ "frameType": 2 })).is_none());
+    }
+
+    fn stat_ids(q: &Value) -> Vec<Value> {
+        q["query"]["stats"][0]["filters"].as_array().unwrap().clone()
+    }
+
+    #[test]
+    fn cluster_jewel_enchants() {
+        let data = real_data();
+        let text = "Item Class: Jewels\nRarity: Normal\nLarge Cluster Jewel\n--------\nItem Level: 84\n--------\n\
+                    Adds 8 Passive Skills (enchant)\n2 Added Passive Skills are Jewel Sockets (enchant)\n\
+                    Added Small Passive Skills grant: 10% increased Spell Damage (enchant)\n";
+        let item = crate::item::parse(text).unwrap();
+        for preset in [Preset::Normal, Preset::Base] {
+            let filters = build_filters(&item, &data, preset);
+            let grant = filters.iter().find(|f| f.label.contains("Spell Damage")).expect("grant filter");
+            assert!(grant.default_on && grant.min.is_none());
+            let passives = filters.iter().find(|f| f.label == "Adds 8 Passive Skills").expect("passives");
+            assert_eq!((passives.default_on, passives.min, passives.max), (true, Some(8.0), Some(8.0)));
+            let sockets = filters.iter().find(|f| f.label.contains("Jewel Sockets")).expect("sockets");
+            assert_eq!((sockets.default_on, sockets.min, sockets.max), (true, Some(2.0), None));
+
+            let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, f.max))).collect();
+            let opts = SearchOptions { base_only: true, corrupted: Corrupted::No, preset, status: Status::Instant };
+            let stats = stat_ids(&query(&item, &filters, &chosen, opts));
+            assert!(
+                stats.contains(&json!({ "id": "enchant.stat_3948993189", "value": { "option": 10 } })),
+                "{stats:?}"
+            );
+            assert!(stats.contains(&json!({ "id": "enchant.stat_3086156145", "value": { "min": 8, "max": 8 } })));
+        }
+
+        // A two-line grant is one option.
+        let text = "Item Class: Jewels\nRarity: Normal\nLarge Cluster Jewel\n--------\nItem Level: 84\n--------\n\
+                    Adds 8 Passive Skills (enchant)\n\
+                    Added Small Passive Skills grant: 12% increased Damage with Bows (enchant)\n\
+                    Added Small Passive Skills grant: 12% increased Damage Over Time with Bow Skills (enchant)\n";
+        let item = crate::item::parse(text).unwrap();
+        let (options, picked) = option_filters(&item, &data);
+        assert_eq!(picked.len(), 2);
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].target, Target::StatOption("enchant.stat_3948993189".into(), 4));
+    }
+
+    #[test]
+    fn anointment() {
+        let data = real_data();
+        let text = "Item Class: Amulets\nRarity: Rare\nDoom Locket\nOnyx Amulet\n--------\nItem Level: 84\n--------\n\
+                    Allocates Charisma (enchant)\n--------\n+10 to all Attributes (implicit)\n--------\n+60 to maximum Life\n";
+        let item = crate::item::parse(text).unwrap();
+        let filters = build_filters(&item, &data, Preset::Normal);
+        let anoint = filters.iter().find(|f| f.label == "Allocates Charisma").expect("anointment filter");
+        assert_eq!(anoint.target, Target::StatOption("enchant.stat_2954116742".into(), 6799));
+        assert!(anoint.default_on);
+        assert_eq!(anoint.section, Section::Enchant);
+    }
+
+    #[test]
+    fn eldritch_implicits() {
+        let data = real_data();
+        let advanced = "Item Class: Gloves\nRarity: Rare\nDoom Grip\nSorcerer Gloves\n--------\nItem Level: 85\n--------\n\
+                        { Searing Exarch Implicit Modifier (Grand) }\n+15(13-16)% to Fire Resistance (implicit)\n\
+                        { Eater of Worlds Implicit Modifier (Lesser) }\n+5(5-8)% to Cold Resistance (implicit)\n--------\n\
+                        { Prefix Modifier \"Virile\" (Tier: 3) — Life }\n+60(55-69) to maximum Life\n--------\n\
+                        Searing Exarch Item\nEater of Worlds Item\n";
+        let item = crate::item::parse(advanced).unwrap();
+        assert_eq!((item.searing, item.tangled), (Some(Some(3)), Some(Some(1))));
+        assert!(item.mods.iter().all(|m| !m.text.contains("Exarch Item")));
+        let filters = build_filters(&item, &data, Preset::Normal);
+        let searing = filters.iter().find(|f| f.label.starts_with("Searing Exarch")).unwrap();
+        assert_eq!(searing.label, "Searing Exarch implicit: Grand+");
+        assert!(matches!(&searing.target, Target::Stat(id) if id == "pseudo.pseudo_searing_implicit_tier"));
+        assert_eq!((searing.min, searing.default_on), (Some(3.0), false));
+
+        // Plain copy: only the flags.
+        let plain = "Item Class: Gloves\nRarity: Rare\nDoom Grip\nSorcerer Gloves\n--------\nItem Level: 85\n--------\n\
+                     +15% to Fire Resistance (implicit)\n--------\n+60 to maximum Life\n--------\nSearing Exarch Item\n";
+        let item = crate::item::parse(plain).unwrap();
+        let filters = build_filters(&item, &data, Preset::Base);
+        let flag = filters.iter().find(|f| f.label == "Searing Exarch item").unwrap();
+        assert_eq!(flag.target, Target::Flag("misc_filters", "searing_item"));
+        assert!(flag.default_on);
+    }
+
     #[test]
     fn search_options() {
         let item = crate::item::parse(RING).unwrap();
         let filters = build_filters(&item, &test_data(), Preset::Normal);
         let enabled: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
-        let opts = |base_only, corrupted| SearchOptions { base_only, corrupted, preset: Preset::Normal };
+        let opts = |base_only, corrupted| SearchOptions {
+            base_only,
+            corrupted,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
 
         let q = query(&item, &filters, &enabled, opts(false, Corrupted::No));
         assert_eq!(q["query"]["filters"]["type_filters"]["filters"]["category"]["option"], "accessory.ring");
@@ -1746,6 +2191,11 @@ mod tests {
 
         let q = query(&item, &filters, &enabled, opts(false, Corrupted::Yes));
         assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["corrupted"]["option"], "true");
+        // Instant buyout by default; the API calls it "securable".
+        assert_eq!(q["query"]["status"]["option"], "securable");
+        let q =
+            query(&item, &filters, &enabled, SearchOptions { status: Status::Available, ..opts(false, Corrupted::No) });
+        assert_eq!(q["query"]["status"]["option"], "available");
     }
 
     #[test]
@@ -1797,7 +2247,12 @@ mod tests {
             &item,
             &filters,
             &chosen,
-            SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Normal },
+            SearchOptions {
+                base_only: false,
+                corrupted: Corrupted::No,
+                preset: Preset::Normal,
+                status: Status::Instant,
+            },
         );
         assert_eq!(q["query"]["name"], "Kaom's Heart");
         assert_eq!(q["query"]["type"], "Glorious Plate");
@@ -1876,7 +2331,8 @@ mod tests {
             ]
         );
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
-        let opts = SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Base };
+        let opts =
+            SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Base, status: Status::Instant };
         let q = query(&item, &filters, &chosen, opts);
         assert_eq!(q["query"]["type"], "Paladin Crown");
         assert!(q["query"]["filters"]["type_filters"]["filters"]["category"].is_null());
@@ -1918,7 +2374,7 @@ mod tests {
                 .iter()
                 .map(|f| (f.default_on || f.label.contains("influence")).then_some((f.min, None)))
                 .collect();
-            let opts = SearchOptions { base_only: false, corrupted: Corrupted::No, preset };
+            let opts = SearchOptions { base_only: false, corrupted: Corrupted::No, preset, status: Status::Instant };
             let q = query(&item, &filters, &chosen, opts);
             let misc = &q["query"]["filters"]["misc_filters"]["filters"];
             assert_eq!(misc["shaper_item"]["option"], "true");
@@ -1946,7 +2402,8 @@ mod tests {
                 );
                 let chosen: Vec<Option<Bounds>> =
                     filters.iter().map(|f| f.label.starts_with("Memory").then_some((f.min, None))).collect();
-                let opts = SearchOptions { base_only: false, corrupted: Corrupted::No, preset };
+                let opts =
+                    SearchOptions { base_only: false, corrupted: Corrupted::No, preset, status: Status::Instant };
                 let q = query(&item, &filters, &chosen, opts);
                 assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["memory_level"]["min"], strands as f64);
             }
@@ -1974,7 +2431,12 @@ mod tests {
         );
         // The base names the tier, so it's searched by base, not "Any Map".
         assert!(tiered_map_base(&item));
-        let opts = SearchOptions { base_only: true, corrupted: Corrupted::Any, preset: Preset::Normal };
+        let opts = SearchOptions {
+            base_only: true,
+            corrupted: Corrupted::Any,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
         let q = query(&item, &filters, &[Some((Some(13.0), None)), None, None, None, Some((None, None))], opts);
         let q = &q["query"];
         assert_eq!(q["type"], "Blighted Map (Tier 16)");
@@ -1998,7 +2460,8 @@ mod tests {
         assert_eq!(got[..2], [("6 links", true, Section::Sockets), ("Item level 70", false, Section::Base)]);
         assert_eq!(got.last(), Some(&("Armour 853", false, Section::Armour)));
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
-        let opts = SearchOptions { base_only: true, corrupted: Corrupted::No, preset: Preset::Base };
+        let opts =
+            SearchOptions { base_only: true, corrupted: Corrupted::No, preset: Preset::Base, status: Status::Instant };
         let q = query(&item, &filters, &chosen, opts);
         assert_eq!(q["query"]["type"], "Astral Plate");
         assert_eq!(q["query"]["filters"]["socket_filters"]["filters"]["links"]["min"], 6.0);
@@ -2022,7 +2485,8 @@ mod tests {
         assert_eq!(default_preset(&plain), Preset::Base);
         let filters = build_filters(&plain, &test_data(), Preset::Base);
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
-        let opts = SearchOptions { base_only: true, corrupted: Corrupted::No, preset: Preset::Base };
+        let opts =
+            SearchOptions { base_only: true, corrupted: Corrupted::No, preset: Preset::Base, status: Status::Instant };
         let q = query(&plain, &filters, &chosen, opts);
         assert_eq!(q["query"]["type"], "Desert Brigandine");
         assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["ilvl"]["min"], 84.0);
@@ -2079,7 +2543,12 @@ mod tests {
             &item,
             &filters,
             &chosen,
-            SearchOptions { base_only: false, corrupted: Corrupted::Any, preset: Preset::Normal },
+            SearchOptions {
+                base_only: false,
+                corrupted: Corrupted::Any,
+                preset: Preset::Normal,
+                status: Status::Instant,
+            },
         );
         assert_eq!(q["query"]["filters"]["weapon_filters"]["filters"]["pdps"]["min"], 175.0);
         assert!(q["query"]["filters"]["weapon_filters"]["filters"]["aps"].is_null());
@@ -2092,7 +2561,12 @@ mod tests {
             &item,
             &filters,
             &chosen,
-            SearchOptions { base_only: false, corrupted: Corrupted::Any, preset: Preset::Normal },
+            SearchOptions {
+                base_only: false,
+                corrupted: Corrupted::Any,
+                preset: Preset::Normal,
+                status: Status::Instant,
+            },
         );
         assert_eq!(
             q["query"]["filters"]["weapon_filters"]["filters"]["pdps"],
@@ -2122,7 +2596,8 @@ mod tests {
     fn real_data() -> TradeData {
         let stats: Value = serde_json::from_str(include_str!("../fixtures/trade-stats.json")).unwrap();
         let statics: Value = serde_json::from_str(include_str!("../fixtures/trade-static.json")).unwrap();
-        TradeData::from_json(&stats, &statics)
+        let items: Value = serde_json::from_str(include_str!("../fixtures/trade-items.json")).unwrap();
+        TradeData::from_json(&stats, &statics, &items)
     }
 
     #[test]
@@ -2175,7 +2650,12 @@ mod tests {
         assert_eq!(got, vec![("+15 to Strength", Some(15.0), Some(15.0), true, Section::Implicit)]);
 
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, f.max))).collect();
-        let options = SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Normal };
+        let options = SearchOptions {
+            base_only: false,
+            corrupted: Corrupted::No,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
         let q = query(&lesser, &filters, &chosen, options);
         // The trade site only knows the base without its tier.
         assert_eq!(q["query"]["type"], "Brute's Arm");
@@ -2226,7 +2706,12 @@ mod tests {
             &item,
             &filters,
             &all,
-            SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Normal },
+            SearchOptions {
+                base_only: false,
+                corrupted: Corrupted::No,
+                preset: Preset::Normal,
+                status: Status::Instant,
+            },
         );
         let searched: Vec<String> = q["query"]["stats"][0]["filters"]
             .as_array()
@@ -2276,7 +2761,12 @@ mod tests {
                     (name.as_str(), *chaos),
                     ("Orb of Alchemy", Some(amount * prices.exchange["Orb of Alchemy"]))
                 ),
-                other => panic!("the fixture search was cheap rings; got {other}"),
+                // Cheap rings sell for other small currency too.
+                other => assert_eq!(
+                    *chaos,
+                    Some(amount * prices.exchange.get(name).copied().unwrap_or_else(|| panic!("{other}: {name}"))),
+                    "{other}"
+                ),
             }
             assert!(minutes.is_some_and(|m| m >= 30), "age {minutes:?}");
             // The listing's item, from today's mod format (objects with tiers).

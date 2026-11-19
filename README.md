@@ -56,7 +56,21 @@ overlay never uses keys PoE does; in particular there's no Esc to close.
 Priced: currency, fragments, essences, divination cards, omens, oils,
 fossils, tattoos and other exchange items; uniques (incl. 5L/6L and
 unidentified); skill gems (level/quality/corruption); maps, invitations,
-beasts; Wickerman limbs (Viscera, matched by their implicits).
+beasts; Wickerman limbs (Viscera, matched by their implicits); white and
+magic cluster jewels (by enchant, passive count and item level bracket);
+plain bases of item level 82+ (by item level and influences).
+
+Currency and other exchange items are priced from poe.ninja, whose figures
+come from the in-game Currency Exchange, where currency actually trades. The
+trade site's bulk exchange (whisper-and-trade listings from stash tabs) is
+left out: APT marks it as legacy for anything on the Currency Exchange.
+
+Skill gems get a trade search too, next to their poe.ninja price: gem level
+(ticked at max level) and quality (ticked from 16%, or 20% on a transfigured
+gem), matching corruption, and transfigured gems searched as the trade site
+knows them. Like APT, level and quality are minimums: a better gem listed
+for less is competition (an uncorrupted gem never meets one, since going
+past 20 takes a corruption). Listings show each gem's level and quality on its row.
 
 Identified uniques show their poe.ninja price too, but since that ignores
 rolls, they also get trade filters like APT's: one for each mod that rolls
@@ -69,7 +83,11 @@ like Awakened PoE Trade's defaults: life, mana, attributes and resistances
 from any mod (crafted ones included) become totals, and only total life and
 the resistance totals start ticked; other mods are listed, unticked, with a
 minimum 10% below your roll. Pick "Any Ring" or the exact base, and whether
-corrupted items count (uncorrupted items exclude them by default). Nothing is
+corrupted items count (uncorrupted items exclude them by default). Searches
+count **instant buyout** listings only by default (merchant tabs, which
+can't be price-fixed: the seller can't list low and refuse to sell); the
+button next to Search switches to instant buyout plus in-person sellers, or
+any listing. Nothing is
 searched until you press **Search**, since every search counts against GGG's
 rate limit; changing anything afterwards marks the listings as out of date
 until you search again.
@@ -111,6 +129,15 @@ Any non-unique 5- or 6-link also gets the Base item button, with the links
 ticked. White and magic ones open in it, since they're worth their links and
 base rather than their mods; for these, item level and implicits start
 unticked unless the base also has crafting value.
+
+Mods that are one of a list rather than a number are searched as exactly
+that, ticked: a cluster jewel's "Added Small Passive Skills grant" (two-line
+grants included), an anointed notable ("Allocates Charisma"), Forbidden
+Flame/Flesh's ascendancy notable. A cluster jewel's passive count is
+searched exactly and its jewel sockets as a minimum. Searing Exarch and
+Eater of Worlds items get a filter for their implicit's tier (Lesser to
+Perfect, from advanced copy), or for the eldritch item flag, ticked on the
+Base item preset.
 
 After a search, the panel shows a one-line estimate (the median of the 10
 cheapest listings, with the price range and a "Low value" tag under 5c), then
@@ -290,10 +317,12 @@ testing a new daemon next to the installed one.
   `POE_WAYTRADE_SCALE` overrides the pixel-per-logical-unit ratio.
 - No X11 input path (would be `XQueryKeymap` polling like MangoHud).
 - Only one device gets the overlay (RmlUi is a process-wide singleton).
-- HDR (10-bit/PQ) swapchains aren't colour-corrected yet; sRGB ones are.
-- Scarabs, incubators and influenced/ilvl base types aren't priced yet.
-- Trade search: no item level, influence or socket filters yet, and magic
-  items can't be searched by exact base (their name hides it among affixes).
+- HDR (10-bit/PQ) swapchains wouldn't be colour-corrected (sRGB ones are).
+  PoE1 has no HDR mode, so this only matters for PoE2.
+- Magic items' exact base is only known from advanced copy's affix names;
+  with plain Ctrl+C a magic item searches its category.
+- Trade search has no socket colour filters (APT has none either).
+- No settings: the league follows poe.ninja (`POE_LEAGUE` pins one).
 
 ## License
 
