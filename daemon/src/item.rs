@@ -155,6 +155,8 @@ pub fn parse(text: &str) -> Option<Item> {
                 if item.advanced && line.starts_with('(') && line.ends_with(')') {
                     continue;
                 }
+                // Advanced copy notes mods that quality doesn't scale.
+                let line = line.trim_end_matches(" — Unscalable Value");
                 let mut m = mod_line(&strip_roll_ranges(line));
                 m.headed = headed;
                 item.mods.push(m);
@@ -285,6 +287,14 @@ mod tests {
                 (ModKind::Explicit, "+30% to Fire Resistance", true),
             ]
         );
+    }
+
+    #[test]
+    fn unscalable_note() {
+        let text = "Item Class: Maps\nRarity: Rare\nTorture Hustle\nMap (Tier 16)\n--------\nItem Level: 83\n--------\n\
+                    { Prefix Modifier \"Elder\" }\nArea is influenced by The Elder — Unscalable Value\n";
+        let item = parse(text).unwrap();
+        assert_eq!(item.mods[0].text, "Area is influenced by The Elder");
     }
 
     #[test]

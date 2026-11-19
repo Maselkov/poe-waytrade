@@ -162,7 +162,7 @@ struct Model {
     Rml::String name, base, subtitle, rarity;
     Rml::String state;  // status | prices | trade
     Rml::String status, source, thin, total, hint;
-    bool status_error = false, searching = false, has_url = false;
+    bool status_error = false, searching = false, has_url = false, closable = false;
     Rml::Vector<UiPrice> prices;
     Rml::Vector<UiFilter> filters;
     Rml::Vector<UiListing> listings;
@@ -220,7 +220,12 @@ struct OverlayUi::Impl {
     void sync_debug(WaylandInput* input, VkExtent2D extent);
     void place(PriceCheck& pc, VkExtent2D extent);
     bool keep_on_screen(VkExtent2D extent);
-    void sync_map(const PriceReply& reply, Model& m);
+    void sync_map(const PriceReply& reply, uint64_t check_id, Model& m);
+    // Map mod display order, fixed when a check opens so rows don't jump
+    // around while you mark them.
+    uint64_t map_order_check = 0;
+    int map_order_profile = 0;
+    std::vector<int> map_order;
     // The panel document for the current check.
     const char* panel_doc(const PriceCheck& pc) const {
         return pc.purpose() == PriceCheck::Purpose::Map ? kMapDoc : kPriceDoc;
@@ -315,6 +320,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("thin", &model.thin);
     c.Bind("total", &model.total);
     c.Bind("hint", &model.hint);
+    c.Bind("closable", &model.closable);
     c.Bind("verdict", &model.verdict);
     c.Bind("verdict_kind", &model.verdict_kind);
     c.Bind("map_stats", &model.map_stats);
@@ -444,10 +450,13 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     m.debug_lines = std::move(model.debug_lines);
     m.searching = pc.searching();
     bool map = pc.purpose() == PriceCheck::Purpose::Map;
+    // Only a locked panel (Ctrl+Alt+D, Alt+D) needs a close button: the
+    // others close by themselves when the mouse moves away.
+    m.closable = pc.mode() == PriceCheck::Mode::Locked;
     switch (pc.mode()) {
     case PriceCheck::Mode::Quick: m.hint = "Hold Ctrl and move here to use filters"; break;
     case PriceCheck::Mode::Pinned: break;
-    case PriceCheck::Mode::Locked: m.hint = map ? "Click a mod to mark it · click the game to close" : "Click the game to close"; break;
+    case PriceCheck::Mode::Locked: if (map) m.hint = "Click a mod to mark it"; break;
     }
     const auto& item = pc.item();
     const auto& reply = pc.reply();
@@ -471,7 +480,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     } else if (reply->status == "map") {
         m.state = "map";
         if (!reply->subtitle.empty()) m.subtitle = reply->subtitle;
-        sync_map(*reply, m);
+        sync_map(*reply, pc.check_id(), m);
     } else if (reply->status == "not_map") {
         m.state = "status";
         m.status = "Not a map. Alt+D checks maps, invitations, contracts and logbooks.";
@@ -556,8 +565,9 @@ bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
 }
 
 // Marks for the active profile, dangerous mods first, and a one-line verdict
-// readable at a glance.
-void OverlayUi::Impl::sync_map(const PriceReply& reply, Model& m) {
+// readable at a glance. Both stay one line/one order while the panel is open,
+// so marking a mod doesn't move anything.
+void OverlayUi::Impl::sync_map(const PriceReply& reply, uint64_t check_id, Model& m) {
     m.profile = std::clamp(reply.profile, 1, 3);
     for (const MapStat& s : reply.map_stats) {
         Rml::String label = s.label;
@@ -567,34 +577,40 @@ void OverlayUi::Impl::sync_map(const PriceReply& reply, Model& m) {
         m.map_stats.push_back({label, s.value});
     }
 
-    auto rank = [](const UiMapMod& u) { return u.mark == "deadly" ? 0 : u.mark == "warning" ? 1 : u.mark == "good" ? 2 : 3; };
-    std::vector<const MapMod*> deadly, warnings;
+    int deadly = 0, warnings = 0, good = 0;
+    std::vector<UiMapMod> mods;
     for (size_t i = 0; i < reply.map_mods.size(); i++) {
         const MapMod& mod = reply.map_mods[i];
         char mark = (size_t)(m.profile - 1) < mod.marks.size() ? mod.marks[m.profile - 1] : '-';
         UiMapMod u{(int)i, mod.text, "", ""};
-        if (mark == 'd') u = {(int)i, mod.text, "deadly", "Deadly"}, deadly.push_back(&mod);
-        else if (mark == 'w') u = {(int)i, mod.text, "warning", "Warning"}, warnings.push_back(&mod);
-        else if (mark == 'g') u = {(int)i, mod.text, "good", "Good"};
-        m.map_mods.push_back(u);
+        if (mark == 'd') u.mark = "deadly", u.tag = "Deadly", deadly++;
+        else if (mark == 'w') u.mark = "warning", u.tag = "Warning", warnings++;
+        else if (mark == 'g') u.mark = "good", u.tag = "Good", good++;
+        mods.push_back(u);
     }
-    std::stable_sort(m.map_mods.begin(), m.map_mods.end(),
-                     [&](const UiMapMod& a, const UiMapMod& b) { return rank(a) < rank(b); });
 
-    if (!deadly.empty()) {
-        m.verdict_kind = "deadly";
-        m.verdict = "Deadly: " + deadly[0]->text;
-        if (deadly.size() > 1) m.verdict += " (+" + std::to_string(deadly.size() - 1) + " more)";
-    } else if (warnings.size() == 1) {
-        m.verdict_kind = "warning";
-        m.verdict = "Warning: " + warnings[0]->text;
-    } else if (!warnings.empty()) {
-        m.verdict_kind = "warning";
-        m.verdict = std::to_string(warnings.size()) + " warnings";
+    if (check_id != map_order_check || m.profile != map_order_profile || map_order.size() != mods.size()) {
+        map_order_check = check_id;
+        map_order_profile = m.profile;
+        auto rank = [](const UiMapMod& u) { return u.mark == "deadly" ? 0 : u.mark == "warning" ? 1 : u.mark == "good" ? 2 : 3; };
+        std::vector<UiMapMod> sorted = mods;
+        std::stable_sort(sorted.begin(), sorted.end(),
+                         [&](const UiMapMod& a, const UiMapMod& b) { return rank(a) < rank(b); });
+        map_order.clear();
+        for (const UiMapMod& u : sorted) map_order.push_back(u.index);
+    }
+    for (int i : map_order) m.map_mods.push_back(mods[i]);
+
+    auto count = [](int n, const char* one, const char* many) { return std::to_string(n) + " " + (n == 1 ? one : many); };
+    if (deadly || warnings) {
+        m.verdict_kind = deadly ? "deadly" : "warning";
+        if (deadly) m.verdict = count(deadly, "deadly mod", "deadly mods");
+        if (warnings) m.verdict += (deadly ? " · " : "") + count(warnings, "warning", "warnings");
     } else {
         m.verdict_kind = "clean";
         m.verdict = reply.map_mods.empty() ? "No mods" : "No dangerous mods";
     }
+    if (good) m.verdict += " · " + count(good, "good mod", "good mods");
 }
 
 void OverlayUi::Impl::sync_debug(WaylandInput* input, VkExtent2D extent) {

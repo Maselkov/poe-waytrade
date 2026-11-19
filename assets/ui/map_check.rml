@@ -6,7 +6,7 @@
 <body data-model="ui">
 <div id="panel">
     <div id="head">
-        <div id="close" data-event-click="close">×</div>
+        <div id="close" data-if="closable" data-event-click="close">×</div>
         <div data-if="name != ''" data-attr-class="'title ' + rarity">{{name}}</div>
         <div data-attr-class="(name != '' ? 'base ' : 'title ') + rarity">{{base}}</div>
         <div class="subtitle" data-if="subtitle != ''">{{subtitle}}</div>

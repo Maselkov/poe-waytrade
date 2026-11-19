@@ -13,16 +13,17 @@ Trade:
 - **Ctrl+D**: a quick look. It closes as soon as you move the mouse away. To
   use it (toggle trade filters, open the trade site), keep holding Ctrl and
   move onto it; it then stays until the mouse leaves it.
-- **Ctrl+Alt+D**: a panel that stays open until you click its close button
-  or click anywhere in the game.
+- **Ctrl+Alt+D**: a panel that stays open until you click its × or click
+  anywhere in the game. Only these locked panels have a ×; the quick look
+  closes by itself.
 - Your own Ctrl+C on an item opens a quick look too.
 - Like APT, the panel sits right next to PoE's inventory when you check an
   item there (or next to the stash for items on the left half of the
   screen). PoE's side panels are 986/1600 of the window height wide.
 
 **Alt+D** on a map (or invitation, heist contract/blueprint, expedition
-logbook) opens the map check instead: a verdict at the top ("Deadly: Monsters
-reflect 18% of Physical Damage", "2 warnings", "No dangerous mods"), the map's
+logbook) opens the map check instead: a one-line verdict at the top ("1 deadly mod ·
+2 warnings", "No dangerous mods"), the map's
 quantity/rarity/pack size, and its mods. Click a mod to cycle it through
 deadly → warning → good → unmarked; marks are per profile (I/II/III) and saved
 in `~/.config/poe-overlay/map-mods.json`. Reflect, no regen, less recovery,
