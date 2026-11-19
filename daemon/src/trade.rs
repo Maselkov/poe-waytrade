@@ -261,8 +261,11 @@ pub struct Listing {
     pub preview: Preview,
 }
 
-/// A one-line answer: the median of the fetched listings.
+/// A one-line answer: what the item would sell for (see `estimate_index`).
 pub struct Summary {
+    /// The price is set by a listing that has sat unsold (see `STALE_MINUTES`),
+    /// so the item sells for less than this.
+    pub capped: bool,
     pub amount: f64,
     pub currency: String,
     pub currency_id: String,
@@ -407,7 +410,8 @@ impl Trade {
             }
         }
 
-        let summary = singles.get(singles.len() / 2).map(|(amount, id, name, chaos, _, _)| {
+        let summary = estimate_index(&singles).map(|(i, capped)| {
+            let (amount, id, name, chaos, _, _) = &singles[i];
             let same_currency = singles.iter().all(|s| s.1 == *id);
             let (first, last) = (&singles[0], &singles[singles.len() - 1]);
             let range = if same_currency {
@@ -416,7 +420,7 @@ impl Trade {
                 let c = |s: &Single| s.3.map(trim_number).unwrap_or("?".into());
                 format!("{}–{}c", c(first), c(last))
             };
-            Summary { amount: *amount, currency: name.clone(), currency_id: id.clone(), chaos: *chaos, range }
+            Summary { capped, amount: *amount, currency: name.clone(), currency_id: id.clone(), chaos: *chaos, range }
         });
 
         let mut listings: Vec<Listing> = Vec::new();
@@ -573,7 +577,29 @@ fn cache_dir() -> PathBuf {
     base.join("poe-waytrade")
 }
 
-/// "2026-11-18T22:01:33Z" -> how long ago, as "2m" / "3h" / "5d".
+/// A listing this old has had time to sell and hasn't: it's overpriced.
+const STALE_MINUTES: i64 = 24 * 60;
+
+/// Which listing (sorted cheapest first) prices the item, and whether it's a
+/// stale one, which caps the price rather than meeting it.
+///
+/// Buyers take the cheapest offers, so the expensive end of the list says
+/// little: the estimate is the middle of the cheapest quarter (a single
+/// lowball doesn't set it). And nothing above a listing that's sat unsold
+/// for a day is going to sell, so the cheapest stale listing caps it.
+fn estimate_index(singles: &[Single]) -> Option<(usize, bool)> {
+    if singles.is_empty() {
+        return None;
+    }
+    let low = (singles.len() / 4).max(1);
+    let pick = low / 2;
+    let stale = singles.iter().position(|s| s.4.is_some_and(|m| m >= STALE_MINUTES));
+    Some(match stale {
+        Some(s) if s <= pick => (s, true),
+        _ => (pick, false),
+    })
+}
+
 /// "2026-11-18T22:01:33Z" -> minutes ago.
 fn listing_minutes(indexed: &str) -> Option<i64> {
     let then = parse_utc(indexed)?;
@@ -1385,6 +1411,30 @@ mod tests {
             ("Adds # to # Physical Damage to Attacks".into(), vec![5.0, 10.0])
         );
         assert_eq!(templatize("0.8% of Physical Attack Damage Leeched as Life").1, vec![0.8]);
+    }
+
+    #[test]
+    fn estimates() {
+        let single = |amount: f64, minutes: i64| -> Single {
+            (amount, "chaos".into(), "Chaos Orb".into(), Some(amount), Some(minutes), Preview::default())
+        };
+        let fresh = |prices: &[f64]| prices.iter().map(|&p| single(p, 60)).collect::<Vec<_>>();
+        assert_eq!(estimate_index(&[]), None);
+        // Few listings: the cheapest, not the median.
+        assert_eq!(estimate_index(&fresh(&[45.0, 1731.0, 2164.0, 7574.0])), Some((0, false)));
+        // Ten: the middle of the cheapest two, so one lowball doesn't set it.
+        assert_eq!(
+            estimate_index(&fresh(&[1.0, 50.0, 55.0, 60.0, 60.0, 70.0, 80.0, 90.0, 100.0, 200.0])),
+            Some((1, false))
+        );
+        // Unsold for days: caps the price.
+        let mut v = fresh(&[45.0, 1731.0, 2164.0, 7574.0]);
+        v[0] = single(45.0, 4 * 24 * 60);
+        assert_eq!(estimate_index(&v), Some((0, true)));
+        // A stale listing above the pick doesn't matter.
+        let mut v = fresh(&[1.0, 50.0, 55.0, 60.0, 60.0, 70.0, 80.0, 90.0, 100.0, 200.0]);
+        v[5] = single(70.0, 5 * 24 * 60);
+        assert_eq!(estimate_index(&v), Some((1, false)));
     }
 
     #[test]

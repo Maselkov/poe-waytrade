@@ -34,6 +34,7 @@
 //!     searched <1|0>
 //!   and, once searched:
 //!     summary  <amount> <currency name> <currency id> <chaos|""> <range>
+//!              <capped 1|0>   (an unsold listing sets it: the item is worth less)
 //!     listing  <amount> <currency name> <chaos value|""> <age, e.g. "5m"
 //!              or "41h–5d"|""> <count> <currency id>   (same prices grouped)
 //!     preview  <kind> <text> <affix tier|"">   (lines describing the first item of the
@@ -458,11 +459,12 @@ fn trade_response(
                 let chaos = s.chaos.map(|c| format!("{c:.2}")).unwrap_or_default();
                 let _ = writeln!(
                     out,
-                    "summary\t{}\t{}\t{}\t{chaos}\t{}",
+                    "summary\t{}\t{}\t{}\t{chaos}\t{}\t{}",
                     trade::trim_number(s.amount),
                     clean(&s.currency),
                     clean(&s.currency_id),
-                    clean(&s.range)
+                    clean(&s.range),
+                    s.capped as u8
                 );
             }
             for l in &r.listings {

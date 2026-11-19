@@ -68,8 +68,10 @@ PriceReply parse_reply(const std::string& body) {
             reply.listings.push_back(l);
         } else if (f[0] == "preview" && f.size() >= 3 && !reply.listings.empty()) {
             reply.listings.back().preview.push_back({f[1], f[2], f.size() >= 4 ? atoi(f[3].c_str()) : 0});
-        } else if (f[0] == "summary" && f.size() >= 6)
+        } else if (f[0] == "summary" && f.size() >= 6) {
             reply.summary = TradeSummary{f[1], f[2], f[3], f[5], f[4].empty() ? -1 : strtod(f[4].c_str(), nullptr)};
+            reply.summary->capped = f.size() >= 7 && f[6] == "1";
+        }
         else if (f[0] == "png") reply.png = f[1];
         else if (f[0] == "subtitle") reply.subtitle = f[1];
         else if (f[0] == "stat" && f.size() >= 3) reply.map_stats.push_back({f[1], f[2]});

@@ -49,6 +49,7 @@ struct TradeListing {
 struct TradeSummary {
     std::string amount, currency, currency_id, range;
     double chaos = -1;
+    bool capped = false;  // set by an unsold listing: worth less than this
 };
 
 struct MapStat {
