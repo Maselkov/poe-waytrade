@@ -315,6 +315,7 @@ struct OverlayUi::Impl {
     void sync_debug(WaylandInput* input, VkExtent2D extent);
     void place(PriceCheck& pc, VkExtent2D extent);
     bool keep_on_screen(VkExtent2D extent);
+    void mark_cut_mods();
     void sync_map(const PriceReply& reply, uint64_t check_id, Model& m);
     void fill_prices(const PriceReply& reply, Model& m);
     void fill_preview(const TradeListing& l, UiListing& u);
@@ -599,6 +600,7 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
     // Keeping the panel on screen needs its laid-out size; redo the layout
     // if that moved it.
     if (d.keep_on_screen(extent)) d.context->Update();
+    d.mark_cut_mods();
     if (input) input->set_cursor(d.system.cursor);
 }
 
@@ -782,6 +784,19 @@ void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
     it->second->SetClass("preview-right", !by_inventory);
     it->second->SetProperty(Rml::PropertyId::Left, Rml::Property(left, Rml::Unit::PX));
     it->second->SetProperty(Rml::PropertyId::Top, Rml::Property(extent.height * 0.08f, Rml::Unit::PX));
+}
+
+// Price check mods that don't fit on their line (they end in "…") get
+// "cut", which lets hovering show their full text. Takes effect next frame.
+void OverlayUi::Impl::mark_cut_mods() {
+    auto it = docs.find(kPriceDoc);
+    if (it == docs.end() || !it->second->IsVisible()) return;
+    Rml::ElementList mods;
+    it->second->GetElementsByClassName(mods, "mod");
+    for (Rml::Element* mod : mods) {
+        bool cut = mod->GetScrollWidth() > mod->GetClientWidth() + 0.5f;
+        if (Rml::Element* cell = mod->GetParentNode(); cell && cell->IsClassSet("cut") != cut) cell->SetClass("cut", cut);
+    }
 }
 
 bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {

@@ -107,25 +107,27 @@ body {
 .filter-main { display: flex; align-items: center; padding: 4dp 0; cursor: pointer; }
 .mod-cell { flex: 1 1 0; min-width: 0; position: relative; }
 .mod { color: $mod; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Like APT: a long mod is one line ending in "…"; hovering it shows the whole
-   text, wrapped, over the rows below, so nothing moves. The pointer goes
-   through it, so moving down still reaches the next row. */
+/* Like APT: a long mod is one line ending in "…"; hovering the row shows the
+   whole text, wrapped, over the rows below, so nothing moves. It's drawn as
+   the row's own text running on (same background and colour, no frame), not
+   as a box of its own, and only for mods that are cut off ("cut", set in
+   ui.cpp). The pointer goes through it, so moving down reaches the next row. */
 .mod-full {
     display: none;
     position: absolute;
-    left: -6dp;
-    right: -6dp;
-    top: -4dp;
+    left: 0;
+    right: 0;
+    top: 0;
     z-index: 10;
-    padding: 3dp 5dp;
-    background-color: #262935;
-    border: 1dp #3a3e4c;
-    border-radius: 6dp;
-    color: $text-strong;
+    padding-bottom: 5dp;
+    background-color: #1a1c23;
+    color: $mod;
     white-space: normal;
     pointer-events: none;
 }
-.mod-cell:hover .mod-full { display: block; }
+.filter:hover .mod-cell.cut .mod { visibility: hidden; }
+.filter:hover .mod-cell.cut .mod-full { display: block; }
+.filter.off .mod-full { color: $text-muted; }
 .filter.off .mod { color: $text-muted; }
 .filter-main .tier { width: 22dp; flex-shrink: 0; text-align: right; font-size: 11dp; color: $text-faint; margin-left: 6dp; }
 .min { flex-shrink: 0; min-width: 40dp; text-align: center; background-color: $chip; border: 1dp transparent; border-radius: 6dp; padding: 1dp 6dp; color: $text-strong; margin-left: 8dp; }
@@ -367,9 +369,9 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 /* Fractured mods in PoE's fractured gold, with a gold bar when ticked.
    Row classes are "sec-" + the filter's section (plain "base" would pick up
    the item header's .base style). */
-.filter.sec-fractured .mod { color: #c6b07a; }
+.filter.sec-fractured .mod, .filter.sec-fractured .mod-full { color: #c6b07a; }
 .filter.sec-fractured.on { border-left-color: #a88f52; background-color: #1a1710; }
-.filter.sec-fractured.off .mod { color: #8e7f57; }
+.filter.sec-fractured.off .mod, .filter.sec-fractured.off .mod-full { color: #8e7f57; }
 .filter.sec-fractured .range-fill { background-color: #a88f52; }
 .filter.sec-fractured .range-handle { border-color: #a88f52; background-color: #efe3c2; }
 .pv-line.fractured { color: #c6b07a; }
