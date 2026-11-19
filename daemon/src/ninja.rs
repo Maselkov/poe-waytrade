@@ -24,7 +24,7 @@ const EXCHANGE_TYPES: &[&str] = &[
 const ITEM_TYPES: &[&str] = &[
     "UniqueWeapon", "UniqueArmour", "UniqueAccessory", "UniqueFlask", "UniqueJewel",
     "UniqueTincture", "UniqueRelic", "UniqueMap", "SkillGem", "Map", "BlightedMap",
-    "Invitation", "Beast",
+    "Invitation", "Beast", "Viscera",
 ];
 
 #[derive(Deserialize)]

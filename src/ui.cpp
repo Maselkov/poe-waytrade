@@ -578,7 +578,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.base = item->base;
         m.rarity = rarity_class(item->rarity);
         // "Rare · Rings", but just "Stackable Currency" / "Skill Gems".
-        bool redundant = item->item_class.find(item->rarity) != std::string::npos;
+        bool redundant = item->rarity.empty() || item->item_class.find(item->rarity) != std::string::npos;
         m.subtitle = redundant ? item->item_class : item->rarity + " · " + item->item_class;
         if (!item->item_level.empty()) m.subtitle += " · ilvl " + item->item_level;
     }

@@ -31,7 +31,8 @@ std::optional<ParsedItem> parse_item_text(std::string_view text) {
         if (take_prefix(line, "Rarity: ", &item.rarity)) continue;
         names.push_back(line);
     }
-    if (item.rarity.empty() || names.empty() || names.size() > 2) return std::nullopt;
+    // Some items have no rarity (Viscera limbs), but every item has a class.
+    if ((item.rarity.empty() && item.item_class.empty()) || names.empty() || names.size() > 2) return std::nullopt;
 
     if (names.size() == 2) {
         item.name = names[0];

@@ -39,7 +39,7 @@ overlay never uses keys PoE does; in particular there's no Esc to close.
 Priced: currency, fragments, essences, divination cards, omens, oils,
 fossils, tattoos and other exchange items; uniques (incl. 5L/6L and
 unidentified); skill gems (level/quality/corruption); maps, invitations,
-beasts.
+beasts; Wickerman limbs (Viscera, matched by their implicits).
 
 Identified uniques show their poe.ninja price too, but since that ignores
 rolls, they also get trade filters like APT's: one for each mod that rolls

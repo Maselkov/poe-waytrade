@@ -193,13 +193,22 @@ pub fn parse(text: &str) -> Option<Item> {
         }
         _ => return None,
     }
-    if item.rarity.is_empty() {
+    // Some items have no rarity (Viscera limbs), but every item has a class.
+    if item.rarity.is_empty() && item.class.is_empty() {
         return None;
     }
 
     let mut after_item_level = false;
     for section in sections.iter().skip(1) {
         if after_item_level {
+            // In advanced copy every mod has a "{ … }" header, so a later
+            // section without one is flavour text or a note ("Take this to
+            // the Wickerman…") — unless its lines carry a kind marker like
+            // "(enchant)", which some mods show instead.
+            let has_header = section.iter().any(|l| l.starts_with("{ ") && l.ends_with(" }"));
+            if item.advanced && !has_header && section.iter().all(|l| mod_line(l).kind == ModKind::Explicit) {
+                continue;
+            }
             let mut headed = false;
             for line in section {
                 if line.starts_with("{ ") && line.ends_with(" }") {
@@ -400,5 +409,17 @@ mod tests {
     fn not_an_item() {
         assert!(parse("hello\nworld").is_none());
         assert!(parse("").is_none());
+    }
+
+    #[test]
+    fn viscera_without_rarity() {
+        let text = "Item Class: Viscera\nLesser Brute's Arm\n--------\nUpper Limb\n--------\nItem Level: 29\n--------\n\
+                    { Implicit Modifier }\n+15(10-15) to Strength\n--------\n\
+                    Take this to the Wickerman in a town or hideout to attach it.\n";
+        let item = parse(text).unwrap();
+        assert_eq!(item.class, "Viscera");
+        assert_eq!(item.base, "Lesser Brute's Arm");
+        let mods: Vec<&str> = item.mods.iter().map(|m| m.text.as_str()).collect();
+        assert_eq!(mods, vec!["+15 to Strength"]);
     }
 }

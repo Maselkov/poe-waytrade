@@ -2,6 +2,7 @@
 
 use crate::item::Item;
 use crate::ninja::{ItemLine, PriceDb};
+use crate::trade::templatize;
 
 pub struct Price {
     pub label: String,
@@ -58,6 +59,15 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
             });
         }
         return found(title, prices);
+    }
+
+    // Wickerman limbs: one line per limb and implicit, the implicits'
+    // templates as the variant ("+# to Strength", joined by " / ").
+    if item.class == "Viscera" {
+        return match db.items.get(&item.base) {
+            Some(lines) => found(title, viscera_prices(db, lines, item)),
+            None => Outcome::NotFound(format!("No poe.ninja price for {title}")),
+        };
     }
 
     // Maps, invitations, beasts: listed by name.
@@ -118,6 +128,20 @@ fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
             price
         })
         .collect()
+}
+
+/// The line for this limb's implicits, or the most-listed ones if poe.ninja
+/// has none for exactly these.
+fn viscera_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
+    let want = item.mods.iter().map(|m| templatize(&m.text).0).collect::<Vec<_>>().join(" / ");
+    if let Some(line) = lines.iter().find(|l| l.variant.as_deref() == Some(want.as_str())) {
+        let mut price = line_price(db, line);
+        price.label.clear(); // the panel already lists the mods
+        return vec![price];
+    }
+    let mut sorted: Vec<&ItemLine> = lines.iter().collect();
+    sorted.sort_by_key(|l| std::cmp::Reverse(l.listing_count.unwrap_or(0)));
+    sorted.into_iter().take(MAX_PRICES).map(|l| line_price(db, l)).collect()
 }
 
 /// Same corruption state, closest level, then the highest quality bucket not
