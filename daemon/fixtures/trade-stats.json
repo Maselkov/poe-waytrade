@@ -1,0 +1,290 @@
+{
+ "result": [
+  {
+   "id": "pseudo",
+   "label": "Pseudo",
+   "entries": [
+    {
+     "id": "pseudo.pseudo_total_elemental_resistance",
+     "text": "+#% total Elemental Resistance",
+     "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_total_chaos_resistance",
+     "text": "+#% total to Chaos Resistance",
+     "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_total_strength",
+     "text": "+# total to Strength",
+     "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_total_dexterity",
+     "text": "+# total to Dexterity",
+     "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_total_intelligence",
+     "text": "+# total to Intelligence",
+     "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_total_life",
+     "text": "+# total maximum Life",
+     "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_total_mana",
+     "text": "+# total maximum Mana",
+     "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_increased_rarity",
+     "text": "#% increased Rarity of Items found",
+     "type": "pseudo"
+    }
+   ]
+  },
+  {
+   "id": "explicit",
+   "label": "Explicit",
+   "entries": [
+    {
+     "id": "explicit.stat_3299347043",
+     "text": "+# to maximum Life",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_3372524247",
+     "text": "+#% to Fire Resistance",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_1050105434",
+     "text": "+# to maximum Mana",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_4220027924",
+     "text": "+#% to Cold Resistance",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_4080418644",
+     "text": "+# to Strength",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_328541901",
+     "text": "+# to Intelligence",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_2300185227",
+     "text": "+# to Dexterity and Intelligence",
+     "type": "explicit"
+    }
+   ]
+  },
+  {
+   "id": "implicit",
+   "label": "Implicit",
+   "entries": [
+    {
+     "id": "implicit.stat_3299347043",
+     "text": "+# to maximum Life",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_4080418644",
+     "text": "+# to Strength",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_4220027924",
+     "text": "+#% to Cold Resistance",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_3372524247",
+     "text": "+#% to Fire Resistance",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_328541901",
+     "text": "+# to Intelligence",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_2300185227",
+     "text": "+# to Dexterity and Intelligence",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_1050105434",
+     "text": "+# to maximum Mana",
+     "type": "implicit"
+    }
+   ]
+  },
+  {
+   "id": "imbued",
+   "label": "Imbued",
+   "entries": []
+  },
+  {
+   "id": "fractured",
+   "label": "Fractured",
+   "entries": [
+    {
+     "id": "fractured.stat_3299347043",
+     "text": "+# to maximum Life",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_3372524247",
+     "text": "+#% to Fire Resistance",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_4220027924",
+     "text": "+#% to Cold Resistance",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_328541901",
+     "text": "+# to Intelligence",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_1050105434",
+     "text": "+# to maximum Mana",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_4080418644",
+     "text": "+# to Strength",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_2300185227",
+     "text": "+# to Dexterity and Intelligence",
+     "type": "fractured"
+    }
+   ]
+  },
+  {
+   "id": "enchant",
+   "label": "Enchant",
+   "entries": []
+  },
+  {
+   "id": "scourge",
+   "label": "Scourge",
+   "entries": [
+    {
+     "id": "scourge.stat_3372524247",
+     "text": "+#% to Fire Resistance",
+     "type": "scourge"
+    },
+    {
+     "id": "scourge.stat_4220027924",
+     "text": "+#% to Cold Resistance",
+     "type": "scourge"
+    },
+    {
+     "id": "scourge.stat_3299347043",
+     "text": "+# to maximum Life",
+     "type": "scourge"
+    },
+    {
+     "id": "scourge.stat_1050105434",
+     "text": "+# to maximum Mana",
+     "type": "scourge"
+    },
+    {
+     "id": "scourge.stat_4080418644",
+     "text": "+# to Strength",
+     "type": "scourge"
+    },
+    {
+     "id": "scourge.stat_328541901",
+     "text": "+# to Intelligence",
+     "type": "scourge"
+    }
+   ]
+  },
+  {
+   "id": "crafted",
+   "label": "Crafted",
+   "entries": [
+    {
+     "id": "crafted.stat_3299347043",
+     "text": "+# to maximum Life",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_3372524247",
+     "text": "+#% to Fire Resistance",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_4220027924",
+     "text": "+#% to Cold Resistance",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_1050105434",
+     "text": "+# to maximum Mana",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_328541901",
+     "text": "+# to Intelligence",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_4080418644",
+     "text": "+# to Strength",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_2300185227",
+     "text": "+# to Dexterity and Intelligence",
+     "type": "crafted"
+    }
+   ]
+  },
+  {
+   "id": "mercenary",
+   "label": "Mercenary",
+   "entries": []
+  },
+  {
+   "id": "veiled",
+   "label": "Veiled",
+   "entries": []
+  },
+  {
+   "id": "delve",
+   "label": "Delve",
+   "entries": []
+  },
+  {
+   "id": "ultimatum",
+   "label": "Ultimatum",
+   "entries": []
+  },
+  {
+   "id": "sanctum",
+   "label": "Sanctum",
+   "entries": []
+  },
+  {
+   "id": "crucible",
+   "label": "Crucible",
+   "entries": []
+  }
+ ]
+}

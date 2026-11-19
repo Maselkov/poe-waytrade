@@ -20,6 +20,15 @@ CI uses Arch's `rust` package, which is the latest stable toolchain. A newer
 clippy can add lints, so keep the local toolchain current
 (`rustup update stable`), or a clean local run can still fail in CI.
 
+The daemon's tests for poe.ninja and trade-site replies run against real
+replies saved in `daemon/fixtures/`. When you change how those replies are
+read, or suspect the APIs changed, re-capture them and re-run the tests (a
+dozen requests, no account needed):
+
+```bash
+python3 daemon/fixtures/refresh.py
+```
+
 When you touch the launcher (`packaging/waytrade`), run the rest of `test`:
 
 ```bash

@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Re-captures the API replies the daemon's tests run against, trimmed to
+what the tests use. Run it from anywhere; it writes next to itself:
+
+    python3 daemon/fixtures/refresh.py
+
+then `cargo test`. A test that fails afterwards means poe.ninja or the trade
+site changed something the daemon relies on (or the market moved: prices in
+assertions are read from the fixtures, not hard-coded, where possible).
+
+Makes about a dozen requests: a few to poe.ninja, two data requests, one
+search and one fetch on pathofexile.com. Listings keep only their price and
+time; sellers' accounts are dropped.
+"""
+
+import json
+import pathlib
+import time
+import urllib.parse
+import urllib.request
+
+OUT = pathlib.Path(__file__).resolve().parent
+UA = "poe-waytrade-daemon/tests (personal price-check overlay)"
+NINJA = "https://poe.ninja/poe1/api"
+TRADE = "https://www.pathofexile.com/api/trade"
+
+# The exchange currencies the tests price things in.
+CURRENCIES = {"chaos", "divine", "alch", "exalted", "mirror"}
+
+# Stat texts the tests' items use (trade.rs RING), in every group, and the
+# pseudo totals trade.rs looks up by name.
+STAT_TEXTS = {
+    "+# to maximum Life",
+    "+# to maximum Mana",
+    "+#% to Cold Resistance",
+    "+#% to Fire Resistance",
+    "+# to Strength",
+    "+# to Intelligence",
+    "+# to Dexterity and Intelligence",
+    "#% increased Rarity of Items found",
+    "+# total maximum Life",
+    "+#% total Elemental Resistance",
+    "+#% total to Chaos Resistance",
+    "+# total maximum Mana",
+    "+# total to Strength",
+    "+# total to Dexterity",
+    "+# total to Intelligence",
+}
+
+# Fields the daemon doesn't read and that only make the files big.
+DROP = {"icon", "image", "sparkLine", "sparkline", "lowConfidenceSparkLine", "flavourText", "implicitModifiers",
+        "explicitModifiers", "mutatedModifiers", "tradeInfo", "tradeFilter"}
+
+
+def get(url, body=None):
+    time.sleep(0.5)  # be polite
+    req = urllib.request.Request(url, data=body and json.dumps(body).encode(), headers={"User-Agent": UA})
+    if body:
+        req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.load(resp)
+
+
+def save(name, value):
+    (OUT / name).write_text(json.dumps(value, indent=1, ensure_ascii=False) + "\n")
+    print(f"wrote {name}")
+
+
+def slim(d):
+    return {k: v for k, v in d.items() if k not in DROP}
+
+
+def main():
+    index = get(f"{NINJA}/data/index-state")
+    leagues = [lg["name"] for lg in index["economyLeagues"]]
+    save("ninja-index-state.json", {"economyLeagues": [{"name": n} for n in leagues]})
+    league = next(n for n in leagues if "Hardcore" not in n and "Ruthless" not in n and n != "Standard")
+    q = urllib.parse.quote(league)
+
+    ex = get(f"{NINJA}/economy/exchange/current/overview?league={q}&type=Currency")
+    save("ninja-exchange-currency.json", {
+        "core": slim(ex["core"]) | {"items": [slim(i) for i in ex["core"].get("items", [])]},
+        "lines": [slim(line) for line in ex["lines"] if line["id"] in CURRENCIES],
+        "items": [slim(i) for i in ex["items"] if i["id"] in CURRENCIES],
+    })
+
+    for kind, name, keep in [
+        ("UniqueArmour", "ninja-unique-armour.json",
+         lambda line: line["name"] in ("Queen of the Forest", "Foulborn Queen of the Forest")
+         or line.get("baseType") == "Spidersilk Robe"),
+        ("SkillGem", "ninja-skill-gem.json", lambda line: line["name"] == "Arc"),
+        ("Map", "ninja-map.json", lambda line: line["name"] == "Nightmare Map"),
+        ("Viscera", "ninja-viscera.json", lambda line: line["name"] == "Coven Queen's Crown"),
+    ]:
+        ov = get(f"{NINJA}/economy/stash/current/item/overview?league={q}&type={kind}")
+        lines = [slim(line) for line in ov["lines"] if keep(line)]
+        # Viscera have a line per implicit: the most listed are enough.
+        lines.sort(key=lambda line: -(line.get("listingCount") or 0))
+        save(name, {"lines": lines[:12]} if kind == "Viscera" else {"lines": lines})
+
+    stats = get(f"{TRADE}/data/stats")
+    save("trade-stats.json", {"result": [
+        {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"] if e["text"] in STAT_TEXTS]}
+        for g in stats["result"]
+    ]})
+    static = get(f"{TRADE}/data/static")
+    save("trade-static.json", {"result": [
+        {"id": g["id"], "label": g.get("label"), "entries": [e for e in g["entries"] if e["id"] in CURRENCIES]}
+        for g in static["result"] if g["id"] == "Currency"
+    ]})
+
+    # A plain, busy search: cheap rare Sapphire Rings with life.
+    search = get(f"{TRADE}/search/{q}", {
+        "query": {"status": {"option": "online"}, "type": "Sapphire Ring",
+                  "stats": [{"type": "and", "filters": [{"id": "pseudo.pseudo_total_life", "value": {"min": 60}}]}]},
+        "sort": {"price": "asc"},
+    })
+    hashes = search["result"][:10]
+    save("trade-search.json", {"id": search["id"], "complexity": search.get("complexity"), "result": hashes,
+                               "total": search["total"], "inexact": search.get("inexact", False)})
+    fetched = get(f"{TRADE}/fetch/{','.join(hashes)}?query={search['id']}")
+    entries = []
+    for e in fetched["result"]:
+        item = {k: v for k, v in e["item"].items() if k != "icon"}
+        item.get("extended", {}).pop("text", None)
+        listing = {"indexed": e["listing"]["indexed"], "price": e["listing"]["price"]}
+        entries.append({"id": e["id"], "listing": listing, "item": item})
+    save("trade-fetch.json", {"result": entries})
+
+
+if __name__ == "__main__":
+    main()

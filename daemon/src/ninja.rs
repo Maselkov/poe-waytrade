@@ -118,8 +118,43 @@ pub struct PriceDb {
 }
 
 impl PriceDb {
+    fn new(league: &str) -> PriceDb {
+        PriceDb {
+            league: league.to_string(),
+            fetched_at: Instant::now(),
+            divine_rate: 0.0,
+            exchange: HashMap::new(),
+            items: HashMap::new(),
+            uniques_by_base: HashMap::new(),
+        }
+    }
+
     pub fn to_divine(&self, chaos: f64) -> f64 {
         chaos * self.divine_rate
+    }
+
+    fn add_exchange(&mut self, ov: ExchangeOverview) {
+        if let Some(rate) = ov.core.rates.get("divine") {
+            self.divine_rate = *rate;
+        }
+        let names: HashMap<_, _> = ov.items.into_iter().map(|i| (i.id, i.name)).collect();
+        for line in ov.lines {
+            if let (Some(name), Some(value)) = (names.get(&line.id), line.primary_value) {
+                self.exchange.insert(name.clone(), value);
+            }
+        }
+    }
+
+    /// `kind`: the poe.ninja type the lines came from ("UniqueArmour", ...).
+    fn add_items(&mut self, kind: &str, ov: ItemOverview) {
+        for line in ov.lines {
+            if kind.starts_with("Unique")
+                && let Some(base) = &line.base_type
+            {
+                self.uniques_by_base.entry(base.clone()).or_default().push(line.clone());
+            }
+            self.items.entry(line.name.clone()).or_default().push(line);
+        }
     }
 }
 
@@ -134,41 +169,27 @@ fn get<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
 
 /// The current softcore challenge league, falling back to Standard.
 pub fn current_league() -> Result<String, String> {
-    let index: IndexState = get(&format!("{BASE}/data/index-state"))?;
-    Ok(index
+    Ok(pick_league(get(&format!("{BASE}/data/index-state"))?))
+}
+
+fn pick_league(index: IndexState) -> String {
+    index
         .economy_leagues
         .into_iter()
         .map(|l| l.name)
         .find(|n| !n.contains("Hardcore") && !n.contains("Ruthless") && n != "Standard")
-        .unwrap_or_else(|| "Standard".to_string()))
+        .unwrap_or_else(|| "Standard".to_string())
 }
 
 pub fn fetch(league: &str) -> Result<PriceDb, String> {
-    let mut db = PriceDb {
-        league: league.to_string(),
-        fetched_at: Instant::now(),
-        divine_rate: 0.0,
-        exchange: HashMap::new(),
-        items: HashMap::new(),
-        uniques_by_base: HashMap::new(),
-    };
+    let mut db = PriceDb::new(league);
     let league_q = encode(league);
     let mut failures = 0;
 
     for kind in EXCHANGE_TYPES {
         let url = format!("{BASE}/economy/exchange/current/overview?league={league_q}&type={kind}");
         match get::<ExchangeOverview>(&url) {
-            Ok(ov) => {
-                if let Some(rate) = ov.core.rates.get("divine") {
-                    db.divine_rate = *rate;
-                }
-                let names: HashMap<_, _> = ov.items.into_iter().map(|i| (i.id, i.name)).collect();
-                for line in ov.lines {
-                    if let (Some(name), Some(value)) = (names.get(&line.id), line.primary_value) {
-                        db.exchange.insert(name.clone(), value);
-                    }
-                }
-            }
+            Ok(ov) => db.add_exchange(ov),
             Err(e) => {
                 eprintln!("poe.ninja: {e}");
                 failures += 1;
@@ -180,16 +201,7 @@ pub fn fetch(league: &str) -> Result<PriceDb, String> {
     for kind in ITEM_TYPES {
         let url = format!("{BASE}/economy/stash/current/item/overview?league={league_q}&type={kind}");
         match get::<ItemOverview>(&url) {
-            Ok(ov) => {
-                for line in ov.lines {
-                    if kind.starts_with("Unique")
-                        && let Some(base) = &line.base_type
-                    {
-                        db.uniques_by_base.entry(base.clone()).or_default().push(line.clone());
-                    }
-                    db.items.entry(line.name.clone()).or_default().push(line);
-                }
-            }
+            Ok(ov) => db.add_items(kind, ov),
             Err(e) => {
                 eprintln!("poe.ninja: {e}");
                 failures += 1;
@@ -215,4 +227,101 @@ pub fn encode(s: &str) -> String {
             _ => format!("%{b:02X}"),
         })
         .collect()
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+
+    /// poe.ninja replies captured by fixtures/refresh.py.
+    const EXCHANGE: &str = include_str!("../fixtures/ninja-exchange-currency.json");
+    const ITEMS: &[(&str, &str)] = &[
+        ("UniqueArmour", include_str!("../fixtures/ninja-unique-armour.json")),
+        ("SkillGem", include_str!("../fixtures/ninja-skill-gem.json")),
+        ("Map", include_str!("../fixtures/ninja-map.json")),
+        ("Viscera", include_str!("../fixtures/ninja-viscera.json")),
+    ];
+
+    /// A price list built from the fixtures the way `fetch` builds it.
+    pub(crate) fn fixture_db() -> PriceDb {
+        let mut db = PriceDb::new("Fixture");
+        db.add_exchange(serde_json::from_str(EXCHANGE).expect("exchange overview"));
+        for (kind, json) in ITEMS {
+            let ov: ItemOverview = serde_json::from_str(json).unwrap_or_else(|e| panic!("{kind} overview: {e}"));
+            db.add_items(kind, ov);
+        }
+        db
+    }
+
+    /// The fixture's own lines for one name, as raw JSON.
+    pub(crate) fn fixture_lines(kind: &str, name: &str) -> Vec<serde_json::Value> {
+        let json = ITEMS.iter().find(|(k, _)| *k == kind).unwrap().1;
+        let v: serde_json::Value = serde_json::from_str(json).unwrap();
+        v["lines"].as_array().unwrap().iter().filter(|l| l["name"] == name).cloned().collect()
+    }
+
+    #[test]
+    fn league_from_index_state() {
+        let index: IndexState = serde_json::from_str(include_str!("../fixtures/ninja-index-state.json")).unwrap();
+        let names: Vec<String> = index.economy_leagues.iter().map(|l| l.name.clone()).collect();
+        let league = pick_league(index);
+        assert!(names.contains(&league), "{league} isn't one of {names:?}");
+        assert!(!league.contains("Hardcore") && league != "Standard", "picked {league} from {names:?}");
+
+        let only = |names: &[&str]| IndexState {
+            economy_leagues: names.iter().map(|n| League { name: n.to_string() }).collect(),
+        };
+        assert_eq!(pick_league(only(&["Hardcore Covens", "Ruthless Covens", "Standard", "Hardcore"])), "Standard");
+        assert_eq!(pick_league(only(&["Hardcore Covens", "Covens", "Standard"])), "Covens");
+    }
+
+    #[test]
+    fn exchange_rates() {
+        let db = fixture_db();
+        let rate: serde_json::Value = serde_json::from_str(EXCHANGE).unwrap();
+        assert_eq!(db.divine_rate, rate["core"]["rates"]["divine"].as_f64().unwrap());
+        assert!(db.divine_rate > 0.0 && db.divine_rate < 1.0, "divine rate {}", db.divine_rate);
+        // Names come from the reply's item list, values from its lines.
+        assert_eq!(db.exchange.get("Chaos Orb"), Some(&1.0));
+        let divine = db.exchange["Divine Orb"];
+        assert!((db.to_divine(divine) - 1.0).abs() < 0.05, "a divine is {} divines", db.to_divine(divine));
+        assert!(db.exchange["Mirror of Kalandra"] > divine);
+    }
+
+    #[test]
+    fn item_lines() {
+        let db = fixture_db();
+        // Every line of every reply is kept: a field that stops being sent
+        // (or changes type) fails the whole reply instead.
+        let sent: usize = ITEMS
+            .iter()
+            .map(|(_, json)| {
+                serde_json::from_str::<serde_json::Value>(json).unwrap()["lines"].as_array().unwrap().len()
+            })
+            .sum();
+        assert_eq!(db.items.values().map(Vec::len).sum::<usize>(), sent);
+        let gem = &db.items["Arc"];
+        assert!(gem.iter().all(|l| l.gem_level.is_some()), "gem lines without a level");
+        assert!(gem.iter().any(|l| l.corrupted == Some(true)) && gem.iter().any(|l| l.gem_quality.is_some()));
+        assert!(db.items["Queen of the Forest"].iter().any(|l| l.links == Some(6)));
+    }
+
+    #[test]
+    fn uniques_by_base() {
+        let db = fixture_db();
+        let robes: std::collections::HashSet<&str> =
+            db.uniques_by_base["Spidersilk Robe"].iter().map(|l| l.name.as_str()).collect();
+        for name in ["Soul Mantle", "The Covenant", "Replica Covenant"] {
+            assert!(robes.contains(name), "{name} missing from {robes:?}");
+        }
+        // Only uniques: gems, maps and viscera aren't looked up by base.
+        assert!(!db.uniques_by_base.values().flatten().any(|l| l.name == "Arc" || l.name == "Nightmare Map"));
+    }
+
+    #[test]
+    fn league_encoding() {
+        assert_eq!(encode("Covens"), "Covens");
+        assert_eq!(encode("Hardcore Covens"), "Hardcore%20Covens");
+        assert_eq!(encode("Mirage (PL123)"), "Mirage%20%28PL123%29");
+    }
 }

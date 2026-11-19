@@ -296,6 +296,32 @@ struct TradeData {
     images: HashMap<String, String>,
 }
 
+impl TradeData {
+    /// From /api/trade/data/stats and /api/trade/data/static.
+    fn from_json(stats: &Value, statics: &Value) -> TradeData {
+        let mut data = TradeData { stats: HashMap::new(), currencies: HashMap::new(), images: HashMap::new() };
+        for group in stats["result"].as_array().into_iter().flatten() {
+            let group_id = group["id"].as_str().unwrap_or("");
+            for e in group["entries"].as_array().into_iter().flatten() {
+                if let (Some(id), Some(text)) = (e["id"].as_str(), e["text"].as_str()) {
+                    data.stats.entry((group_id.to_string(), text.to_string())).or_insert_with(|| id.to_string());
+                }
+            }
+        }
+        for group in statics["result"].as_array().into_iter().flatten() {
+            for e in group["entries"].as_array().into_iter().flatten() {
+                if let (Some(id), Some(text)) = (e["id"].as_str(), e["text"].as_str()) {
+                    data.currencies.insert(id.to_string(), text.to_string());
+                    if let Some(image) = e["image"].as_str() {
+                        data.images.insert(id.to_string(), image.to_string());
+                    }
+                }
+            }
+        }
+        data
+    }
+}
+
 pub struct Trade {
     browser: Option<Browser>,
     data: Option<(TradeData, Instant)>,
@@ -388,87 +414,17 @@ impl Trade {
         let league_path = ninja::encode(league);
 
         let resp = self.request("search", "POST", &format!("/api/trade/search/{league_path}"), Some(&body))?;
-        let found: Value = serde_json::from_str(&resp.body).map_err(|e| format!("bad search reply: {e}"))?;
-        let id = found["id"].as_str().ok_or("search reply has no id")?.to_string();
-        let total = found["total"].as_u64().unwrap_or(0);
-        let hashes: Vec<&str> = found["result"]
-            .as_array()
-            .map(|a| a.iter().filter_map(Value::as_str).take(LISTINGS).collect())
-            .unwrap_or_default();
+        let (id, total, hashes) = parse_search(&resp.body)?;
 
         // One entry per listing first.
         let mut singles: Vec<Single> = Vec::new();
         if !hashes.is_empty() {
             let path = format!("/api/trade/fetch/{}?query={id}", hashes.join(","));
             let resp = self.request("fetch", "GET", &path, None)?;
-            let fetched: Value = serde_json::from_str(&resp.body).map_err(|e| format!("bad fetch reply: {e}"))?;
             let data = &self.data.as_ref().unwrap().0;
-            for entry in fetched["result"].as_array().into_iter().flatten() {
-                let listing = &entry["listing"];
-                let (Some(amount), Some(currency)) =
-                    (listing["price"]["amount"].as_f64(), listing["price"]["currency"].as_str())
-                else {
-                    continue; // unpriced
-                };
-                let name = data.currencies.get(currency).cloned().unwrap_or_else(|| currency.to_string());
-                let chaos =
-                    if currency == "chaos" { Some(amount) } else { prices.exchange.get(&name).map(|c| c * amount) };
-                let minutes = listing["indexed"].as_str().and_then(listing_minutes);
-                singles.push((amount, currency.to_string(), name, chaos, minutes, item_preview(&entry["item"])));
-            }
+            singles = parse_fetch(&resp.body, data, prices, unix_now())?;
         }
-
-        let summary = estimate_index(&singles).map(|(i, capped)| {
-            let (amount, id, name, chaos, _, _) = &singles[i];
-            let same_currency = singles.iter().all(|s| s.1 == *id);
-            let (first, last) = (&singles[0], &singles[singles.len() - 1]);
-            let range = if same_currency {
-                format!("{}–{} {}", trim_number(first.0), trim_number(last.0), name)
-            } else {
-                let c = |s: &Single| s.3.map(trim_number).unwrap_or("?".into());
-                format!("{}–{}c", c(first), c(last))
-            };
-            Summary { capped, amount: *amount, currency: name.clone(), currency_id: id.clone(), chaos: *chaos, range }
-        });
-
-        let mut listings: Vec<Listing> = Vec::new();
-        let mut ages: Vec<Vec<i64>> = Vec::new();
-        for (amount, id, name, chaos, minutes, preview) in singles {
-            match listings.last_mut() {
-                Some(last) if last.amount == amount && last.currency_id == id => {
-                    last.count += 1;
-                    ages.last_mut().unwrap().extend(minutes);
-                }
-                _ => {
-                    listings.push(Listing {
-                        amount,
-                        currency: name,
-                        currency_id: id,
-                        chaos,
-                        count: 1,
-                        age: String::new(),
-                        preview,
-                    });
-                    ages.push(minutes.into_iter().collect());
-                }
-            }
-        }
-        for (listing, ages) in listings.iter_mut().zip(ages) {
-            listing.age = match (ages.iter().min(), ages.iter().max()) {
-                (Some(&lo), Some(&hi)) if format_age(lo) != format_age(hi) => {
-                    format!("{}–{}", format_age(lo), format_age(hi))
-                }
-                (Some(&lo), _) => format_age(lo),
-                _ => String::new(),
-            };
-        }
-
-        Ok(TradeResult {
-            listings,
-            summary,
-            total,
-            url: format!("https://www.pathofexile.com/trade/search/{league_path}/{id}"),
-        })
+        Ok(trade_result(singles, total, &id, &league_path))
     }
 
     /// A currency's icon (PNG), from web.poecdn.com (a plain CDN, no browser
@@ -537,25 +493,7 @@ impl Trade {
         let stats = self.cached_json("stats")?;
         let statics = self.cached_json("static")?;
 
-        let mut data = TradeData { stats: HashMap::new(), currencies: HashMap::new(), images: HashMap::new() };
-        for group in stats["result"].as_array().into_iter().flatten() {
-            let group_id = group["id"].as_str().unwrap_or("");
-            for e in group["entries"].as_array().into_iter().flatten() {
-                if let (Some(id), Some(text)) = (e["id"].as_str(), e["text"].as_str()) {
-                    data.stats.entry((group_id.to_string(), text.to_string())).or_insert_with(|| id.to_string());
-                }
-            }
-        }
-        for group in statics["result"].as_array().into_iter().flatten() {
-            for e in group["entries"].as_array().into_iter().flatten() {
-                if let (Some(id), Some(text)) = (e["id"].as_str(), e["text"].as_str()) {
-                    data.currencies.insert(id.to_string(), text.to_string());
-                    if let Some(image) = e["image"].as_str() {
-                        data.images.insert(id.to_string(), image.to_string());
-                    }
-                }
-            }
-        }
+        let data = TradeData::from_json(&stats, &statics);
         eprintln!("trade: {} stat templates, {} currencies", data.stats.len(), data.currencies.len());
         self.data = Some((data, Instant::now()));
         Ok(())
@@ -575,6 +513,93 @@ impl Trade {
         let _ = std::fs::create_dir_all(cache_dir());
         let _ = std::fs::write(&path, &resp.body);
         Ok(v)
+    }
+}
+
+/// The search reply: query id, total matches, the first listings' hashes.
+fn parse_search(body: &str) -> Result<(String, u64, Vec<String>), String> {
+    let found: Value = serde_json::from_str(body).map_err(|e| format!("bad search reply: {e}"))?;
+    let id = found["id"].as_str().ok_or("search reply has no id")?.to_string();
+    let total = found["total"].as_u64().unwrap_or(0);
+    let hashes = found["result"]
+        .as_array()
+        .map(|a| a.iter().filter_map(Value::as_str).take(LISTINGS).map(str::to_string).collect())
+        .unwrap_or_default();
+    Ok((id, total, hashes))
+}
+
+/// The fetch reply: one entry per priced listing, in the reply's order.
+/// `now`: seconds since the epoch, for the listings' ages.
+fn parse_fetch(body: &str, data: &TradeData, prices: &PriceDb, now: i64) -> Result<Vec<Single>, String> {
+    let fetched: Value = serde_json::from_str(body).map_err(|e| format!("bad fetch reply: {e}"))?;
+    let mut singles = Vec::new();
+    for entry in fetched["result"].as_array().into_iter().flatten() {
+        let listing = &entry["listing"];
+        let (Some(amount), Some(currency)) =
+            (listing["price"]["amount"].as_f64(), listing["price"]["currency"].as_str())
+        else {
+            continue; // unpriced
+        };
+        let name = data.currencies.get(currency).cloned().unwrap_or_else(|| currency.to_string());
+        let chaos = if currency == "chaos" { Some(amount) } else { prices.exchange.get(&name).map(|c| c * amount) };
+        let minutes = listing["indexed"].as_str().and_then(parse_utc).map(|then| (now - then).max(0) / 60);
+        singles.push((amount, currency.to_string(), name, chaos, minutes, item_preview(&entry["item"])));
+    }
+    Ok(singles)
+}
+
+/// Listings at the same price grouped, with the estimate.
+fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -> TradeResult {
+    let summary = estimate_index(&singles).map(|(i, capped)| {
+        let (amount, id, name, chaos, _, _) = &singles[i];
+        let same_currency = singles.iter().all(|s| s.1 == *id);
+        let (first, last) = (&singles[0], &singles[singles.len() - 1]);
+        let range = if same_currency {
+            format!("{}–{} {}", trim_number(first.0), trim_number(last.0), name)
+        } else {
+            let c = |s: &Single| s.3.map(trim_number).unwrap_or("?".into());
+            format!("{}–{}c", c(first), c(last))
+        };
+        Summary { capped, amount: *amount, currency: name.clone(), currency_id: id.clone(), chaos: *chaos, range }
+    });
+
+    let mut listings: Vec<Listing> = Vec::new();
+    let mut ages: Vec<Vec<i64>> = Vec::new();
+    for (amount, id, name, chaos, minutes, preview) in singles {
+        match listings.last_mut() {
+            Some(last) if last.amount == amount && last.currency_id == id => {
+                last.count += 1;
+                ages.last_mut().unwrap().extend(minutes);
+            }
+            _ => {
+                listings.push(Listing {
+                    amount,
+                    currency: name,
+                    currency_id: id,
+                    chaos,
+                    count: 1,
+                    age: String::new(),
+                    preview,
+                });
+                ages.push(minutes.into_iter().collect());
+            }
+        }
+    }
+    for (listing, ages) in listings.iter_mut().zip(ages) {
+        listing.age = match (ages.iter().min(), ages.iter().max()) {
+            (Some(&lo), Some(&hi)) if format_age(lo) != format_age(hi) => {
+                format!("{}–{}", format_age(lo), format_age(hi))
+            }
+            (Some(&lo), _) => format_age(lo),
+            _ => String::new(),
+        };
+    }
+
+    TradeResult {
+        listings,
+        summary,
+        total,
+        url: format!("https://www.pathofexile.com/trade/search/{league_path}/{id}"),
     }
 }
 
@@ -608,11 +633,8 @@ fn estimate_index(singles: &[Single]) -> Option<(usize, bool)> {
     })
 }
 
-/// "2026-11-18T22:01:33Z" -> minutes ago.
-fn listing_minutes(indexed: &str) -> Option<i64> {
-    let then = parse_utc(indexed)?;
-    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).ok()?.as_secs() as i64;
-    Some((now - then).max(0) / 60)
+fn unix_now() -> i64 {
+    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
 /// Minutes as "2m" / "3h" / "5d".
@@ -1909,5 +1931,202 @@ mod tests {
         assert_eq!(resist_parts("+#% to all Elemental Resistances"), Some((3, false)));
         assert_eq!(resist_parts("+#% to Fire and Chaos Resistances"), Some((1, true)));
         assert_eq!(resist_parts("+# to maximum Life"), None);
+    }
+
+    // ---- against replies captured by fixtures/refresh.py ----
+
+    fn real_data() -> TradeData {
+        let stats: Value = serde_json::from_str(include_str!("../fixtures/trade-stats.json")).unwrap();
+        let statics: Value = serde_json::from_str(include_str!("../fixtures/trade-static.json")).unwrap();
+        TradeData::from_json(&stats, &statics)
+    }
+
+    #[test]
+    fn real_stat_list() {
+        let data = real_data();
+        // The pseudo totals are looked up by their exact text: if GGG
+        // renames one, its filter silently disappears.
+        for text in [
+            "+# total maximum Life",
+            "+#% total Elemental Resistance",
+            "+#% total to Chaos Resistance",
+            "+# total maximum Mana",
+            "+# total to Strength",
+            "+# total to Dexterity",
+            "+# total to Intelligence",
+        ] {
+            assert!(data.stats.contains_key(&("pseudo".into(), text.into())), "no pseudo stat {text:?}");
+        }
+        // Stat ids are per group, with the group as their prefix.
+        let life = |group: &str| data.stats[&(group.to_string(), "+# to maximum Life".to_string())].clone();
+        for group in ["explicit", "implicit", "crafted", "fractured"] {
+            assert!(life(group).starts_with(&format!("{group}.")), "{group}: {}", life(group));
+        }
+        assert_eq!(data.currencies.get("divine").map(String::as_str), Some("Divine Orb"));
+        assert_eq!(data.currencies.get("alch").map(String::as_str), Some("Orb of Alchemy"));
+        assert!(
+            data.images.get("divine").is_some_and(|i| i.starts_with('/')),
+            "icon path: {:?}",
+            data.images.get("divine")
+        );
+    }
+
+    #[test]
+    fn real_stat_ids_in_query() {
+        let data = real_data();
+        let item = crate::item::parse(RING).unwrap();
+        let filters = build_filters(&item, &data, Preset::Normal);
+        // The same filters as with the hand-made stat list…
+        let labels: Vec<&str> = filters.iter().map(|f| f.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "+75 total maximum Life",
+                "+67% total Elemental Resistance",
+                "+30 total to Strength",
+                "+20 total to Dexterity",
+                "+20 total to Intelligence",
+                "12% increased Rarity of Items found",
+            ]
+        );
+        // …each searched by an id that's in GGG's list.
+        let ids: std::collections::HashSet<&String> = data.stats.values().collect();
+        let all = vec![Some((None, None)); filters.len()];
+        let q = query(
+            &item,
+            &filters,
+            &all,
+            SearchOptions { base_only: false, corrupted: Corrupted::No, preset: Preset::Normal },
+        );
+        let searched: Vec<String> = q["query"]["stats"][0]["filters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["id"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(searched.len(), filters.len());
+        for id in &searched {
+            assert!(ids.contains(id), "{id} isn't a trade stat");
+        }
+        assert_eq!(searched[0], "pseudo.pseudo_total_life");
+    }
+
+    const SEARCH: &str = include_str!("../fixtures/trade-search.json");
+    const FETCH: &str = include_str!("../fixtures/trade-fetch.json");
+
+    /// Half an hour after the newest listing in FETCH.
+    fn fetch_now() -> i64 {
+        let v: Value = serde_json::from_str(FETCH).unwrap();
+        let newest =
+            v["result"].as_array().unwrap().iter().filter_map(|e| parse_utc(e["listing"]["indexed"].as_str()?)).max();
+        newest.unwrap() + 30 * 60
+    }
+
+    #[test]
+    fn search_reply() {
+        let (id, total, hashes) = parse_search(SEARCH).unwrap();
+        assert!(!id.is_empty());
+        assert_eq!(hashes.len(), LISTINGS);
+        assert!(total >= hashes.len() as u64);
+        assert!(hashes.iter().all(|h| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit())), "{hashes:?}");
+        assert!(parse_search(r#"{"error":{"code":2,"message":"Invalid query"}}"#).is_err());
+        assert!(parse_search("<html>Cloudflare</html>").is_err());
+    }
+
+    #[test]
+    fn fetch_reply() {
+        let prices = crate::ninja::tests::fixture_db();
+        let singles = parse_fetch(FETCH, &real_data(), &prices, fetch_now()).unwrap();
+        assert_eq!(singles.len(), LISTINGS, "every captured listing is priced");
+        for (amount, id, name, chaos, minutes, preview) in &singles {
+            // Currency names from the static list, chaos values from poe.ninja.
+            match id.as_str() {
+                "chaos" => assert_eq!((name.as_str(), *chaos), ("Chaos Orb", Some(*amount))),
+                "alch" => assert_eq!(
+                    (name.as_str(), *chaos),
+                    ("Orb of Alchemy", Some(amount * prices.exchange["Orb of Alchemy"]))
+                ),
+                other => panic!("the fixture search was cheap rings; got {other}"),
+            }
+            assert!(minutes.is_some_and(|m| m >= 30), "age {minutes:?}");
+            // The listing's item, from today's mod format (objects with tiers).
+            assert_eq!(preview[0], ("rarity", "rare".into(), None));
+            assert!(preview.contains(&("base", "Sapphire Ring".into(), None)), "{preview:?}");
+            assert!(preview.iter().any(|l| l.0 == "explicit" && l.2.is_some()), "no tiered explicit in {preview:?}");
+            assert!(preview.iter().all(|l| !l.1.contains('[')), "markup left in {preview:?}");
+        }
+    }
+
+    #[test]
+    fn fetched_listings_grouped() {
+        let prices = crate::ninja::tests::fixture_db();
+        let singles = parse_fetch(FETCH, &real_data(), &prices, fetch_now()).unwrap();
+        let (id, total, _) = parse_search(SEARCH).unwrap();
+        let prices_in_order: Vec<(f64, String)> = singles.iter().map(|s| (s.0, s.1.clone())).collect();
+        let result = trade_result(singles, total, &id, "Covens");
+        assert_eq!(result.total, total);
+        assert_eq!(result.url, format!("https://www.pathofexile.com/trade/search/Covens/{id}"));
+        // Consecutive listings at one price make one row; counts add up.
+        assert_eq!(result.listings.iter().map(|l| l.count).sum::<usize>(), prices_in_order.len());
+        let mut rows = prices_in_order.clone();
+        rows.dedup();
+        let got: Vec<(f64, String)> = result.listings.iter().map(|l| (l.amount, l.currency_id.clone())).collect();
+        assert_eq!(got, rows);
+        for l in &result.listings {
+            assert!(!l.age.is_empty(), "row without an age");
+            assert!(l.age.split('–').all(|a| a.ends_with(['m', 'h', 'd'])), "age {:?}", l.age);
+        }
+        let summary = result.summary.expect("an estimate");
+        let currencies: std::collections::HashSet<_> = prices_in_order.iter().map(|p| &p.1).collect();
+        if currencies.len() > 1 {
+            assert!(summary.range.ends_with('c'), "mixed currencies are compared in chaos: {}", summary.range);
+        }
+    }
+
+    fn reply(status: u16, headers: &[(&str, &str)]) -> HttpResponse {
+        HttpResponse {
+            status,
+            headers: headers.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            body: String::new(),
+        }
+    }
+
+    #[test]
+    fn rate_limits() {
+        // The search endpoint's headers, as GGG sent them for the fixture.
+        let fresh = reply(
+            200,
+            &[
+                ("x-rate-limit-rules", "Ip"),
+                ("x-rate-limit-ip", "5:10:60,15:60:300,30:300:1800,600:21600:3600"),
+                ("x-rate-limit-ip-state", "1:10:0,1:60:0,1:300:0,1:21600:0"),
+            ],
+        );
+        let mut limiter = RateLimiter::default();
+        assert!(limiter.check("search").is_ok(), "limits unknown: allowed");
+        // 5 per 10s, one kept spare: the fifth request is refused.
+        for n in 1..=4 {
+            limiter.record("search", &fresh);
+            assert_eq!(limiter.check("search").is_ok(), n < 4, "after {n} requests");
+        }
+        assert!(limiter.check("fetch").is_ok(), "limits are per endpoint");
+
+        // A penalty in the state header blocks every endpoint for that long.
+        let mut limiter = RateLimiter::default();
+        limiter.record(
+            "fetch",
+            &reply(
+                200,
+                &[("x-rate-limit-rules", "Ip"), ("x-rate-limit-ip", "12:4:10"), ("x-rate-limit-ip-state", "13:4:10")],
+            ),
+        );
+        let err = limiter.check("search").unwrap_err();
+        assert!(err.contains("try again in 10s") || err.contains("try again in 11s"), "{err}");
+
+        // 429 without limit headers: Retry-After.
+        let mut limiter = RateLimiter::default();
+        limiter.record("search", &reply(429, &[("retry-after", "120")]));
+        let err = limiter.check("search").unwrap_err();
+        assert!(err.contains("in 120s") || err.contains("in 121s"), "{err}");
     }
 }
