@@ -73,7 +73,10 @@ far right: none). The minimum defaults to your roll minus 10% (the slider
 reaches down to it even below the tier), and a roll at the top of its tier defaults to exactly that value
 (tagged "Max"). Weapons
 also get physical/elemental DPS, attack speed and critical strike chance
-filters from their properties. Unticked mods fold behind "+ N more mods". Each mod shows its affix tier from the
+filters from their properties; armour pieces get armour, evasion, energy
+shield, ward and block filters (unticked), scaled to 20% quality the way the
+trade site searches them. 5- and 6-links get a links filter, ticked except
+on a rare 5-link, and an unlinked 6-socket gets a sockets filter. Unticked mods fold behind "+ N more mods". Each mod shows its affix tier from the
 advanced copy ([T1] gold, [T2] silver, [T3] bronze, lower ones grey).
 Fractured mods count in the totals and also get a filter of their own that
 searches them as fractured, styled in PoE's fractured gold.
@@ -86,6 +89,11 @@ flags, fractured mods, enchants, implicits (unless influenced or fractured)
 and, on magic items, tier 1–2 mods. Magic items' bases are worked out from
 the advanced copy's affix names ("Fecund Paladin Crown of the Genius" →
 Paladin Crown), so they can be searched by exact base too.
+
+Any non-unique 5- or 6-link also gets the Base item button, with the links
+ticked. White and magic ones open in it, since they're worth their links and
+base rather than their mods; for these, item level and implicits start
+unticked unless the base also has crafting value.
 
 After a search, the panel shows a one-line estimate (the median of the 10
 cheapest listings, with the price range and a "Low value" tag under 5c), then

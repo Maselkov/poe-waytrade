@@ -41,6 +41,10 @@ pub enum Section {
     Fractured,
     /// Base item properties: item level, influences, fractured/synthesised.
     Base,
+    /// Armour, evasion, energy shield, ward, block.
+    Armour,
+    /// Links and sockets.
+    Sockets,
 }
 
 impl Section {
@@ -52,6 +56,8 @@ impl Section {
             Section::Roll => "roll",
             Section::Fractured => "fractured",
             Section::Base => "base",
+            Section::Armour => "armour",
+            Section::Sockets => "sockets",
         }
     }
 }
@@ -189,25 +195,44 @@ impl Preset {
 /// Like APT: the "base item" preset is offered for unfinished gear with
 /// crafting value (fractured, synthesised, influenced, cluster or magic
 /// jewels, or item level 82+).
+/// Also offered for any 5- or 6-link, which sells as a linked base.
 pub fn base_preset_available(item: &Item) -> bool {
     let class = item.class.as_str();
-    let gear = matches!(item.rarity.as_str(), "Magic" | "Rare")
-        && !item.mods.is_empty()
-        && category(item).is_some()
+    let gear = category(item).is_some()
         && !matches!(
             class,
             "Maps" | "Flasks" | "Tinctures" | "Life Flasks" | "Mana Flasks" | "Hybrid Flasks" | "Utility Flasks"
         );
+    if !gear {
+        return false;
+    }
+    if item.links >= 5 && matches!(item.rarity.as_str(), "Normal" | "Magic" | "Rare") {
+        return true;
+    }
     let finished =
         item.corrupted || item.mirrored || item.quality == 20 || item.mods.iter().any(|m| m.kind == ModKind::Crafted);
-    let jewel = class.contains("Jewel");
-    let crafting_value = item.fractured_item
+    matches!(item.rarity.as_str(), "Magic" | "Rare") && !item.mods.is_empty() && !finished && crafting_value(item)
+}
+
+/// Fractured, synthesised, influenced, cluster or magic jewels, item level 82+.
+fn crafting_value(item: &Item) -> bool {
+    let jewel = item.class.contains("Jewel");
+    item.fractured_item
         || item.synthesised
         || !item.influences.is_empty()
         || item.base.contains("Cluster Jewel")
         || (jewel && item.rarity == "Magic")
-        || (!jewel && item.item_level.unwrap_or(0) >= 82);
-    gear && !finished && crafting_value
+        || (!jewel && item.item_level.unwrap_or(0) >= 82)
+}
+
+/// The preset a price check starts with: a white or magic 5/6-link is
+/// worth its links and base, not its mods.
+pub fn default_preset(item: &Item) -> Preset {
+    if item.links >= 5 && matches!(item.rarity.as_str(), "Normal" | "Magic") && base_preset_available(item) {
+        Preset::Base
+    } else {
+        Preset::Normal
+    }
 }
 
 /// What the panel shows before anything is searched.
@@ -272,7 +297,7 @@ pub struct Trade {
 /// Items worth a trade search: anything non-unique with mods.
 pub fn searchable(item: &Item) -> bool {
     match item.rarity.as_str() {
-        "Rare" | "Magic" | "Normal" => !item.mods.is_empty(),
+        "Rare" | "Magic" | "Normal" => !item.mods.is_empty() || item.links >= 5,
         // Identified uniques: searched by name, with their rolls.
         "Unique" => item.name.is_some() && !item.mods.is_empty(),
         _ => false,
@@ -832,11 +857,91 @@ fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
     filters
 }
 
+/// Local "#% increased Armour"-style mods, summed for armour, evasion,
+/// energy shield and ward.
+fn local_defence_increase(item: &Item) -> [f64; 4] {
+    let mut inc = [0.0; 4];
+    for m in &item.mods {
+        let (template, values) = templatize(&m.text);
+        let Some(rest) = template.strip_prefix("#% increased ") else { continue };
+        let Some(&value) = values.first() else { continue };
+        let parts: &[usize] = match rest {
+            "Armour" => &[0],
+            "Evasion Rating" => &[1],
+            "Energy Shield" => &[2],
+            "Ward" => &[3],
+            "Armour and Evasion" => &[0, 1],
+            "Armour and Energy Shield" => &[0, 2],
+            "Evasion and Energy Shield" => &[1, 2],
+            "Armour, Evasion and Energy Shield" => &[0, 1, 2],
+            _ => continue,
+        };
+        for &i in parts {
+            inc[i] += value;
+        }
+    }
+    inc
+}
+
+/// Armour pieces' defences, unticked. The trade site searches defences as
+/// at 20% quality (like APT), so lower quality is scaled up.
+fn armour_filters(item: &Item) -> Vec<Filter> {
+    let mut filters = Vec::new();
+    if !category(item).is_some_and(|(c, _)| c.starts_with("armour.")) {
+        return filters;
+    }
+    let inc = local_defence_increase(item);
+    let quality = item.quality as f64;
+    let defences = [
+        ("Armour", item.armour, "ar"),
+        ("Evasion", item.evasion, "ev"),
+        ("Energy shield", item.energy_shield, "es"),
+        ("Ward", item.ward, "ward"),
+    ];
+    for (i, (name, value, key)) in defences.into_iter().enumerate() {
+        let Some(value) = value.filter(|v| *v > 0.0) else { continue };
+        let at20 = (value * (100.0 + inc[i] + quality.max(20.0)) / (100.0 + inc[i] + quality)).round();
+        let label = if at20 > value { format!("{name} {at20} (at 20% quality)") } else { format!("{name} {at20}") };
+        filters.push(Filter::new(label, Target::Property("armour_filters", key), at20, None, false, Section::Armour));
+    }
+    if let Some(block) = item.block.filter(|v| *v > 0.0) {
+        let label = format!("Chance to block {block}%");
+        filters.push(Filter::new(
+            label,
+            Target::Property("armour_filters", "block"),
+            block,
+            None,
+            false,
+            Section::Armour,
+        ));
+    }
+    filters
+}
+
+/// 5/6 links (ticked, except a rare's 5-link) and an unlinked 6-socket
+/// (unticked).
+fn socket_filters(item: &Item) -> Vec<Filter> {
+    let mut filters = Vec::new();
+    let fixed = |label: String, key: &'static str, value: u32, on: bool| {
+        let value = value as f64;
+        Filter::new(label, Target::Property("socket_filters", key), value, Some((value, value)), on, Section::Sockets)
+    };
+    if item.links >= 5 {
+        let on = item.links >= 6 || item.rarity != "Rare";
+        filters.push(fixed(format!("{} links", item.links), "links", item.links, on));
+    }
+    if item.sockets >= 6 && item.links < 6 {
+        filters.push(fixed(format!("{} sockets", item.sockets), "sockets", item.sockets, false));
+    }
+    filters
+}
+
 /// Like APT for uniques: no totals, only the mods that roll (fixed ones
 /// don't tell copies apart), all unticked.
 fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     let local = category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."));
     let mut filters = weapon_filters(item, false);
+    filters.extend(socket_filters(item));
     for m in &item.mods {
         let (template, values) = templatize(&m.text);
         let Some((value, Some((lo, hi)))) = mod_value(&values, &m.ranges) else { continue };
@@ -886,8 +991,10 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         section: Section::Base,
         tier: None,
     };
+    filters.extend(socket_filters(item));
     if let Some(ilvl) = item.item_level {
-        // Higher item levels don't add mod tiers (APT caps at 86).
+        // Higher item levels don't add mod tiers (APT caps at 86). For a
+        // linked base without crafting value, it hardly matters.
         let min = ilvl.min(86) as f64;
         filters.push(Filter {
             label: format!("Item level {ilvl}"),
@@ -896,7 +1003,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             slider: Some((min.min(60.0), 86.0)),
             step: 1.0,
             max_roll: false,
-            default_on: true,
+            default_on: crafting_value(item),
             section: Section::Base,
             tier: None,
         });
@@ -920,19 +1027,22 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         name[..1].make_ascii_uppercase();
         filters.push(flag(format!("{name} influence"), key));
     }
-    // Influenced and fractured bases' implicits vary too much to match.
+    // Influenced and fractured bases' implicits vary too much to match; a
+    // linked base without crafting value is worth its links, not its rolls.
     let implicits = item.influences.is_empty() && !item.fractured_item;
+    let valuable = crafting_value(item);
     for m in &item.mods {
         let (on, section) = match m.kind {
             ModKind::Fractured => (true, Section::Fractured),
             ModKind::Enchant => (true, Section::Mod),
-            ModKind::Implicit if implicits => (true, Section::Mod),
+            ModKind::Implicit if implicits => (valuable, Section::Mod),
             // A magic base's top-tier mods are part of its value.
             ModKind::Explicit if item.rarity == "Magic" => (m.tier.is_some_and(|t| t <= 2), Section::Mod),
             _ => continue,
         };
         filters.extend(mod_filter(m, data, local, on, section));
     }
+    filters.extend(armour_filters(item));
     filters
 }
 
@@ -994,6 +1104,8 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     let mut filters = Vec::new();
 
     filters.extend(weapon_filters(item, true));
+    filters.extend(armour_filters(item));
+    filters.extend(socket_filters(item));
 
     // Strength gives 1 life per 2, intelligence 1 mana per 2.
     let [strength, dexterity, intelligence] = attributes;
@@ -1128,12 +1240,14 @@ pub struct Choice {
 type Bounds = (Option<f64>, Option<f64>);
 
 fn bounds_json((min, max): Bounds) -> Value {
+    // Some filters (links, sockets) refuse "6.0".
+    let number = |n: f64| if n.fract() == 0.0 && n.abs() < 1e15 { json!(n as i64) } else { json!(n) };
     let mut v = json!({});
     if let Some(min) = min {
-        v["min"] = json!(min);
+        v["min"] = number(min);
     }
     if let Some(max) = max {
-        v["max"] = json!(max);
+        v["max"] = number(max);
     }
     v
 }
@@ -1458,12 +1572,14 @@ mod tests {
         assert_eq!(
             got,
             vec![
+                ("Armour 420 (at 20% quality)", false, Section::Armour),
+                ("Energy shield 84 (at 20% quality)", false, Section::Armour),
                 ("+143 total maximum Life", true, Section::Total),
                 ("+52 total to Intelligence", false, Section::Total),
                 ("+143 to maximum Life (fractured)", false, Section::Fractured),
             ]
         );
-        assert_eq!(filters[2].target, Target::Stat("fractured.life".into()));
+        assert_eq!(filters[4].target, Target::Stat("fractured.life".into()));
 
         // Base item: item level, the fractured flag, the fractured mod and a
         // top-tier magic mod, all ticked; the exact base.
@@ -1476,6 +1592,8 @@ mod tests {
                 ("Fractured item", true, Section::Base),
                 ("+143 to maximum Life (fractured)", true, Section::Fractured),
                 ("+52 to Intelligence", true, Section::Mod),
+                ("Armour 420 (at 20% quality)", false, Section::Armour),
+                ("Energy shield 84 (at 20% quality)", false, Section::Armour),
             ]
         );
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
@@ -1495,6 +1613,64 @@ mod tests {
         assert!(crafted.mods.iter().any(|m| m.kind == ModKind::Crafted) && !base_preset_available(&crafted));
         let corrupted = crate::item::parse(&format!("{}Corrupted\n", crate::item::tests::FRACTURED_CROWN)).unwrap();
         assert!(!base_preset_available(&corrupted));
+    }
+
+    #[test]
+    fn linked_bases_and_defences() {
+        // A white 6-link: priced as a base, links ticked, item level not.
+        let text = "Item Class: Body Armours\nRarity: Normal\nAstral Plate\n--------\n\
+                    Quality: +20% (augmented)\nArmour: 853 (augmented)\n--------\n\
+                    Sockets: R-R-G-G-B-B \n--------\nItem Level: 70\n--------\n\
+                    +12% to all Elemental Resistances (implicit)\n";
+        let item = crate::item::parse(text).unwrap();
+        assert_eq!((item.links, item.sockets, item.armour), (6, 6, Some(853.0)));
+        assert!(searchable(&item) && base_preset_available(&item));
+        assert_eq!(default_preset(&item), Preset::Base);
+        let filters = build_filters(&item, &test_data(), Preset::Base);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.default_on, f.section)).collect();
+        assert_eq!(got[..2], [("6 links", true, Section::Sockets), ("Item level 70", false, Section::Base)]);
+        assert_eq!(got.last(), Some(&("Armour 853", false, Section::Armour)));
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
+        let opts = SearchOptions { base_only: true, corrupted: Corrupted::No, preset: Preset::Base };
+        let q = query(&item, &filters, &chosen, opts);
+        assert_eq!(q["query"]["type"], "Astral Plate");
+        assert_eq!(q["query"]["filters"]["socket_filters"]["filters"]["links"]["min"], 6.0);
+        assert!(q["query"]["filters"]["misc_filters"]["filters"]["ilvl"].is_null());
+
+        // A white 6-socket without links: a socket filter, unticked; not
+        // priced as a base by default.
+        let unlinked = crate::item::parse(&text.replace("R-R-G-G-B-B", "R R G G B B")).unwrap();
+        assert_eq!(default_preset(&unlinked), Preset::Normal);
+        assert!(!searchable(
+            &crate::item::parse(
+                &text
+                    .replace("+12% to all Elemental Resistances (implicit)\n", "")
+                    .replace("R-R-G-G-B-B", "R R G G B B")
+            )
+            .unwrap()
+        ));
+        let got: Vec<_> = socket_filters(&unlinked).iter().map(|f| (f.label.clone(), f.default_on)).collect();
+        assert_eq!(got, vec![("6 sockets".to_string(), false)]);
+
+        // A rare 5-link at 10% quality with local increased armour and
+        // evasion: defences scaled to 20% quality, the 5-link unticked.
+        let text = "Item Class: Body Armours\nRarity: Rare\nGale Shell\nTriumphant Lamellar\n--------\n\
+                    Quality: +10% (augmented)\nArmour: 1000 (augmented)\nEvasion Rating: 900 (augmented)\n\
+                    --------\nSockets: R-G-G-B-B \n--------\nItem Level: 84\n--------\n\
+                    90% increased Armour and Evasion\n+80 to maximum Life\n";
+        let item = crate::item::parse(text).unwrap();
+        assert_eq!(default_preset(&item), Preset::Normal);
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.default_on, f.section)).collect();
+        assert_eq!(
+            got[..3],
+            [
+                ("Armour 1050 (at 20% quality)", false, Section::Armour),
+                ("Evasion 945 (at 20% quality)", false, Section::Armour),
+                ("5 links", false, Section::Sockets),
+            ]
+        );
+        assert_eq!(filters[0].target, Target::Property("armour_filters", "ar"));
     }
 
     #[test]
@@ -1543,7 +1719,7 @@ mod tests {
         );
         assert_eq!(
             q["query"]["filters"]["weapon_filters"]["filters"]["pdps"],
-            serde_json::json!({ "min": 180.0, "max": 220.0 })
+            serde_json::json!({ "min": 180, "max": 220 })
         );
         assert_eq!(q["query"]["filters"]["weapon_filters"]["filters"]["aps"], serde_json::json!({ "max": 1.5 }));
     }

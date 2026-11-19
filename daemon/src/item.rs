@@ -14,6 +14,8 @@ pub struct Item {
     pub quality: u32,
     /// Size of the largest linked socket group.
     pub links: u32,
+    /// Number of sockets.
+    pub sockets: u32,
     pub map_tier: Option<u32>,
     pub stack_size: Option<u32>,
     pub item_level: Option<u32>,
@@ -38,6 +40,13 @@ pub struct Item {
     pub mirrored: bool,
     /// Influences from "Shaper Item"-style lines, as trade keys ("shaper").
     pub influences: Vec<&'static str>,
+    /// Armour properties as shown (with the item's quality).
+    pub armour: Option<f64>,
+    pub evasion: Option<f64>,
+    pub energy_shield: Option<f64>,
+    pub ward: Option<f64>,
+    /// "Chance to Block: 26%" on shields, in percent.
+    pub block: Option<f64>,
 }
 
 /// Influence lines and their trade site names.
@@ -296,6 +305,7 @@ pub fn parse(text: &str) -> Option<Item> {
             item.quality = leading_number(v).unwrap_or(0);
         } else if let Some(v) = line.strip_prefix("Sockets: ") {
             item.links = largest_link_group(v);
+            item.sockets = v.split(|c: char| c == '-' || c.is_whitespace()).filter(|s| !s.is_empty()).count() as u32;
         } else if let Some(v) = line.strip_prefix("Map Tier: ") {
             item.map_tier = leading_number(v);
         } else if let Some(v) = line.strip_prefix("Stack Size: ") {
@@ -306,6 +316,16 @@ pub fn parse(text: &str) -> Option<Item> {
             item.elemental_damage += average_damage(v);
         } else if let Some(v) = line.strip_prefix("Attacks per Second: ") {
             item.attacks_per_second = v.trim_end_matches(" (augmented)").parse().ok();
+        } else if let Some(v) = line.strip_prefix("Armour: ") {
+            item.armour = property_number(v);
+        } else if let Some(v) = line.strip_prefix("Evasion Rating: ") {
+            item.evasion = property_number(v);
+        } else if let Some(v) = line.strip_prefix("Energy Shield: ") {
+            item.energy_shield = property_number(v);
+        } else if let Some(v) = line.strip_prefix("Ward: ") {
+            item.ward = property_number(v);
+        } else if let Some(v) = line.strip_prefix("Chance to Block: ") {
+            item.block = property_number(v);
         } else if let Some(v) = line.strip_prefix("Critical Strike Chance: ") {
             item.critical_chance = v.trim_end_matches(" (augmented)").trim_end_matches('%').parse().ok();
         }
@@ -360,6 +380,11 @@ fn leading_number(s: &str) -> Option<u32> {
 }
 
 /// "R-R-G B-B" -> 3: groups are space-separated, links are dashes.
+/// "553 (augmented)", "26%" -> the number.
+fn property_number(v: &str) -> Option<f64> {
+    v.split_whitespace().next()?.trim_end_matches('%').parse().ok()
+}
+
 fn largest_link_group(sockets: &str) -> u32 {
     sockets.split_whitespace().map(|group| group.matches('-').count() as u32 + 1).max().unwrap_or(0)
 }

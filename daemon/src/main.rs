@@ -267,7 +267,7 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
     let request = read_frame(&mut stream)?;
     *state.last_request.lock().unwrap() = Instant::now();
     let response = if let Some(text) = request.strip_prefix("PRICE\n") {
-        respond(state, text, None, trade::Preset::Normal)
+        respond_default(state, text)
     } else if let Some(rest) = request.strip_prefix("PREPARE\n") {
         let (preset, text) = rest.split_once('\n').unwrap_or((rest, ""));
         respond(state, text, None, trade::Preset::parse(preset))
@@ -488,6 +488,13 @@ fn trade_response(
     }
 }
 
+/// A price check: starts with the item's default preset (a white 6-link
+/// is priced as a base).
+fn respond_default(state: &State, text: &str) -> String {
+    let preset = item::parse(text).map_or(trade::Preset::Normal, |item| trade::default_preset(&item));
+    respond(state, text, None, preset)
+}
+
 fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, preset: trade::Preset) -> String {
     let mut out = String::new();
     let Some(item) = item::parse(text) else {
@@ -496,10 +503,7 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
     let db = state.db.read().unwrap().clone();
     // Rares never have a poe.ninja price, and the base item preset doesn't
     // use one: show their filters right away, even while poe.ninja loads.
-    if trade_search.is_none()
-        && trade::searchable(&item)
-        && (item.rarity == "Rare" || preset == trade::Preset::Base)
-    {
+    if trade_search.is_none() && trade::searchable(&item) && (item.rarity == "Rare" || preset == trade::Preset::Base) {
         return trade_response(state, &item, None, preset, db.as_deref());
     }
     let Some(db) = db else {

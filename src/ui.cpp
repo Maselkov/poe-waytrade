@@ -148,7 +148,7 @@ struct UiFilter {
     float min_pct = 0, max_pct = 100;  // handle positions on the slider
     bool has_slider = false, max_roll = false;
     Rml::String tier;     // "T1"; empty: none
-    Rml::String section;  // weapon | base | total | mod | roll | fractured
+    Rml::String section;  // weapon | base | armour | sockets | total | mod | roll | fractured
     bool visible = true;  // extra mods fold away until "+ N more"
 };
 struct UiPreviewLine {
@@ -181,7 +181,7 @@ struct Model {
     // Trade search options
     Rml::String base_label, category_label, corrupted, corrupted_label;
     bool base_preset = false, preset_base = false;  // offered / active
-    Rml::String top_label;                          // "Weapon" | "Base item"
+    Rml::String top_label;                          // "Weapon" | "Armour" | "Item" | "Base item"
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
     Rml::Vector<UiFilter> weapon_filters, mod_filters;
@@ -643,7 +643,14 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.preset_base = reply->preset == "base";
         // The base item preset always searches the exact base.
         if (m.preset_base) m.base_only = true;
-        m.top_label = m.preset_base ? "Base item" : "Weapon";
+        m.top_label = "Base item";
+        if (!m.preset_base) {
+            auto has = [&](const char* section) {
+                return std::any_of(reply->filters.begin(), reply->filters.end(),
+                                   [&](const TradeFilter& f) { return f.section == section; });
+            };
+            m.top_label = has("weapon") ? "Weapon" : has("armour") ? "Armour" : "Item";
+        }
         if (!reply->category_label.empty()) m.category_label = "Any " + reply->category_label;
         // Short, so the button keeps its size; its colour tells the state too.
         m.corrupted = reply->corrupted;
@@ -667,7 +674,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             u.max_roll = f.max_roll;
             if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
             u.section = f.section;
-            if (f.section == "weapon" || f.section == "base") {
+            if (f.section == "weapon" || f.section == "base" || f.section == "armour" || f.section == "sockets") {
                 m.weapon_filters.push_back(u);
                 continue;
             }
