@@ -461,18 +461,31 @@ impl Trade {
 
     /// A currency's icon (PNG), from web.poecdn.com (a plain CDN, no browser
     /// needed), cached on disk.
+    /// Also a listed item's image, by its URL (`Preview`'s "icon"), cached
+    /// under a hash of it, and `SOCKET_SPRITE`: the trade site's sheet of
+    /// socket and link images.
     pub fn icon(&mut self, currency_id: &str) -> Result<Vec<u8>, String> {
-        if currency_id.is_empty() || !currency_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        let is_url = currency_id.starts_with(ICON_CDN);
+        if currency_id.is_empty()
+            || !is_url && !currency_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
             return Err("bad currency id".into());
         }
-        let path = cache_dir().join("icons").join(format!("{currency_id}.png"));
+        let name = if is_url { format!("item-{:016x}", fnv1a(currency_id)) } else { currency_id.to_string() };
+        let path = cache_dir().join("icons").join(format!("{name}.png"));
         if let Ok(bytes) = std::fs::read(&path) {
             return Ok(bytes);
         }
-        self.ensure_data()?;
-        let data = &self.data.as_ref().unwrap().0;
-        let image = data.images.get(currency_id).ok_or("no icon for this currency")?;
-        let url = format!("https://web.poecdn.com{image}");
+        let url = if is_url {
+            currency_id.to_string()
+        } else if currency_id == SOCKET_SPRITE {
+            socket_sprite_url()?
+        } else {
+            self.ensure_data()?;
+            let data = &self.data.as_ref().unwrap().0;
+            let image = data.images.get(currency_id).ok_or("no icon for this currency")?;
+            format!("https://web.poecdn.com{image}")
+        };
         let resp = ureq::get(&url)
             .set("User-Agent", ninja::USER_AGENT)
             .timeout(Duration::from_secs(20))
@@ -1351,11 +1364,17 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
 type Single = (f64, String, String, Option<f64>, Option<i64>, Preview);
 
 /// A listed item for the hover preview, as (kind, text, affix tier) lines:
-/// "rarity"
-/// (normal/magic/rare/unique), "name", "base", "ilvl", "dps", "enchant",
-/// "implicit", "fractured", "explicit", "crafted", "corrupted",
-/// "unidentified".
+/// "icon" (its image's URL on web.poecdn.com), "cells" ("2 2": its size in
+/// inventory cells), "rarity" (normal/magic/rare/unique), "name", "base",
+/// "ilvl", "sockets" ("R-G-B B"), "influence" (one per influence), "dps",
+/// "enchant", "implicit", then the mods: "fractured", "explicit", "crafted",
+/// "veiled" and others the trade site marks by domain (e.g. "desecrated"),
+/// then "mirrored", "corrupted", "unidentified".
 pub type Preview = Vec<(&'static str, String, Option<u32>)>;
+
+/// Mod domains the preview colours; others count as plain explicit mods.
+const MOD_DOMAINS: [&str; 8] =
+    ["fractured", "crafted", "veiled", "desecrated", "scourge", "crucible", "enchant", "implicit"];
 
 fn item_preview(item: &Value) -> Preview {
     let mut out: Preview = Vec::new();
@@ -1365,6 +1384,11 @@ fn item_preview(item: &Value) -> Preview {
         Some(3) => "unique",
         _ => "normal",
     };
+    if let Some(icon) = item["icon"].as_str().filter(|i| i.starts_with(ICON_CDN)) {
+        out.push(("icon", icon.to_string(), None));
+        let (w, h) = (item["w"].as_u64().unwrap_or(1), item["h"].as_u64().unwrap_or(1));
+        out.push(("cells", format!("{w} {h}"), None));
+    }
     out.push(("rarity", rarity.to_string(), None));
     for (kind, key) in [("name", "name"), ("base", "typeLine")] {
         if let Some(text) = item[key].as_str().filter(|t| !t.is_empty()) {
@@ -1373,6 +1397,14 @@ fn item_preview(item: &Value) -> Preview {
     }
     if let Some(ilvl) = item["ilvl"].as_u64() {
         out.push(("ilvl", ilvl.to_string(), None));
+    }
+    if let Some(sockets) = sockets_text(&item["sockets"]) {
+        out.push(("sockets", sockets, None));
+    }
+    if let Some(influences) = item["influences"].as_object() {
+        for (name, _) in influences.iter().filter(|(_, on)| on.as_bool() == Some(true)) {
+            out.push(("influence", name.clone(), None));
+        }
     }
     let ext = &item["extended"];
     let dps: Vec<String> = [("pDPS", "pdps"), ("eDPS", "edps")]
@@ -1388,17 +1420,33 @@ fn item_preview(item: &Value) -> Preview {
         ("fractured", "fracturedMods"),
         ("explicit", "explicitMods"),
         ("crafted", "craftedMods"),
+        ("veiled", "veiledMods"),
     ] {
-        // Plain strings, or (lately) objects with the text as "description"
-        // and the affixes behind it, with tiers like "P7" (prefix tier 7).
+        // Plain strings, or (lately) objects with the text as "description",
+        // the kind as "domain" (fractured and crafted mods are now among
+        // explicitMods), and the affixes behind it, with tiers like "P7"
+        // (prefix tier 7).
         for m in item[key].as_array().into_iter().flatten() {
             let Some(text) = m.as_str().or(m["description"].as_str()) else { continue };
-            let tier = m["mods"].as_array().into_iter().flatten().filter_map(|a| affix_tier(a["tier"].as_str()?)).min();
+            let kind =
+                m["domain"].as_str().and_then(|d| MOD_DOMAINS.iter().find(|k| **k == d).copied()).unwrap_or(kind);
+            let affixes = m["mods"].as_array().into_iter().flatten();
+            let tier = affixes.clone().filter_map(|a| affix_tier(a["tier"].as_str()?)).min();
+            // Veiled mods' text is a placeholder ("Suffix02").
+            if kind == "veiled" {
+                let side = affixes.filter_map(|a| a["tier"].as_str()).next().unwrap_or("");
+                let text = if side.starts_with('P') { "Veiled Prefix" } else { "Veiled Suffix" };
+                out.push((kind, text.to_string(), None));
+                continue;
+            }
             // Some mods span lines ("…\nhave 20% reduced …"); the tier goes on the first.
             for (i, line) in strip_markup(text).lines().enumerate() {
                 out.push((kind, line.to_string(), if i == 0 { tier } else { None }));
             }
         }
+    }
+    if item["duplicated"].as_bool() == Some(true) {
+        out.push(("mirrored", "Mirrored".to_string(), None));
     }
     if item["identified"].as_bool() == Some(false) {
         out.push(("unidentified", "Unidentified".to_string(), None));
@@ -1407,6 +1455,72 @@ fn item_preview(item: &Value) -> Preview {
         out.push(("corrupted", "Corrupted".to_string(), None));
     }
     out
+}
+
+/// The `icon` id of the socket sprite sheet.
+pub const SOCKET_SPRITE: &str = "sockets";
+
+/// pathofexile.com's stylesheets name the socket sprite with a key that
+/// changes with the site, so it's looked up there: the home page links them
+/// (it isn't behind Cloudflare's check, unlike the trade pages).
+fn socket_sprite_url() -> Result<String, String> {
+    let get = |url: &str| -> Result<String, String> {
+        let resp = ureq::get(url)
+            .set("User-Agent", ninja::USER_AGENT)
+            .timeout(Duration::from_secs(20))
+            .call()
+            .map_err(|e| format!("{url}: {e}"))?;
+        let mut text = String::new();
+        resp.into_reader().take(8 << 20).read_to_string(&mut text).map_err(|e| e.to_string())?;
+        Ok(text)
+    };
+    let home = get("https://www.pathofexile.com/")?;
+    for css in stylesheet_links(&home) {
+        if let Some(path) = socket_sprite_path(&get(&css)?) {
+            return Ok(format!("https://web.poecdn.com{path}"));
+        }
+    }
+    Err("no socket images in pathofexile.com's stylesheets".into())
+}
+
+/// The web.poecdn.com stylesheets a page links.
+fn stylesheet_links(html: &str) -> Vec<String> {
+    html.split(['"', '\''])
+        .filter(|s| s.starts_with(ICON_CDN) && s.split('?').next().unwrap_or("").ends_with(".css"))
+        .map(str::to_string)
+        .collect()
+}
+
+/// "/protected/image/gen/socket.png?v=…&key=…" in a stylesheet.
+fn socket_sprite_path(css: &str) -> Option<&str> {
+    let start = css.find("/protected/image/gen/socket.png")?;
+    let rest = &css[start..];
+    Some(&rest[..rest.find([')', '"', '\'', ' ']).unwrap_or(rest.len())])
+}
+
+/// 64-bit FNV-1a: a stable file name for a cached item image.
+fn fnv1a(text: &str) -> u64 {
+    text.bytes().fold(0xcbf29ce484222325, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3))
+}
+
+/// Where listed items' images live; the daemon fetches only from here.
+pub const ICON_CDN: &str = "https://web.poecdn.com/";
+
+/// Sockets as PoE writes them in item text: linked ones joined by "-",
+/// groups apart ("R-G-B B"). None without sockets.
+fn sockets_text(sockets: &Value) -> Option<String> {
+    let mut out = String::new();
+    let mut group = None;
+    for s in sockets.as_array()? {
+        let colour = s["sColour"].as_str().unwrap_or("?");
+        let g = s["group"].as_u64();
+        if group.is_some() {
+            out.push(if g == group { '-' } else { ' ' });
+        }
+        group = g;
+        out.push_str(colour);
+    }
+    (!out.is_empty()).then_some(out)
 }
 
 /// The trade site's affix tier: "P7" (prefix) or "S4" (suffix) -> 7 / 4.
@@ -1785,6 +1899,63 @@ mod tests {
         let tiers: Vec<_> = got.iter().filter(|l| l.0 == "explicit").map(|l| l.2).collect();
         assert_eq!(tiers, vec![Some(2), None]);
         assert_eq!(affix_tier("R1"), None);
+    }
+
+    #[test]
+    fn socket_sprite_lookup() {
+        let html = r#"<link href="https://web.poecdn.com/dist/css/chunk.A1.css" rel="stylesheet">
+            <script src='https://web.poecdn.com/dist/js/x.js'></script>
+            <link href='https://web.poecdn.com/dist/css/chunk.B2.css?v=3'>"#;
+        assert_eq!(
+            stylesheet_links(html),
+            ["https://web.poecdn.com/dist/css/chunk.A1.css", "https://web.poecdn.com/dist/css/chunk.B2.css?v=3"]
+        );
+        let css = ".x .socket.socketStr{background:url(/protected/image/gen/socket.png?v=17&key=mf1B-Q) no-repeat}";
+        assert_eq!(socket_sprite_path(css), Some("/protected/image/gen/socket.png?v=17&key=mf1B-Q"));
+        assert_eq!(socket_sprite_path(".x{}"), None);
+    }
+
+    /// As the trade site sends them lately: fractured and crafted mods among
+    /// explicitMods, told apart by domain.
+    #[test]
+    fn listing_preview_domains() {
+        let item = serde_json::json!({
+            "frameType": 2, "name": "Corruption Veil", "typeLine": "Ezomyte Burgonet", "ilvl": 85, "w": 2, "h": 2,
+            "icon": "https://web.poecdn.com/gen/image/WzI1/5d663a6c33/HelmetStr9.png",
+            "sockets": [
+                { "group": 0, "sColour": "R" }, { "group": 0, "sColour": "G" }, { "group": 1, "sColour": "B" }
+            ],
+            "influences": { "shaper": true },
+            "explicitMods": [
+                { "description": "+50 to Intelligence", "flags": { "fractured": true }, "domain": "fractured",
+                  "mods": [{ "tier": "S3" }] },
+                { "description": "+116 to maximum Life", "domain": "explicit", "mods": [{ "tier": "P2" }] },
+                { "description": "+25% to Fire Resistance", "flags": { "crafted": true }, "domain": "crafted",
+                  "mods": [{ "tier": "R2" }] }
+            ],
+            "veiledMods": [{ "description": "Suffix02", "domain": "veiled", "mods": [{ "tier": "S2" }] }],
+            "duplicated": true
+        });
+        let got = item_preview(&item);
+        let want: Vec<(&str, &str, Option<u32>)> = vec![
+            ("icon", "https://web.poecdn.com/gen/image/WzI1/5d663a6c33/HelmetStr9.png", None),
+            ("cells", "2 2", None),
+            ("rarity", "rare", None),
+            ("name", "Corruption Veil", None),
+            ("base", "Ezomyte Burgonet", None),
+            ("ilvl", "85", None),
+            ("sockets", "R-G B", None),
+            ("influence", "shaper", None),
+            ("fractured", "+50 to Intelligence", Some(3)),
+            ("explicit", "+116 to maximum Life", Some(2)),
+            ("crafted", "+25% to Fire Resistance", None),
+            ("veiled", "Veiled Suffix", None),
+            ("mirrored", "Mirrored", None),
+        ];
+        assert_eq!(got.iter().map(|(k, t, n)| (*k, t.as_str(), *n)).collect::<Vec<_>>(), want);
+        // Images only from the CDN.
+        let elsewhere = serde_json::json!({ "typeLine": "Ring", "icon": "https://example.com/x.png" });
+        assert!(item_preview(&elsewhere).iter().all(|l| l.0 != "icon"));
     }
 
     #[test]

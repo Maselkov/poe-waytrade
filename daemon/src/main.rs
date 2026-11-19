@@ -53,7 +53,8 @@
 //!             filters for that preset, without searching ("base": the item
 //!             as a crafting base, like APT's "Base item" preset).
 //!
-//!   request:  "ICON\n" + currency id: its icon, as "png <base64>"
+//!   request:  "ICON\n" + currency id, or a listed item's image URL (its
+//!             "icon" preview line): the PNG, as "png <base64>"
 //!
 //!   request:  "OPEN\n" + url: open a pathofexile.com trade URL in the
 //!             user's browser (the layer can't, from inside the game).
