@@ -19,7 +19,9 @@ std::string socket_name() {
 }
 // A trade search can take a few seconds (browser start, two API requests).
 constexpr auto kTimeout = std::chrono::seconds(20);
-constexpr size_t kMaxReply = 64 * 1024;
+// ICON replies carry a PNG as base64: the socket sprite sheet is ~85 KB, and
+// the daemon fetches images up to 1 MiB.
+constexpr size_t kMaxReply = 2 * 1024 * 1024;
 
 std::string frame(const std::string& body) {
     uint32_t len = (uint32_t)body.size();

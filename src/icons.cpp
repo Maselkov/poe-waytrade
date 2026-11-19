@@ -1,5 +1,7 @@
 #include "icons.h"
 
+#include <cstdint>
+#include <cstdio>
 #include <map>
 
 namespace {
@@ -17,6 +19,14 @@ void icons_put(const std::string& id, std::string png) { store()[id] = std::move
 const std::string* icons_get(const std::string& id) {
     auto it = store().find(id);
     return it == store().end() ? nullptr : &it->second;
+}
+
+std::string item_icon_id(const std::string& url) {
+    uint64_t h = 0xcbf29ce484222325ull;  // FNV-1a
+    for (unsigned char c : url) h = (h ^ c) * 0x100000001b3ull;
+    char id[24];
+    snprintf(id, sizeof id, "item-%016llx", (unsigned long long)h);
+    return id;
 }
 
 std::string base64_decode(const std::string& in) {

@@ -367,7 +367,16 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .pv-line.enchant { color: #b8daf2; }
 .pv-line.crafted { color: #b4b4ff; }
 .pv-line.fractured { color: #a29162; }
+.pv-line.veiled { color: #b8a3e0; }
+.pv-line.desecrated { color: #8fd18f; }
+.pv-line.scourge { color: #ff8a4c; }
+.pv-line.influence { color: $text-muted; }
+.pv-line.mirrored { color: #9ad0f0; margin-top: 4dp; }
 .pv-line.corrupted, .pv-line.unidentified { color: $danger; margin-top: 4dp; }
+/* The item's image, with its sockets and links on top, as in game. */
+.pv-art { position: relative; margin: 2dp auto 6dp; }
+.pv-art img { display: block; }
+.pv-socket { position: absolute; }
 .pv-more { color: $text-faint; font-size: 11dp; margin-top: 6dp; }
 
 /* Affix tiers: T1 a subtle gold, T2 silver, T3 bronze, lower ones grey. */

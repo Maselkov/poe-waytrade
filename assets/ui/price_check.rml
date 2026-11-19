@@ -104,6 +104,14 @@
                         <div class="count" data-if="l.count != ''">{{l.count}}</div>
                         <div class="age">{{l.age}}</div>
                         <div class="preview" data-if="l.has_preview">
+                            <div class="pv-art" data-if="l.item_icon != ''"
+                                 data-style-width="l.icon_w + 'dp'" data-style-height="l.icon_h + 'dp'">
+                                <img data-attr-src="'icon:' + l.item_icon"
+                                     data-style-width="l.icon_w + 'dp'" data-style-height="l.icon_h + 'dp'"/>
+                                <img class="pv-socket" data-for="s : l.sockets" src="icon:sockets" data-attr-rect="s.rect"
+                                     data-style-left="s.x + 'dp'" data-style-top="s.y + 'dp'"
+                                     data-style-width="s.w + 'dp'" data-style-height="s.h + 'dp'"/>
+                            </div>
                             <div data-if="l.name != ''" data-attr-class="'pv-name ' + l.rarity">{{l.name}}</div>
                             <div data-attr-class="'pv-name ' + l.rarity">{{l.base}}</div>
                             <div class="pv-meta" data-if="l.meta != ''">{{l.meta}}</div>

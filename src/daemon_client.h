@@ -39,9 +39,10 @@ struct TradeListing {
     std::string age;    // "2m", "41h–5d"; empty if unknown
     int count = 1;      // listings at this price
     std::string currency_id;
-    // The first listed item, as (kind, text) lines: rarity, name, base, ilvl,
-    // dps, enchant, implicit, fractured, explicit, crafted, corrupted,
-    // unidentified.
+    // The first listed item, as (kind, text) lines: icon (image URL), cells
+    // ("2 2"), rarity, name, base, ilvl, sockets, influence, dps, enchant,
+    // implicit, then mods (fractured, explicit, crafted, veiled, ...),
+    // mirrored, corrupted, unidentified. See daemon/src/trade.rs Preview.
     struct PreviewLine {
         std::string kind, text;
         int tier = 0;  // affix tier, 1 best; 0: none
