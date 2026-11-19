@@ -150,7 +150,7 @@ struct UiFilter {
     float roll_pct = -1;               // the item's own value; < 0: none
     bool has_slider = false, max_roll = false;
     Rml::String tier;     // "T1"; empty: none
-    Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | mod | fractured
+    Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | mod | fractured | map | shaper, elder, ... (influence)
 };
 struct UiGroup {
     Rml::String label;

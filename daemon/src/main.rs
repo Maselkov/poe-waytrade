@@ -25,7 +25,7 @@
 //!   Nothing is searched until the layer asks:
 //!     filter   <index> <1|0 enabled> <label> <minimum|""> <slider low>
 //!              <slider high> <step> <1|0 max roll> <weapon|base|armour|sockets|total|enchant|
-//!              implicit|mod|fractured>
+//!              implicit|mod|fractured|map|<influence: shaper, elder, ...>>
 //!              <maximum|""> <affix tier|""> <the item's value|"">
 //!     option   base <base type> <category label>   (if the base can be
 //!                                                  searched on its own)
