@@ -21,7 +21,7 @@ UinputKeyboard::UinputKeyboard() {
     setup.id.bustype = BUS_VIRTUAL;
     setup.id.vendor = 0x1209;  // pid.codes test VID
     setup.id.product = 0x0001;
-    strncpy(setup.name, "poe-overlay virtual keyboard", UINPUT_MAX_NAME_SIZE - 1);
+    strncpy(setup.name, "poe-waytrade virtual keyboard", UINPUT_MAX_NAME_SIZE - 1);
 
     bool ok = ioctl(fd_, UI_SET_EVBIT, EV_KEY) == 0 &&
               ioctl(fd_, UI_SET_KEYBIT, KEY_LEFTCTRL) == 0 &&

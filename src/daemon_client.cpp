@@ -12,10 +12,10 @@
 
 namespace {
 
-// POE_OVERLAY_SOCKET picks another name, to test against a separate daemon.
+// POE_WAYTRADE_SOCKET picks another name, to test against a separate daemon.
 std::string socket_name() {
-    const char* name = getenv("POE_OVERLAY_SOCKET");
-    return name && *name ? name : "poe-overlay";
+    const char* name = getenv("POE_WAYTRADE_SOCKET");
+    return name && *name ? name : "poe-waytrade";
 }
 // A trade search can take a few seconds (browser start, two API requests).
 constexpr auto kTimeout = std::chrono::seconds(20);
@@ -116,7 +116,7 @@ void DaemonClient::start(const std::string& body) {
 
 bool DaemonClient::poll(PriceReply* out) {
     if (out_buf_.empty()) return false;  // no request pending
-    if (fd_ < 0) return fail(out, "Price daemon isn't running (systemctl --user start poe-overlay-daemon.socket)");
+    if (fd_ < 0) return fail(out, "Price daemon isn't running (systemctl --user start poe-waytrade-daemon.socket)");
     if (std::chrono::steady_clock::now() > deadline_) return fail(out, "Price daemon didn't answer");
 
     while (out_sent_ < out_buf_.size()) {

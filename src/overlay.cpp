@@ -47,9 +47,9 @@ struct OverlayDevice {
     // the compositor before the first hotkey.
     PriceCheck price_check;
 
-    // POE_OVERLAY_SNAPSHOT=<file.ppm>: save one rendered frame (the app's own
+    // POE_WAYTRADE_SNAPSHOT=<file.ppm>: save one rendered frame (the app's own
     // image, game plus overlay) a few seconds in, for checking the UI.
-    const char* snapshot_path = getenv("POE_OVERLAY_SNAPSHOT");
+    const char* snapshot_path = getenv("POE_WAYTRADE_SNAPSHOT");
     int frames = 0;
 };
 

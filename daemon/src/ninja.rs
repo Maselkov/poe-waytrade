@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 const BASE: &str = "https://poe.ninja/poe1/api";
 pub const USER_AGENT: &str = concat!(
-    "poe-overlay-daemon/",
+    "poe-waytrade-daemon/",
     env!("CARGO_PKG_VERSION"),
     " (personal price-check overlay)"
 );

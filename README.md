@@ -1,4 +1,6 @@
-# poe-overlay (prototype)
+# Waytrade (prototype)
+
+In-frame price checks for Path of Exile on Linux/Wayland.
 
 A Vulkan layer that draws an RmlUi panel inside the game's own frames
 (MangoHud-style) and reads hotkeys and the clipboard from the game's own
@@ -27,7 +29,8 @@ logbook) opens the map check instead: a one-line verdict at the top ("1 deadly m
 2 warnings", "No dangerous mods"), the map's
 quantity/rarity/pack size, and its mods. Click a mod to cycle it through
 deadly → warning → good → unmarked; marks are per profile (I/II/III) and saved
-in `~/.config/poe-overlay/map-mods.json`. Reflect, no regen, less recovery,
+in `~/.config/poe-waytrade/map-mods.json` (moved there from
+`~/.config/poe-overlay/` the first time, if you have marks from before the rename). Reflect, no regen, less recovery,
 −max res, cannot leech, player curses and a few others come pre-marked.
 
 Ctrl+Alt+D and Alt+D send PoE's advanced copy (Ctrl+Alt+C, since Alt is still
@@ -110,13 +113,13 @@ browser.
   the game's surface, sized to the visible panels, with an input region
   covering just them: clicks there reach the UI and never the game. With no
   panel visible it's unmapped.
-- `daemon/` (Rust): `poe-overlay-daemon` listens on the abstract Unix socket
-  `@poe-overlay` (reachable from inside Steam's runtime container, since
+- `daemon/` (Rust): `poe-waytrade-daemon` listens on the abstract Unix socket
+  `@poe-waytrade` (reachable from inside Steam's runtime container, since
   abstract sockets ignore mount namespaces; other users are rejected via
   `SO_PEERCRED`). It loads poe.ninja's PoE1 data for the current league at
   start and every 15 minutes, so lookups never wait on the network. The
   protocol is described at the top of `daemon/src/main.rs`.
-  It's socket-activated: systemd owns `@poe-overlay`, starts the daemon on
+  It's socket-activated: systemd owns `@poe-waytrade`, starts the daemon on
   the first connection and the daemon exits after 30 minutes idle. The layer
   pings it when the game starts, so prices are loaded by the first lookup.
 - Trade search (`daemon/src/trade.rs`, `daemon/src/cdp.rs`): pathofexile.com
@@ -126,7 +129,7 @@ browser.
   pipe, making same-origin `fetch()` calls from a page on the site. It starts
   on the first rare price check and closes after 10 minutes unused. Mod
   lines map to trade stat ids by their text with numbers replaced by `#`
-  (stat list cached daily in `~/.cache/poe-overlay`). The daemon follows
+  (stat list cached daily in `~/.cache/poe-waytrade`). The daemon follows
   GGG's `X-Rate-Limit-*` headers and refuses requests that would hit a limit
   rather than risk an IP timeout.
 
@@ -144,7 +147,7 @@ The build also writes a manifest pointing at the built library, so you can
 test without installing:
 
 ```bash
-VK_ADD_IMPLICIT_LAYER_PATH=$PWD/build/layer ENABLE_POE_OVERLAY=1 vkcube --wsi wayland
+VK_ADD_IMPLICIT_LAYER_PATH=$PWD/build/layer ENABLE_POE_WAYTRADE=1 vkcube --wsi wayland
 ```
 
 The daemon:
@@ -160,43 +163,43 @@ cargo run --release -- query item.txt            # ask a running daemon
 cd packaging/arch && makepkg -si
 ```
 
-This installs the layer (`/usr/lib/libVkLayer_poe_overlay.so` plus a manifest
-in `/usr/share/vulkan/implicit_layer.d/`), `/usr/bin/poe-overlay-daemon` and
+This installs the layer (`/usr/lib/libVkLayer_poe_waytrade.so` plus a manifest
+in `/usr/share/vulkan/implicit_layer.d/`), `/usr/bin/poe-waytrade-daemon` and
 its systemd user socket + service, and enables the socket for all users
 (`systemctl --global`), so there is nothing to start by hand from the next
-login on (`systemctl --user start poe-overlay-daemon.socket` for the current
-one). Remove with `pacman -R poe-overlay`. The daemon follows poe.ninja's
+login on (`systemctl --user start poe-waytrade-daemon.socket` for the current
+one). Remove with `pacman -R poe-waytrade`. The daemon follows poe.ninja's
 current softcore league; set `POE_LEAGUE` in the service
-(`systemctl --user edit poe-overlay-daemon.service`) to pin one.
+(`systemctl --user edit poe-waytrade-daemon.service`) to pin one.
 
 ## Use with Path of Exile
 
-The layer is inert unless `ENABLE_POE_OVERLAY=1` is set. Steam launch options:
+The layer is inert unless `ENABLE_POE_WAYTRADE=1` is set. Steam launch options:
 
 ```
-ENABLE_POE_OVERLAY=1 PROTON_ENABLE_WAYLAND=1 POE_OVERLAY_LOG=/tmp/poe-overlay.log %command%
+ENABLE_POE_WAYTRADE=1 PROTON_ENABLE_WAYLAND=1 POE_WAYTRADE_LOG=/tmp/poe-waytrade.log %command%
 ```
 
 Without `PROTON_ENABLE_WAYLAND` the game runs on XWayland: the panel still
 draws, but hotkeys and the clipboard are not implemented for X11 yet.
 
-`POE_OVERLAY_DEBUG=1` adds a debug window (focus, last key, clipboard state).
+`POE_WAYTRADE_DEBUG=1` adds a debug window (focus, last key, clipboard state).
 
 Working on the UI without the game:
 
 ```bash
-POE_OVERLAY_UI_DIR=$PWD/assets POE_OVERLAY_DEMO_ITEM=item.txt \
-  VK_ADD_IMPLICIT_LAYER_PATH=$PWD/build/layer ENABLE_POE_OVERLAY=1 vkcube --wsi wayland
+POE_WAYTRADE_UI_DIR=$PWD/assets POE_WAYTRADE_DEMO_ITEM=item.txt \
+  VK_ADD_IMPLICIT_LAYER_PATH=$PWD/build/layer ENABLE_POE_WAYTRADE=1 vkcube --wsi wayland
 ```
 
-`POE_OVERLAY_UI_DIR` loads `ui/*` from disk and reloads them when they
-change; `POE_OVERLAY_DEMO_ITEM` opens the panel on start with that item text
-(as copied from the game; maps open the map check). `POE_OVERLAY_UI_SCALE`
-scales the whole UI. `POE_OVERLAY_SNAPSHOT=<file.ppm>` saves one of the app's own rendered frames
-(after 300 frames) and `POE_OVERLAY_DEMO_SEARCH=1` makes a demo item search by
-itself, for checking the UI without screenshots. `POE_OVERLAY_SOCKET=name`
+`POE_WAYTRADE_UI_DIR` loads `ui/*` from disk and reloads them when they
+change; `POE_WAYTRADE_DEMO_ITEM` opens the panel on start with that item text
+(as copied from the game; maps open the map check). `POE_WAYTRADE_UI_SCALE`
+scales the whole UI. `POE_WAYTRADE_SNAPSHOT=<file.ppm>` saves one of the app's own rendered frames
+(after 300 frames) and `POE_WAYTRADE_DEMO_SEARCH=1` makes a demo item search by
+itself, for checking the UI without screenshots. `POE_WAYTRADE_SOCKET=name`
 makes the layer (and
-`poe-overlay-daemon query`) talk to a daemon on another abstract socket, for
+`poe-waytrade-daemon query`) talk to a daemon on another abstract socket, for
 testing a new daemon next to the installed one.
 
 ## Known limitations / next steps
@@ -204,7 +207,7 @@ testing a new daemon next to the installed one.
 - Hotkeys are hard-coded (Ctrl+D, Ctrl+Alt+D) and still reach the game too.
 - Mouse input under fractional scaling assumes the app renders at full
   resolution if it runs under Wine, at logical size otherwise;
-  `POE_OVERLAY_SCALE` overrides the pixel-per-logical-unit ratio.
+  `POE_WAYTRADE_SCALE` overrides the pixel-per-logical-unit ratio.
 - No advanced copy (Ctrl+Alt+C) yet, so mod tiers/ranges aren't available.
 - No X11 input path (would be `XQueryKeymap` polling like MangoHud).
 - Only one device gets the overlay (RmlUi is a process-wide singleton).
@@ -215,7 +218,7 @@ testing a new daemon next to the installed one.
 
 ## License
 
-poe-overlay is free software under the GNU General Public License, version
+poe-waytrade is free software under the GNU General Public License, version
 3 or (at your option) any later version; see [LICENSE](LICENSE).
 
 Bundled third-party code keeps its own license: `third_party/rmlui` is RmlUi 6.3 core (MIT); `third_party/stb` has

@@ -456,7 +456,7 @@ fn cache_dir() -> PathBuf {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".cache"));
-    base.join("poe-overlay")
+    base.join("poe-waytrade")
 }
 
 /// "2026-11-18T22:01:33Z" -> how long ago, as "2m" / "3h" / "5d".

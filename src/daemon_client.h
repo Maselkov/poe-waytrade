@@ -1,4 +1,4 @@
-// Talks to poe-overlay-daemon over the abstract socket @poe-overlay without
+// Talks to poe-waytrade-daemon over the abstract socket @poe-waytrade without
 // ever blocking the frame: the request is written and the reply read a bit
 // at a time from poll(), once per frame. Protocol: see daemon/src/main.rs.
 #pragma once

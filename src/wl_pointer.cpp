@@ -79,12 +79,12 @@ int round_up(int v) { return (v + kBufferStep - 1) / kBufferStep * kBufferStep; 
 // is inferred: Wine renders at the output's full resolution, so the ratio is
 // the compositor's fractional scale for our surface (which sits on the same
 // output). Apps that render at logical size (e.g. vkcube) have a ratio of 1.
-// POE_OVERLAY_SCALE overrides both.
+// POE_WAYTRADE_SCALE overrides both.
 void WaylandInput::init_scale_policy() {
-    if (const char* s = getenv("POE_OVERLAY_SCALE")) {
+    if (const char* s = getenv("POE_WAYTRADE_SCALE")) {
         double v = atof(s);
         scale_ = v > 0 ? v : 1.0;
-        poe_log("wayland input: scale %.3f (POE_OVERLAY_SCALE)", scale_);
+        poe_log("wayland input: scale %.3f (POE_WAYTRADE_SCALE)", scale_);
         return;
     }
     follow_fractional_scale_ = getenv("WINEPREFIX") || getenv("WINELOADER") || getenv("WINEDLLPATH");
@@ -204,7 +204,7 @@ bool WaylandInput::ensure_buffer(int w, int h) {
 
     size_t size = (size_t)w * h * 4;
     if (shm_fd_ < 0) {
-        shm_fd_ = memfd_create("poe-overlay-input", MFD_CLOEXEC);
+        shm_fd_ = memfd_create("poe-waytrade-input", MFD_CLOEXEC);
         if (shm_fd_ < 0 || ftruncate(shm_fd_, size) != 0) {
             poe_log("wayland input: shm buffer: %s", strerror(errno));
             return false;

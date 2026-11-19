@@ -74,12 +74,12 @@ std::string substitute_defines(const std::string& src) {
     return out;
 }
 
-// Serves assets from POE_OVERLAY_UI_DIR when set (for live editing),
+// Serves assets from POE_WAYTRADE_UI_DIR when set (for live editing),
 // otherwise from the copies built into the layer.
 class Files final : public Rml::FileInterface {
 public:
     Files() {
-        if (const char* dir = getenv("POE_OVERLAY_UI_DIR")) dev_dir = dir;
+        if (const char* dir = getenv("POE_WAYTRADE_UI_DIR")) dev_dir = dir;
     }
 
     std::string dev_dir;
@@ -268,7 +268,7 @@ struct OverlayUi::Impl {
     }
     uint64_t shown_all_check = 0;
     uint64_t placed_check = 0;
-    bool debug = getenv("POE_OVERLAY_DEBUG") != nullptr;
+    bool debug = getenv("POE_WAYTRADE_DEBUG") != nullptr;
     float ui_scale = 1.0f;
     int frame = 0;
     time_t loaded_mtime = 0;
@@ -307,7 +307,7 @@ OverlayUi::~OverlayUi() {
 bool OverlayUi::ok() const { return impl_->ok; }
 
 bool OverlayUi::Impl::init(RmlRenderer* renderer) {
-    if (const char* s = getenv("POE_OVERLAY_UI_SCALE")) ui_scale = std::max(0.25f, (float)atof(s));
+    if (const char* s = getenv("POE_WAYTRADE_UI_SCALE")) ui_scale = std::max(0.25f, (float)atof(s));
     Rml::SetRenderInterface(renderer);
     Rml::SetSystemInterface(&system);
     Rml::SetFileInterface(&files);

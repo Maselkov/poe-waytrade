@@ -117,7 +117,7 @@ private:
     float anchor_x_ = 0, anchor_y_ = 0;
     bool visible_ = false;
     bool stale_ = false;
-    bool demo_ = false;  // POE_OVERLAY_DEMO_ITEM: stays open for design work
+    bool demo_ = false;  // POE_WAYTRADE_DEMO_ITEM: stays open for design work
     // When the pointer left a pinned panel; it closes once that's long enough
     // ago, so slipping over the edge or the panel resizing doesn't close it.
     std::optional<Clock::time_point> left_panel_at_;

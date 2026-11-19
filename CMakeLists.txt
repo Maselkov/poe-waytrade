@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(poe_overlay C CXX)
+project(poe_waytrade C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,7 +58,7 @@ target_compile_definitions(rmlui_core PUBLIC RMLUI_STATIC_LIB
                            PRIVATE RMLUI_FONT_ENGINE_FREETYPE RMLUI_VERSION="6.3")
 target_link_libraries(rmlui_core PRIVATE PkgConfig::FREETYPE)
 
-add_library(VkLayer_poe_overlay SHARED
+add_library(VkLayer_poe_waytrade SHARED
   src/layer.cpp
   src/overlay.cpp
   src/rml_renderer.cpp
@@ -74,18 +74,18 @@ add_library(VkLayer_poe_overlay SHARED
   ${PROTOCOL_SOURCES}
   ${SHADER_OUTPUTS}
 )
-target_include_directories(VkLayer_poe_overlay PRIVATE ${VULKAN_INCLUDE_DIR} ${PROTOCOL_DIR} ${SHADER_DIR}
+target_include_directories(VkLayer_poe_waytrade PRIVATE ${VULKAN_INCLUDE_DIR} ${PROTOCOL_DIR} ${SHADER_DIR}
   ${CMAKE_SOURCE_DIR}/third_party/stb)
-target_compile_definitions(VkLayer_poe_overlay PRIVATE VK_NO_PROTOTYPES VK_USE_PLATFORM_WAYLAND_KHR)
+target_compile_definitions(VkLayer_poe_waytrade PRIVATE VK_NO_PROTOTYPES VK_USE_PLATFORM_WAYLAND_KHR)
 # Fonts and UI documents are built in with #embed (C23).
 set_source_files_properties(src/assets.c PROPERTIES
   COMPILE_OPTIONS "-std=gnu23;--embed-dir=${CMAKE_SOURCE_DIR}/assets"
   OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/assets/ui/theme.rcss;${CMAKE_SOURCE_DIR}/assets/ui/price_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/map_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/debug.rml")
 pkg_check_modules(WAYLAND_CURSOR REQUIRED IMPORTED_TARGET wayland-cursor)
-target_link_libraries(VkLayer_poe_overlay PRIVATE PkgConfig::WAYLAND PkgConfig::WAYLAND_CURSOR rmlui_core)
+target_link_libraries(VkLayer_poe_waytrade PRIVATE PkgConfig::WAYLAND PkgConfig::WAYLAND_CURSOR rmlui_core)
 # The layer is loaded into the game (inside Steam's runtime container), so keep
 # its dependencies minimal and don't leak symbols like RmlUi's into the process.
-target_link_options(VkLayer_poe_overlay PRIVATE
+target_link_options(VkLayer_poe_waytrade PRIVATE
   -static-libstdc++ -static-libgcc
   -Wl,--exclude-libs,ALL
   -Wl,--no-undefined
@@ -94,16 +94,16 @@ target_link_options(VkLayer_poe_overlay PRIVATE
 include(GNUInstallDirs)
 
 # Manifest for testing from the build tree:
-#   VK_ADD_IMPLICIT_LAYER_PATH=build/layer ENABLE_POE_OVERLAY=1 vkcube --wsi wayland
-set(LAYER_PATH $<TARGET_FILE:VkLayer_poe_overlay>)
-configure_file(VkLayer_poe_overlay.json.in ${CMAKE_BINARY_DIR}/layer.json.in @ONLY)
-file(GENERATE OUTPUT ${CMAKE_BINARY_DIR}/layer/VkLayer_poe_overlay.json
+#   VK_ADD_IMPLICIT_LAYER_PATH=build/layer ENABLE_POE_WAYTRADE=1 vkcube --wsi wayland
+set(LAYER_PATH $<TARGET_FILE:VkLayer_poe_waytrade>)
+configure_file(VkLayer_poe_waytrade.json.in ${CMAKE_BINARY_DIR}/layer.json.in @ONLY)
+file(GENERATE OUTPUT ${CMAKE_BINARY_DIR}/layer/VkLayer_poe_waytrade.json
      INPUT ${CMAKE_BINARY_DIR}/layer.json.in)
 
 # Installed manifest points at the installed library.
-set(LAYER_PATH ${CMAKE_INSTALL_FULL_LIBDIR}/libVkLayer_poe_overlay.so)
-configure_file(VkLayer_poe_overlay.json.in ${CMAKE_BINARY_DIR}/install/VkLayer_poe_overlay.json @ONLY)
+set(LAYER_PATH ${CMAKE_INSTALL_FULL_LIBDIR}/libVkLayer_poe_waytrade.so)
+configure_file(VkLayer_poe_waytrade.json.in ${CMAKE_BINARY_DIR}/install/VkLayer_poe_waytrade.json @ONLY)
 
-install(TARGETS VkLayer_poe_overlay LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/install/VkLayer_poe_overlay.json
+install(TARGETS VkLayer_poe_waytrade LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES ${CMAKE_BINARY_DIR}/install/VkLayer_poe_waytrade.json
         DESTINATION ${CMAKE_INSTALL_DATADIR}/vulkan/implicit_layer.d)

@@ -1,0 +1,11 @@
+[Unit]
+Description=Price lookups for the poe-waytrade Vulkan layer
+Requires=poe-waytrade-daemon.socket
+After=network-online.target
+
+# Started on demand by poe-waytrade-daemon.socket; exits after 30 min idle.
+[Service]
+ExecStart=/usr/bin/poe-waytrade-daemon
+Restart=on-failure
+# Pin a league instead of following poe.ninja's current one:
+# Environment=POE_LEAGUE=Standard

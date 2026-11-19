@@ -1,6 +1,6 @@
-//! Price lookups for the poe-overlay Vulkan layer.
+//! Price lookups for the poe-waytrade Vulkan layer.
 //!
-//! Listens on the abstract Unix socket `@poe-overlay`. Abstract sockets live
+//! Listens on the abstract Unix socket `@poe-waytrade`. Abstract sockets live
 //! in the network namespace rather than the filesystem, so the layer can
 //! reach us from inside Steam's runtime container. One request per
 //! connection; both directions are framed as a little-endian u32 length
@@ -57,7 +57,7 @@
 //!   request:  "MAPMARK\n" + profile + "\n" + d|w|g|- + "\n" + key
 //!   request:  "MAPPROFILE\n" + profile        (both answer "status ok")
 //!
-//! Normally started by systemd socket activation (poe-overlay-daemon.socket):
+//! Normally started by systemd socket activation (poe-waytrade-daemon.socket):
 //! systemd owns the socket, starts us on the first connection, and we exit
 //! after a while without requests. Run by hand, we bind the socket ourselves
 //! and stay up.
@@ -78,7 +78,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const SOCKET_NAME: &[u8] = b"poe-overlay";
+const SOCKET_NAME: &[u8] = b"poe-waytrade";
 const MAX_FRAME: usize = 256 * 1024;
 const REFRESH: Duration = Duration::from_secs(15 * 60);
 const RETRY: Duration = Duration::from_secs(60);
@@ -115,7 +115,7 @@ fn main() {
 
     let listener = match systemd_listener() {
         Some(l) => {
-            let idle = std::env::var("POE_OVERLAY_IDLE_SECS")
+            let idle = std::env::var("POE_WAYTRADE_IDLE_SECS")
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .map(Duration::from_secs)
@@ -129,11 +129,11 @@ fn main() {
             let addr = SocketAddr::from_abstract_name(SOCKET_NAME).expect("socket name");
             match UnixListener::bind_addr(&addr) {
                 Ok(l) => {
-                    eprintln!("listening on @poe-overlay");
+                    eprintln!("listening on @poe-waytrade");
                     l
                 }
                 Err(e) => {
-                    eprintln!("can't listen on @poe-overlay ({e}); is another daemon running?");
+                    eprintln!("can't listen on @poe-waytrade ({e}); is another daemon running?");
                     std::process::exit(1);
                 }
             }
@@ -530,9 +530,9 @@ fn write_frame(stream: &mut UnixStream, body: &str) -> io::Result<()> {
     stream.write_all(body.as_bytes())
 }
 
-/// `poe-overlay-daemon query [--map] [file]`: send item text (file or stdin)
+/// `poe-waytrade-daemon query [--map] [file]`: send item text (file or stdin)
 /// to the running daemon as a price check (or map check) and print its
-/// answer, for testing without the game. POE_OVERLAY_SOCKET picks another
+/// answer, for testing without the game. POE_WAYTRADE_SOCKET picks another
 /// socket name, for a test daemon.
 fn query(args: &[String]) -> io::Result<()> {
     let map = args.first().is_some_and(|a| a == "--map");
@@ -541,7 +541,7 @@ fn query(args: &[String]) -> io::Result<()> {
         Some(p) => std::fs::read_to_string(p)?,
         None => io::read_to_string(io::stdin())?,
     };
-    let name = std::env::var("POE_OVERLAY_SOCKET").unwrap_or_else(|_| "poe-overlay".into());
+    let name = std::env::var("POE_WAYTRADE_SOCKET").unwrap_or_else(|_| "poe-waytrade".into());
     let addr = SocketAddr::from_abstract_name(name.as_bytes())?;
     let mut stream = UnixStream::connect_addr(&addr)?;
     write_frame(&mut stream, &format!("{}\n{text}", if map { "MAPCHECK" } else { "PRICE" }))?;

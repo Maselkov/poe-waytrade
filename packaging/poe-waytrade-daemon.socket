@@ -1,9 +1,9 @@
 [Unit]
-Description=Socket for poe-overlay price lookups
+Description=Socket for poe-waytrade price lookups
 
 [Socket]
 # Abstract socket: reachable from inside Steam's runtime container.
-ListenStream=@poe-overlay
+ListenStream=@poe-waytrade
 
 [Install]
 WantedBy=sockets.target

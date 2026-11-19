@@ -41,9 +41,9 @@ pub struct Browser {
     session: String,
 }
 
-/// `POE_OVERLAY_CHROMIUM`, else the first Chromium/Chrome on PATH.
+/// `POE_WAYTRADE_CHROMIUM`, else the first Chromium/Chrome on PATH.
 pub fn find_binary() -> Option<String> {
-    if let Ok(path) = std::env::var("POE_OVERLAY_CHROMIUM") {
+    if let Ok(path) = std::env::var("POE_WAYTRADE_CHROMIUM") {
         return Some(path);
     }
     let path = std::env::var("PATH").unwrap_or_default();

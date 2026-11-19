@@ -1,5 +1,5 @@
 /* Theme for the overlay. `@define $name value;` lines are substituted by
-   the loader (RCSS has no variables). Edit live with POE_OVERLAY_UI_DIR. */
+   the loader (RCSS has no variables). Edit live with POE_WAYTRADE_UI_DIR. */
 
 @define $accent #5b4fb0;
 @define $accent-text #e4e0fa;

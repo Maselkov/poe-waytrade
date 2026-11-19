@@ -26,11 +26,11 @@ PriceCheck::PriceCheck() {
     wake_.ping();
     // For working on the UI without the game: open the panel on start with
     // an item as if it had just been copied.
-    if (const char* path = getenv("POE_OVERLAY_DEMO_ITEM")) {
+    if (const char* path = getenv("POE_WAYTRADE_DEMO_ITEM")) {
         std::ifstream f(path);
         item_text_.assign(std::istreambuf_iterator<char>(f), {});
         item_ = parse_item_text(item_text_);
-        status_ = item_ ? "" : std::string("POE_OVERLAY_DEMO_ITEM isn't PoE item text: ") + path;
+        status_ = item_ ? "" : std::string("POE_WAYTRADE_DEMO_ITEM isn't PoE item text: ") + path;
         // Maps show the map check, everything else the price check.
         pending_purpose_ = item_ && is_map_like(*item_) ? Purpose::Map : Purpose::Price;
         if (item_) pending_purpose_ == Purpose::Map ? daemon_.request_map(item_text_) : daemon_.request(item_text_);
@@ -90,9 +90,9 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
             reply_ = std::move(reply);
             stale_ = false;
             request_icons();
-            // POE_OVERLAY_DEMO_SEARCH=1: a demo item searches by itself, so
+            // POE_WAYTRADE_DEMO_SEARCH=1: a demo item searches by itself, so
             // the searched state can be checked without clicking.
-            if (demo_ && reply_->status == "trade" && !reply_->searched && getenv("POE_OVERLAY_DEMO_SEARCH")) search();
+            if (demo_ && reply_->status == "trade" && !reply_->searched && getenv("POE_WAYTRADE_DEMO_SEARCH")) search();
         }
         changed();
     }
@@ -218,7 +218,7 @@ void PriceCheck::open() {
 void PriceCheck::set_visible(bool v) {
     if (visible_ == v) return;
     visible_ = v;
-    if (getenv("POE_OVERLAY_DEBUG")) poe_log("price check: %s (mode %d)", v ? "shown" : "hidden", (int)mode_);
+    if (getenv("POE_WAYTRADE_DEBUG")) poe_log("price check: %s (mode %d)", v ? "shown" : "hidden", (int)mode_);
     changed();
 }
 

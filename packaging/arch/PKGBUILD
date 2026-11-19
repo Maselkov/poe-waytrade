@@ -1,6 +1,6 @@
 # Builds from the local checkout this file lives in.
 #   cd packaging/arch && makepkg -si
-pkgname=poe-overlay
+pkgname=poe-waytrade
 pkgver=0.11.1
 pkgrel=2
 pkgdesc="In-game Vulkan price-check overlay for Path of Exile on Wayland"
@@ -10,7 +10,7 @@ depends=('vulkan-icd-loader' 'wayland' 'freetype2' 'gcc-libs' 'glibc')
 makedepends=('cmake' 'ninja' 'vulkan-headers' 'wayland-protocols' 'shaderc' 'cargo')
 optdepends=('chromium: trade search for rare items (or google-chrome)'
             'xdg-utils: open trade searches in your browser')
-install=poe-overlay.install
+install=poe-waytrade.install
 
 _srcroot="$(realpath "$startdir/../..")"
 
@@ -36,8 +36,8 @@ check() {
 
 package() {
   DESTDIR="$pkgdir" cmake --install build
-  install -Dm755 "$srcdir/target/release/poe-overlay-daemon" "$pkgdir/usr/bin/poe-overlay-daemon"
+  install -Dm755 "$srcdir/target/release/poe-waytrade-daemon" "$pkgdir/usr/bin/poe-waytrade-daemon"
   install -Dm644 -t "$pkgdir/usr/lib/systemd/user" \
-    "$_srcroot/packaging/poe-overlay-daemon.service" \
-    "$_srcroot/packaging/poe-overlay-daemon.socket"
+    "$_srcroot/packaging/poe-waytrade-daemon.service" \
+    "$_srcroot/packaging/poe-waytrade-daemon.socket"
 }
