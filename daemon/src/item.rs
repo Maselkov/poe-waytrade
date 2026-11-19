@@ -1,5 +1,6 @@
-//! Parser for the text PoE1 puts on the clipboard for Ctrl+C on an item,
-//! and for Ctrl+Alt+C ("advanced" copy: mod headers and roll ranges).
+//! Parser for the text PoE1 puts on the clipboard when an item is copied:
+//! plain, or the "advanced" copy with mod headers and roll ranges (what
+//! Ctrl+C gives now, like Ctrl+Alt+C).
 
 #[derive(Debug, Default)]
 pub struct Item {

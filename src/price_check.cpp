@@ -68,7 +68,6 @@ bool PriceCheck::anchor(float* x, float* y) const {
 void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     if (release_pending_) {
         keyboard_.key(KEY_C, false);
-        if (we_pressed_alt_) keyboard_.key(KEY_LEFTALT, false);
         if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, false);
         keyboard_.sync();
         release_pending_ = false;
@@ -204,18 +203,16 @@ void PriceCheck::send_copy_keys(WaylandInput& input) {
     restore_clipboard_ = true;
     Mode mode = pending_mode_;
     Purpose purpose = pending_purpose_;
-    // Ctrl+Alt+C: PoE's advanced copy, which adds each mod's roll range (for
-    // the trade filters' sliders) and marks which lines are mods. The user is
-    // still holding some modifiers from the hotkey; only add the others.
+    // Ctrl+C: PoE copies the advanced description (mod headers with tiers,
+    // affix names and roll ranges), the same as Ctrl+Alt+C. The user may
+    // still be holding Ctrl from the hotkey; only press it if not.
     if (test_copy_) {
-        poe_log("test copy: would press Ctrl+Alt+C now");
+        poe_log("test copy: would press Ctrl+C now");
         begin_wait(input, mode, purpose, Clock::now() + std::chrono::seconds(5));
         return;
     }
     we_pressed_ctrl_ = !input.ctrl_held();
-    we_pressed_alt_ = !input.alt_held();
     if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, true);
-    if (we_pressed_alt_) keyboard_.key(KEY_LEFTALT, true);
     keyboard_.key(KEY_C, true);
     keyboard_.sync();
     release_pending_ = true;
