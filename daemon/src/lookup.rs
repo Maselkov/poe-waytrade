@@ -43,12 +43,7 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
 
     // Currency, fragments, essences, divination cards, omens, ...
     if let Some(&chaos) = db.exchange.get(&item.base) {
-        let mut prices = vec![Price {
-            label: "each".to_string(),
-            chaos,
-            divine: db.to_divine(chaos),
-            listings: None,
-        }];
+        let mut prices = vec![Price { label: "each".to_string(), chaos, divine: db.to_divine(chaos), listings: None }];
         if let Some(stack) = item.stack_size.filter(|&n| n > 1) {
             let total = chaos * stack as f64;
             prices.push(Price {
@@ -105,8 +100,7 @@ fn line_price(db: &PriceDb, line: &ItemLine) -> Price {
 /// unlinked line. Variants (different rolls of one unique) are all shown.
 fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
     let want = if item.links >= 5 { Some(item.links) } else { None };
-    let mut matching: Vec<&ItemLine> =
-        lines.iter().filter(|l| l.links.filter(|&n| n >= 5) == want).collect();
+    let mut matching: Vec<&ItemLine> = lines.iter().filter(|l| l.links.filter(|&n| n >= 5) == want).collect();
     if matching.is_empty() {
         matching = lines.iter().collect();
     }
@@ -119,11 +113,8 @@ fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
             let mut price = line_price(db, l);
             // Unidentified: several uniques share the base, so say which.
             if item.name.is_none() {
-                price.label = if price.label.is_empty() {
-                    l.name.clone()
-                } else {
-                    format!("{} ({})", l.name, price.label)
-                };
+                price.label =
+                    if price.label.is_empty() { l.name.clone() } else { format!("{} ({})", l.name, price.label) };
             }
             price
         })
@@ -152,11 +143,9 @@ fn best_gem<'a>(lines: &'a [ItemLine], item: &Item) -> Option<&'a ItemLine> {
         lines.iter().filter(|l| l.corrupted.unwrap_or(false) == item.corrupted).collect();
     let pool = if same_corruption.is_empty() { lines.iter().collect() } else { same_corruption };
     let closest = pool.iter().map(|l| l.gem_level.unwrap_or(1).abs_diff(level)).min()?;
-    pool.into_iter()
-        .filter(|l| l.gem_level.unwrap_or(1).abs_diff(level) == closest)
-        .min_by_key(|l| {
-            let q = l.gem_quality.unwrap_or(0);
-            // Buckets at or below our quality first (closest wins), then above.
-            if q <= item.quality { (0, item.quality - q) } else { (1, q - item.quality) }
-        })
+    pool.into_iter().filter(|l| l.gem_level.unwrap_or(1).abs_diff(level) == closest).min_by_key(|l| {
+        let q = l.gem_quality.unwrap_or(0);
+        // Buckets at or below our quality first (closest wins), then above.
+        if q <= item.quality { (0, item.quality - q) } else { (1, q - item.quality) }
+    })
 }

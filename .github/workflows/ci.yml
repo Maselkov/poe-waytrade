@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: .github/scripts/arch-setup.sh
+
+      - name: Daemon formatting
+        working-directory: daemon
+        run: cargo fmt --check
+      - name: Daemon lints
+        working-directory: daemon
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Daemon tests
+        working-directory: daemon
+        run: cargo test --locked
+
+      - name: Build layer
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build
+      - name: Layer exports only Vulkan entry points
+        run: .github/scripts/check-exports.sh build/libVkLayer_poe_waytrade.so
+
+      - name: Arch package
+        working-directory: packaging/arch
+        run: su builder -c 'makepkg --noconfirm'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: packaging/arch/*.pkg.tar.zst
+          retention-days: 14

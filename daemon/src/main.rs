@@ -237,8 +237,12 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         respond(state, text, None)
     } else if let Some(rest) = request.strip_prefix("TRADE\n") {
         let mut parts = rest.splitn(4, '\n');
-        let (indices, base, corrupted, text) =
-            (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+        let (indices, base, corrupted, text) = (
+            parts.next().unwrap_or(""),
+            parts.next().unwrap_or(""),
+            parts.next().unwrap_or(""),
+            parts.next().unwrap_or(""),
+        );
         let search = TradeRequest {
             enabled: indices
                 .split(',')
@@ -291,7 +295,8 @@ fn base64(bytes: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
-        let n = (chunk[0] as u32) << 16 | (*chunk.get(1).unwrap_or(&0) as u32) << 8 | *chunk.get(2).unwrap_or(&0) as u32;
+        let n =
+            (chunk[0] as u32) << 16 | (*chunk.get(1).unwrap_or(&0) as u32) << 8 | *chunk.get(2).unwrap_or(&0) as u32;
         for k in 0..4 {
             if k <= chunk.len() {
                 out.push(TABLE[(n >> (18 - 6 * k) & 63) as usize] as char);
@@ -352,7 +357,12 @@ struct TradeRequest {
 /// Filters and options for an item, and listings if `search` asks for a
 /// search. Without one, no request goes to the trade site.
 /// `db` is only needed to search (for the league); filters come without it.
-fn trade_response(state: &State, item: &item::Item, search: Option<&TradeRequest>, db: Option<&ninja::PriceDb>) -> String {
+fn trade_response(
+    state: &State,
+    item: &item::Item,
+    search: Option<&TradeRequest>,
+    db: Option<&ninja::PriceDb>,
+) -> String {
     let mut out = String::new();
     let title = item.name.clone().unwrap_or_else(|| item.base.clone());
     let mut trade = state.trade.lock().unwrap();
@@ -372,7 +382,9 @@ fn trade_response(state: &State, item: &item::Item, search: Option<&TradeRequest
         let on = search.map_or(f.default_on, |_| chosen.is_some());
         let min = chosen.and_then(|c| c.min).or(f.min).map(trade::trim_number).unwrap_or_default();
         let max = chosen.and_then(|c| c.max).map(trade::trim_number).unwrap_or_default();
-        let (lo, hi) = f.slider.map_or((String::new(), String::new()), |(lo, hi)| (trade::trim_number(lo), trade::trim_number(hi)));
+        let (lo, hi) = f
+            .slider
+            .map_or((String::new(), String::new()), |(lo, hi)| (trade::trim_number(lo), trade::trim_number(hi)));
         let _ = writeln!(
             out,
             "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}\t{max}",
@@ -451,10 +463,10 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>) -> St
         // Identified uniques: trade filters for their rolls, with the
         // poe.ninja price (which ignores rolls) alongside.
         out = trade_response(state, &item, trade_search, Some(&db));
-        if out.starts_with("status\ttrade") {
-            if let lookup::Outcome::Found { prices, .. } = lookup::lookup(&db, &item) {
-                write_prices(&mut out, prices);
-            }
+        if out.starts_with("status\ttrade")
+            && let lookup::Outcome::Found { prices, .. } = lookup::lookup(&db, &item)
+        {
+            write_prices(&mut out, prices);
         }
     } else if trade_search.is_some() {
         out = trade_response(state, &item, trade_search, Some(&db));

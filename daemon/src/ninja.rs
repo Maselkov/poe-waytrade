@@ -6,25 +6,45 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 const BASE: &str = "https://poe.ninja/poe1/api";
-pub const USER_AGENT: &str = concat!(
-    "poe-waytrade-daemon/",
-    env!("CARGO_PKG_VERSION"),
-    " (personal price-check overlay)"
-);
+pub const USER_AGENT: &str =
+    concat!("poe-waytrade-daemon/", env!("CARGO_PKG_VERSION"), " (personal price-check overlay)");
 /// Be polite: poe.ninja is a free community service.
 const REQUEST_GAP: Duration = Duration::from_millis(250);
 
 /// Categories served by the currency exchange endpoint (name -> chaos).
 const EXCHANGE_TYPES: &[&str] = &[
-    "Currency", "Fragment", "Oil", "Fossil", "Resonator", "Essence", "DivinationCard",
-    "DeliriumOrb", "Omen", "Tattoo", "Artifact", "Runegraft", "AllflameEmber", "Astrolabe",
+    "Currency",
+    "Fragment",
+    "Oil",
+    "Fossil",
+    "Resonator",
+    "Essence",
+    "DivinationCard",
+    "DeliriumOrb",
+    "Omen",
+    "Tattoo",
+    "Artifact",
+    "Runegraft",
+    "AllflameEmber",
+    "Astrolabe",
 ];
 
 /// Categories served by the stash item endpoint (per-variant lines).
 const ITEM_TYPES: &[&str] = &[
-    "UniqueWeapon", "UniqueArmour", "UniqueAccessory", "UniqueFlask", "UniqueJewel",
-    "UniqueTincture", "UniqueRelic", "UniqueMap", "SkillGem", "Map", "BlightedMap",
-    "Invitation", "Beast", "Viscera",
+    "UniqueWeapon",
+    "UniqueArmour",
+    "UniqueAccessory",
+    "UniqueFlask",
+    "UniqueJewel",
+    "UniqueTincture",
+    "UniqueRelic",
+    "UniqueMap",
+    "SkillGem",
+    "Map",
+    "BlightedMap",
+    "Invitation",
+    "Beast",
+    "Viscera",
 ];
 
 #[derive(Deserialize)]
@@ -162,10 +182,10 @@ pub fn fetch(league: &str) -> Result<PriceDb, String> {
         match get::<ItemOverview>(&url) {
             Ok(ov) => {
                 for line in ov.lines {
-                    if kind.starts_with("Unique") {
-                        if let Some(base) = &line.base_type {
-                            db.uniques_by_base.entry(base.clone()).or_default().push(line.clone());
-                        }
+                    if kind.starts_with("Unique")
+                        && let Some(base) = &line.base_type
+                    {
+                        db.uniques_by_base.entry(base.clone()).or_default().push(line.clone());
                     }
                     db.items.entry(line.name.clone()).or_default().push(line);
                 }

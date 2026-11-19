@@ -172,6 +172,25 @@ one). Remove with `pacman -R poe-waytrade`. The daemon follows poe.ninja's
 current softcore league; set `POE_LEAGUE` in the service
 (`systemctl --user edit poe-waytrade-daemon.service`) to pin one.
 
+## CI and releases
+
+GitHub Actions builds everything in an Arch container (the layer needs GCC
+15 for `#embed`) on every push to main and every pull request: rustfmt,
+clippy with warnings as errors, the daemon's tests, the layer, a check that
+the layer exports only the three Vulkan loader entry points, and the Arch
+package.
+
+To release, bump `pkgver` in `packaging/arch/PKGBUILD`, commit, and push a
+matching tag:
+
+```
+git tag v0.12.0 && git push origin v0.12.0
+```
+
+The release workflow attaches the Arch package and a tarball of the same
+files laid out from `/` (for other distros with a recent glibc), with
+checksums.
+
 ## Use with Path of Exile
 
 The layer is inert unless `ENABLE_POE_WAYTRADE=1` is set. Steam launch options:

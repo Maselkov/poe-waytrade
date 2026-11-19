@@ -89,7 +89,9 @@ target_link_options(VkLayer_poe_waytrade PRIVATE
   -static-libstdc++ -static-libgcc
   -Wl,--exclude-libs,ALL
   -Wl,--no-undefined
+  -Wl,--version-script=${CMAKE_SOURCE_DIR}/src/layer.map
 )
+set_property(TARGET VkLayer_poe_waytrade APPEND PROPERTY LINK_DEPENDS ${CMAKE_SOURCE_DIR}/src/layer.map)
 
 include(GNUInstallDirs)
 

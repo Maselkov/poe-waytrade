@@ -68,7 +68,14 @@ pub struct Filter {
 
 impl Filter {
     /// `value`: the item's own (average for "Adds # to #", sums for totals).
-    fn new(label: String, target: Target, value: f64, bounds: Option<(f64, f64)>, on: bool, section: Section) -> Filter {
+    fn new(
+        label: String,
+        target: Target,
+        value: f64,
+        bounds: Option<(f64, f64)>,
+        on: bool,
+        section: Section,
+    ) -> Filter {
         let (min, slider, step, max_roll) = defaults(value, bounds);
         Filter { label, target, min, slider, step, max_roll, default_on: on, section }
     }
@@ -279,11 +286,13 @@ impl Trade {
         let found: Value = serde_json::from_str(&resp.body).map_err(|e| format!("bad search reply: {e}"))?;
         let id = found["id"].as_str().ok_or("search reply has no id")?.to_string();
         let total = found["total"].as_u64().unwrap_or(0);
-        let hashes: Vec<&str> =
-            found["result"].as_array().map(|a| a.iter().filter_map(Value::as_str).take(LISTINGS).collect()).unwrap_or_default();
+        let hashes: Vec<&str> = found["result"]
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_str).take(LISTINGS).collect())
+            .unwrap_or_default();
 
-        // One entry per listing first: (amount, currency id, name, chaos, minutes ago).
-        let mut singles: Vec<(f64, String, String, Option<f64>, Option<i64>)> = Vec::new();
+        // One entry per listing first.
+        let mut singles: Vec<Single> = Vec::new();
         if !hashes.is_empty() {
             let path = format!("/api/trade/fetch/{}?query={id}", hashes.join(","));
             let resp = self.request("fetch", "GET", &path, None)?;
@@ -297,11 +306,8 @@ impl Trade {
                     continue; // unpriced
                 };
                 let name = data.currencies.get(currency).cloned().unwrap_or_else(|| currency.to_string());
-                let chaos = if currency == "chaos" {
-                    Some(amount)
-                } else {
-                    prices.exchange.get(&name).map(|c| c * amount)
-                };
+                let chaos =
+                    if currency == "chaos" { Some(amount) } else { prices.exchange.get(&name).map(|c| c * amount) };
                 let minutes = listing["indexed"].as_str().and_then(listing_minutes);
                 singles.push((amount, currency.to_string(), name, chaos, minutes));
             }
@@ -313,7 +319,7 @@ impl Trade {
             let range = if same_currency {
                 format!("{}–{} {}", trim_number(first.0), trim_number(last.0), name)
             } else {
-                let c = |s: &(f64, String, String, Option<f64>, Option<i64>)| s.3.map(trim_number).unwrap_or("?".into());
+                let c = |s: &Single| s.3.map(trim_number).unwrap_or("?".into());
                 format!("{}–{}c", c(first), c(last))
             };
             Summary { amount: *amount, currency: name.clone(), currency_id: id.clone(), chaos: *chaos, range }
@@ -328,14 +334,23 @@ impl Trade {
                     ages.last_mut().unwrap().extend(minutes);
                 }
                 _ => {
-                    listings.push(Listing { amount, currency: name, currency_id: id, chaos, count: 1, age: String::new() });
+                    listings.push(Listing {
+                        amount,
+                        currency: name,
+                        currency_id: id,
+                        chaos,
+                        count: 1,
+                        age: String::new(),
+                    });
                     ages.push(minutes.into_iter().collect());
                 }
             }
         }
         for (listing, ages) in listings.iter_mut().zip(ages) {
             listing.age = match (ages.iter().min(), ages.iter().max()) {
-                (Some(&lo), Some(&hi)) if format_age(lo) != format_age(hi) => format!("{}–{}", format_age(lo), format_age(hi)),
+                (Some(&lo), Some(&hi)) if format_age(lo) != format_age(hi) => {
+                    format!("{}–{}", format_age(lo), format_age(hi))
+                }
                 (Some(&lo), _) => format_age(lo),
                 _ => String::new(),
             };
@@ -385,7 +400,13 @@ impl Trade {
     }
 
     /// A rate-limited request; non-2xx replies become errors.
-    fn request(&mut self, endpoint: &'static str, method: &str, path: &str, body: Option<&str>) -> Result<HttpResponse, String> {
+    fn request(
+        &mut self,
+        endpoint: &'static str,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+    ) -> Result<HttpResponse, String> {
         self.limiter.check(endpoint)?;
         let resp = self.browser()?.fetch(method, path, body)?;
         self.limiter.record(endpoint, &resp);
@@ -439,10 +460,8 @@ impl Trade {
         let fresh = std::fs::metadata(&path)
             .and_then(|m| m.modified())
             .is_ok_and(|t| SystemTime::now().duration_since(t).unwrap_or(Duration::MAX) < DATA_MAX_AGE);
-        if fresh {
-            if let Some(v) = std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok()) {
-                return Ok(v);
-            }
+        if fresh && let Some(v) = std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok()) {
+            return Ok(v);
         }
         let resp = self.request("data", "GET", &format!("/api/trade/data/{name}"), None)?;
         let v: Value = serde_json::from_str(&resp.body).map_err(|e| format!("bad {name} data: {e}"))?;
@@ -656,7 +675,8 @@ fn defaults(value: f64, bounds: Option<(f64, f64)>) -> (Option<f64>, Option<(f64
         return (None, None, 1.0, false);
     }
     let fractional = |v: f64| (v - v.round()).abs() > 1e-6;
-    let step = if fractional(value) || bounds.is_some_and(|(lo, hi)| fractional(lo) || fractional(hi)) { 0.01 } else { 1.0 };
+    let step =
+        if fractional(value) || bounds.is_some_and(|(lo, hi)| fractional(lo) || fractional(hi)) { 0.01 } else { 1.0 };
     let tidy = |v: f64| (v / step).round() * step;
     match bounds {
         Some((lo, hi)) if hi > lo => {
@@ -690,21 +710,35 @@ fn defaults(value: f64, bounds: Option<(f64, f64)>) -> (Option<f64>, Option<(f64
 /// damage type starts ticked.
 fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
     let mut filters = Vec::new();
-    if category(item).is_some_and(|(c, _)| c.starts_with("weapon.")) {
-        if let Some(aps) = item.attacks_per_second {
-            let pdps = (item.physical_damage.unwrap_or(0.0) * aps).round();
-            let edps = (item.elemental_damage * aps).round();
-            if pdps > 0.0 {
-                let label = format!("Physical DPS {pdps}");
-                filters.push(Filter::new(label, Target::Property("weapon_filters", "pdps"), pdps, None, ticked && pdps >= edps, Section::Weapon));
-            }
-            if edps > 0.0 {
-                let label = format!("Elemental DPS {edps}");
-                filters.push(Filter::new(label, Target::Property("weapon_filters", "edps"), edps, None, ticked && edps > pdps, Section::Weapon));
-            }
-            let label = format!("Attacks per second {aps:.2}");
-            filters.push(Filter::new(label, Target::Property("weapon_filters", "aps"), aps, None, false, Section::Weapon));
+    if category(item).is_some_and(|(c, _)| c.starts_with("weapon."))
+        && let Some(aps) = item.attacks_per_second
+    {
+        let pdps = (item.physical_damage.unwrap_or(0.0) * aps).round();
+        let edps = (item.elemental_damage * aps).round();
+        if pdps > 0.0 {
+            let label = format!("Physical DPS {pdps}");
+            filters.push(Filter::new(
+                label,
+                Target::Property("weapon_filters", "pdps"),
+                pdps,
+                None,
+                ticked && pdps >= edps,
+                Section::Weapon,
+            ));
         }
+        if edps > 0.0 {
+            let label = format!("Elemental DPS {edps}");
+            filters.push(Filter::new(
+                label,
+                Target::Property("weapon_filters", "edps"),
+                edps,
+                None,
+                ticked && edps > pdps,
+                Section::Weapon,
+            ));
+        }
+        let label = format!("Attacks per second {aps:.2}");
+        filters.push(Filter::new(label, Target::Property("weapon_filters", "aps"), aps, None, false, Section::Weapon));
     }
     filters
 }
@@ -736,7 +770,8 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     }
     let local = category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."));
     let mut listed = Vec::new();
-    let (mut elemental, mut chaos, mut life, mut mana) = (Amount::default(), Amount::default(), Amount::default(), Amount::default());
+    let (mut elemental, mut chaos, mut life, mut mana) =
+        (Amount::default(), Amount::default(), Amount::default(), Amount::default());
     let mut attributes = [Amount::default(); 3];
 
     for m in &item.mods {
@@ -820,6 +855,9 @@ fn build_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     filters
 }
 
+/// One fetched listing: amount, currency id, currency name, chaos value,
+/// minutes since it was listed.
+type Single = (f64, String, String, Option<f64>, Option<i64>);
 
 /// A filter the layer wants searched, with the bounds it chose (no minimum:
 /// the filter's default; no maximum: unbounded).
@@ -868,7 +906,9 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
         q["type"] = json!(item.base);
     } else {
         match category(item) {
-            Some((c, _)) if !options.base_only => q["filters"]["type_filters"]["filters"]["category"] = json!({ "option": c }),
+            Some((c, _)) if !options.base_only => {
+                q["filters"]["type_filters"]["filters"]["category"] = json!({ "option": c })
+            }
             _ => q["type"] = json!(item.base),
         }
     }
@@ -936,12 +976,14 @@ impl RateLimiter {
                     rules.push((max as u32, Duration::from_secs(window)));
                 }
             }
-            for part in resp.headers.get(&format!("x-rate-limit-{rule}-state")).map(String::as_str).unwrap_or("").split(',') {
+            for part in
+                resp.headers.get(&format!("x-rate-limit-{rule}-state")).map(String::as_str).unwrap_or("").split(',')
+            {
                 let f: Vec<u64> = part.split(':').filter_map(|n| n.parse().ok()).collect();
-                if let [_, _, penalty, ..] = f[..] {
-                    if penalty > 0 {
-                        self.block_for(Duration::from_secs(penalty));
-                    }
+                if let [_, _, penalty, ..] = f[..]
+                    && penalty > 0
+                {
+                    self.block_for(Duration::from_secs(penalty));
                 }
             }
         }
@@ -1085,7 +1127,8 @@ mod tests {
         let item = crate::item::parse(text).unwrap();
         assert!(searchable(&item));
         let filters = build_filters(&item, &test_data());
-        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.min, f.slider, f.max_roll, f.default_on, f.section)).collect();
+        let got: Vec<_> =
+            filters.iter().map(|f| (f.label.as_str(), f.min, f.slider, f.max_roll, f.default_on, f.section)).collect();
         assert_eq!(
             got,
             vec![
@@ -1128,7 +1171,10 @@ mod tests {
         chosen[0] = Some((Some(180.0), Some(220.0)));
         chosen[1] = Some((None, Some(1.5)));
         let q = query(&item, &filters, &chosen, SearchOptions { base_only: false, corrupted: Corrupted::Any });
-        assert_eq!(q["query"]["filters"]["weapon_filters"]["filters"]["pdps"], serde_json::json!({ "min": 180.0, "max": 220.0 }));
+        assert_eq!(
+            q["query"]["filters"]["weapon_filters"]["filters"]["pdps"],
+            serde_json::json!({ "min": 180.0, "max": 220.0 })
+        );
         assert_eq!(q["query"]["filters"]["weapon_filters"]["filters"]["aps"], serde_json::json!({ "max": 1.5 }));
     }
 

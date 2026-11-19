@@ -83,8 +83,14 @@ fn mod_line(line: &str) -> ModLine {
 
 /// Map properties shown in the map check, in this order.
 const MAP_PROPS: &[&str] = &[
-    "Item Quantity", "Item Rarity", "Monster Pack Size", "More Currency", "More Scarabs", "More Maps",
-    "More Divination Cards", "Quality",
+    "Item Quantity",
+    "Item Rarity",
+    "Monster Pack Size",
+    "More Currency",
+    "More Scarabs",
+    "More Maps",
+    "More Divination Cards",
+    "Quality",
 ];
 
 /// Advanced copy appends the roll range to each number: "+60(55-69)" and
@@ -115,18 +121,18 @@ fn split_roll_ranges(line: &str) -> (String, Vec<Option<(f64, f64)>>) {
         out.extend(&chars[start..i]);
         let negative = start > 0 && chars[start - 1] == '-';
         let mut range = None;
-        if chars.get(i) == Some(&'(') {
-            if let Some(len) = chars[i + 1..].iter().position(|&c| c == ')') {
-                let inner: String = chars[i + 1..i + 1 + len].iter().collect();
-                if let Some((a, b)) = parse_range(&inner) {
-                    range = Some(if negative {
-                        let (a, b) = (a.abs(), b.abs());
-                        (a.min(b), a.max(b))
-                    } else {
-                        (a, b)
-                    });
-                    i += len + 2;
-                }
+        if chars.get(i) == Some(&'(')
+            && let Some(len) = chars[i + 1..].iter().position(|&c| c == ')')
+        {
+            let inner: String = chars[i + 1..i + 1 + len].iter().collect();
+            if let Some((a, b)) = parse_range(&inner) {
+                range = Some(if negative {
+                    let (a, b) = (a.abs(), b.abs());
+                    (a.min(b), a.max(b))
+                } else {
+                    (a, b)
+                });
+                i += len + 2;
             }
         }
         ranges.push(range);
@@ -136,7 +142,8 @@ fn split_roll_ranges(line: &str) -> (String, Vec<Option<(f64, f64)>>) {
 
 /// "55-69", "0.6-1", "-12--9", or a fixed "18".
 fn parse_range(inner: &str) -> Option<(f64, f64)> {
-    if !inner.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-') || !inner.chars().any(|c| c.is_ascii_digit()) {
+    if !inner.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-') || !inner.chars().any(|c| c.is_ascii_digit())
+    {
         return None;
     }
     let bytes = inner.as_bytes();
@@ -257,11 +264,11 @@ pub fn parse(text: &str) -> Option<Item> {
         } else if let Some(v) = line.strip_prefix("Attacks per Second: ") {
             item.attacks_per_second = v.trim_end_matches(" (augmented)").parse().ok();
         }
-        if let Some((label, value)) = line.split_once(": ") {
-            if MAP_PROPS.contains(&label) {
-                let value = strip_roll_ranges(value.trim_end_matches(" (augmented)"));
-                item.map_props.push((label.to_string(), value));
-            }
+        if let Some((label, value)) = line.split_once(": ")
+            && MAP_PROPS.contains(&label)
+        {
+            let value = strip_roll_ranges(value.trim_end_matches(" (augmented)"));
+            item.map_props.push((label.to_string(), value));
         }
     }
     Some(item)
@@ -281,11 +288,7 @@ fn leading_number(s: &str) -> Option<u32> {
 
 /// "R-R-G B-B" -> 3: groups are space-separated, links are dashes.
 fn largest_link_group(sockets: &str) -> u32 {
-    sockets
-        .split_whitespace()
-        .map(|group| group.matches('-').count() as u32 + 1)
-        .max()
-        .unwrap_or(0)
+    sockets.split_whitespace().map(|group| group.matches('-').count() as u32 + 1).max().unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -397,7 +400,10 @@ mod tests {
         assert_eq!(strip_roll_ranges("Adds 5(3-6) to 10(9-11) Damage"), "Adds 5 to 10 Damage");
         assert_eq!(strip_roll_ranges("+0.8(0.6-1)% Leech"), "+0.8% Leech");
         assert_eq!(strip_roll_ranges("Grants Level 20 Aspect (Unique)"), "Grants Level 20 Aspect (Unique)");
-        assert_eq!(strip_roll_ranges("Monsters reflect 18(15-20)% of Physical Damage"), "Monsters reflect 18% of Physical Damage");
+        assert_eq!(
+            strip_roll_ranges("Monsters reflect 18(15-20)% of Physical Damage"),
+            "Monsters reflect 18% of Physical Damage"
+        );
     }
 
     #[test]

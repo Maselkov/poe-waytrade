@@ -1,0 +1,10 @@
+/* Export only the loader's entry points: anything else (e.g. libstdc++
+   template instances) could interpose on the game's own symbols. */
+{
+  global:
+    vkNegotiateLoaderLayerInterfaceVersion;
+    vkGetInstanceProcAddr;
+    vkGetDeviceProcAddr;
+  local:
+    *;
+};

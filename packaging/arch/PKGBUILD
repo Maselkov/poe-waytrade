@@ -10,6 +10,8 @@ depends=('vulkan-icd-loader' 'wayland' 'freetype2' 'gcc-libs' 'glibc')
 makedepends=('cmake' 'ninja' 'vulkan-headers' 'wayland-protocols' 'shaderc' 'cargo')
 optdepends=('chromium: trade search for rare items (or google-chrome)'
             'xdg-utils: open trade searches in your browser')
+# Rust links with lld, which can't read the GCC LTO objects of C deps (ring).
+options=('!lto')
 install=poe-waytrade.install
 
 _srcroot="$(realpath "$startdir/../..")"

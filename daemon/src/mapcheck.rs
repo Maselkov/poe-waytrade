@@ -105,10 +105,7 @@ pub struct Decisions {
 
 impl Decisions {
     fn defaults() -> Decisions {
-        let mods = DEFAULTS
-            .iter()
-            .map(|(text, d)| (mod_key(text), d.to_string().repeat(PROFILES)))
-            .collect();
+        let mods = DEFAULTS.iter().map(|(text, d)| (mod_key(text), d.to_string().repeat(PROFILES))).collect();
         Decisions { profile: 1, mods }
     }
 
@@ -234,7 +231,10 @@ mod tests {
                 "Players have -12% to all maximum Resistances\n",
                 "{ Suffix Modifier \"of Exposure\" }\nPlayers have -12(-12--9)% to all maximum Resistances\n",
             )
-            .replace("Area contains two Unique Bosses\n", "{ Prefix Modifier \"Twinned\" }\nArea contains two Unique Bosses\n");
+            .replace(
+                "Area contains two Unique Bosses\n",
+                "{ Prefix Modifier \"Twinned\" }\nArea contains two Unique Bosses\n",
+            );
         let info = analyse(&item::parse(&text).unwrap());
         let keys: Vec<_> = info.mods.iter().map(|m| m.key.as_str()).collect();
         assert_eq!(

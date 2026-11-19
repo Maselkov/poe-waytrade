@@ -214,7 +214,8 @@ impl Browser {
         loop {
             if let Some(end) = self.buf.iter().position(|&b| b == 0) {
                 let msg: Vec<u8> = self.buf.drain(..=end).collect();
-                return serde_json::from_slice(&msg[..msg.len() - 1]).map_err(|e| format!("chromium sent bad JSON: {e}"));
+                return serde_json::from_slice(&msg[..msg.len() - 1])
+                    .map_err(|e| format!("chromium sent bad JSON: {e}"));
             }
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
