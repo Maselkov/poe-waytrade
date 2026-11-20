@@ -225,7 +225,11 @@ struct Model {
     Rml::String status, source, thin, total, hint;
     bool status_error = false, searching = false, has_url = false, closable = false;
     // Trade search options
-    Rml::String base_label, category_label, corrupted, corrupted_label;
+    // The base and corruption chips name the item's own base and state, and
+    // are lit when the search keeps to it (dim: any base of the category, any
+    // corruption).
+    Rml::String base_label, corrupted_label, corrupted_kind;  // kind: yes | no
+    bool has_base = false, corrupted_on = false;
     bool base_preset = false, preset_base = false;  // offered / active
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
@@ -561,11 +565,12 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("hint", &model.hint);
     c.Bind("closable", &model.closable);
     c.Bind("base_label", &model.base_label);
-    c.Bind("category_label", &model.category_label);
+    c.Bind("has_base", &model.has_base);
     c.Bind("base_preset", &model.base_preset);
     c.Bind("preset_base", &model.preset_base);
-    c.Bind("corrupted", &model.corrupted);
+    c.Bind("corrupted_on", &model.corrupted_on);
     c.Bind("corrupted_label", &model.corrupted_label);
+    c.Bind("corrupted_kind", &model.corrupted_kind);
     c.Bind("base_only", &model.base_only);
     c.Bind("searched", &model.searched);
     c.Bind("stale", &model.stale);
@@ -627,8 +632,8 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("toggle_base", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check && price_check->reply()) price_check->set_base_only(!price_check->reply()->base_only);
     });
-    c.BindEventCallback("cycle_corrupted", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
-        if (price_check) price_check->cycle_corrupted();
+    c.BindEventCallback("toggle_corrupted", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->toggle_corrupted();
     });
     c.BindEventCallback("search", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->search();
@@ -897,10 +902,10 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.preset_base = reply->preset == "base";
         // The base item preset always searches the exact base.
         if (m.preset_base) m.base_only = true;
-        if (!reply->category_label.empty()) m.category_label = "Any " + reply->category_label;
-        // Short, so the button keeps its size; its colour tells the state too.
-        m.corrupted = reply->corrupted;
-        m.corrupted_label = reply->corrupted == "no" ? "Uncorrupted" : reply->corrupted == "yes" ? "Corrupted" : "Any";
+        m.has_base = !reply->category_label.empty();
+        m.corrupted_on = reply->corrupted != "any";
+        m.corrupted_kind = reply->item_corrupted ? "yes" : "no";
+        m.corrupted_label = reply->item_corrupted ? "Corrupted" : "Uncorrupted";
         m.source = reply->league;
         // A unique's poe.ninja price, which doesn't know its rolls.
         fill_prices(*reply, m);

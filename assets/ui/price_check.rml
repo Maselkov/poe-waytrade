@@ -55,11 +55,11 @@
             <div class="tag" data-if="low_value">Low value</div>
         </div>
         <div class="options">
-            <div data-if="category_label != ''" data-attr-class="base_only ? 'base-toggle exact' : 'base-toggle'"
-                 data-event-click="toggle_base">{{base_only ? base_label : category_label}}</div>
+            <div data-if="has_base" data-attr-class="'base-toggle' + (base_only ? ' on' : ' off') + (preset_base ? ' locked' : '')"
+                 data-event-click="toggle_base">{{base_label}}</div>
             <div data-if="base_preset" data-attr-class="preset_base ? 'toggle-chip preset on' : 'toggle-chip preset'"
                  data-event-click="toggle_preset">Base item</div>
-            <div data-attr-class="'toggle-chip ' + corrupted" data-event-click="cycle_corrupted">{{corrupted_label}}</div>
+            <div data-attr-class="'toggle-chip corr ' + corrupted_kind + (corrupted_on ? ' on' : '')" data-event-click="toggle_corrupted">{{corrupted_label}}</div>
             <div class="toggle-chip view" data-if="can_switch" data-event-click="switch_view">Map check</div>
         </div>
         <div class="filters">

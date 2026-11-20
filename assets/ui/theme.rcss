@@ -207,9 +207,10 @@ body {
 /* Trade search options */
 .options { display: flex; align-items: center; padding: 10dp 14dp 2dp; }
 /* Fixed layout: labels never wrap, and the corrupted button keeps one width,
-   so clicking either control doesn't move anything. The base button (like
-   APT's) shows the search it's set to: "Any Gloves" or the exact base,
-   outlined in the accent colour. */
+   so clicking either control doesn't move anything. Like the filter rows,
+   the base and corruption chips always name the item's own base and state,
+   and are lit when the search keeps to it; dim, it's any base of the
+   category, or any corruption. The base item preset locks the base on. */
 .base-toggle {
     flex: 1;
     min-width: 0;
@@ -221,11 +222,14 @@ body {
     text-overflow: ellipsis;
     border: 1dp $off;
     border-radius: 8dp;
-    color: $text-strong;
+    color: $text-muted;
     cursor: pointer;
+    transition: background-color color 0.12s linear-out;
 }
-.base-toggle:hover { background-color: $chip; }
-.base-toggle.exact { border-color: $accent; }
+.base-toggle:hover { background-color: $chip; color: $text-strong; }
+.base-toggle.on { border-color: $accent; color: $text-strong; }
+.base-toggle.locked { cursor: default; }
+.base-toggle.locked:hover { background-color: transparent; }
 .toggle-chip {
     width: 78dp;
     flex-shrink: 0;
@@ -239,8 +243,8 @@ body {
     transition: background-color color 0.12s linear-out;
 }
 .toggle-chip:hover { color: $text-strong; }
-.toggle-chip.no { background-color: $good-bg; border-color: #2a5a3c; color: $good; }
-.toggle-chip.yes { background-color: $danger-bg; border-color: #6a2a26; color: $danger; }
+.toggle-chip.corr.no.on { background-color: $good-bg; border-color: #2a5a3c; color: $good; }
+.toggle-chip.corr.yes.on { background-color: $danger-bg; border-color: #6a2a26; color: $danger; }
 /* "Base item": APT's crafting-base preset, offered for fractured,
    influenced, synthesised and high item level bases. */
 .toggle-chip.preset { width: 70dp; margin-right: 8dp; }
