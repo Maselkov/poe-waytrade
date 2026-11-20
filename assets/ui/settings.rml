@@ -53,7 +53,7 @@
         <div class="setting-row">
             <div class="setting-text">
                 <div class="setting-name">Over the panels</div>
-                <div class="setting-desc">Desktop keeps its size under fractional scaling</div>
+                <div class="setting-desc warn" data-if="s_scaled">At this display scale the game's cursor grows over the panels</div>
             </div>
             <div class="button-row toggle">
                 <div data-attr-class="s_desktop_cursor ? 'button' : 'button on'" data-event-click="desktop_cursor(0)">Game</div>

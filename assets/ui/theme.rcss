@@ -516,6 +516,7 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .setting-text { flex: 1 1 0; min-width: 0; }
 .setting-name { color: $text-strong; }
 .setting-desc { font-size: 11dp; color: $text-muted; margin-top: 2dp; }
+.setting-desc.warn { color: $warn; }
 .setting-foot { font-size: 11dp; color: $text-muted; margin-top: 8dp; }
 
 /* A hotkey's button; "capturing" waits for the new keys. */

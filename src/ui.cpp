@@ -283,6 +283,7 @@ struct Model {
     bool s_scale_env = false;
     bool s_stash_scroll = true;
     bool s_desktop_cursor = false;
+    bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
     int s_profile = 1;
     bool s_reset_armed = false;
     Rml::Vector<UiAbout> s_about;
@@ -684,6 +685,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_scale_env", &model.s_scale_env);
     c.Bind("s_stash_scroll", &model.s_stash_scroll);
     c.Bind("s_desktop_cursor", &model.s_desktop_cursor);
+    c.Bind("s_scaled", &model.s_scaled);
     c.Bind("s_profile", &model.s_profile);
     c.Bind("s_reset_armed", &model.s_reset_armed);
     c.Bind("s_about", &model.s_about);
@@ -823,6 +825,13 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
     d.context->SetDimensions(Rml::Vector2i((int)extent.width, (int)extent.height));
     if (!d.ui_scale_env) d.ui_scale = (float)pc.settings().values().ui_scale;
     d.context->SetDensityIndependentPixelRatio((input ? (float)input->scale() : 1.0f) * d.ui_scale);
+    // Wine draws its cursor for scale 1 over our surface, so at any other
+    // scale (fractional or not) it shows at the wrong size there.
+    bool scaled = input && std::abs(input->scale() - 1.0) > 0.01;
+    if (scaled != d.model.s_scaled) {
+        d.model.s_scaled = scaled;
+        d.handle.DirtyVariable("s_scaled");
+    }
 
     d.price_check = &pc;
     if (input) {
@@ -895,6 +904,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
 
     Model m;
     m.debug_lines = std::move(model.debug_lines);
+    m.s_scaled = model.s_scaled;
     sync_settings(pc, m);
     const SettingsPage::Values& sv = pc.settings().values();
     // "ready" once prices are in; until then, or without the daemon, only running.
