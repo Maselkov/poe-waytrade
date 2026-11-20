@@ -53,7 +53,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           cat > notes.md <<NOTES
           ## Install
 
@@ -66,4 +65,7 @@ jobs:
           \`systemctl --user enable --now poe-waytrade-daemon.socket\`).
           Trade searches need Chromium (or Google Chrome).
           NOTES
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Waytrade $VERSION" --notes-file notes.md --generate-notes
+          # --repo: the checkout has no .git (git isn't installed when it runs),
+          # so gh can't find the repository on its own.
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
+            --title "Waytrade $VERSION" --notes-file notes.md --generate-notes
