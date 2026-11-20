@@ -169,9 +169,10 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
         icon_pending_.clear();
     }
     if (!icon_client_.busy() && icon_pending_.empty() && !icon_queue_.empty()) {
-        icon_pending_ = icon_queue_.front();
+        auto [id, request] = icon_queue_.front();
         icon_queue_.pop_front();
-        icon_client_.send_raw("ICON\n" + icon_pending_);
+        icon_pending_ = id;
+        icon_client_.send_raw("ICON\n" + request);
     }
 }
 
@@ -462,14 +463,20 @@ void PriceCheck::switch_view() {
 
 void PriceCheck::request_icons() {
     if (!reply_) return;
-    auto want = [&](const std::string& id) {
+    auto want = [&](const std::string& id, const std::string& request) {
         if (id.empty() || icons_get(id) || !icons_requested_.insert(id).second) return;
-        icon_queue_.push_back(id);
+        icon_queue_.push_back({id, request});
     };
-    if (reply_->summary) want(reply_->summary->currency_id);
+    if (reply_->summary) want(reply_->summary->currency_id, reply_->summary->currency_id);
     // poe.ninja prices: their own card, or the one on a unique's trade panel
-    for (const PriceLine& p : reply_->prices) want(price_icon(p));
-    for (const TradeListing& l : reply_->listings) want(l.currency_id);
+    for (const PriceLine& p : reply_->prices) want(price_icon(p), price_icon(p));
+    for (const TradeListing& l : reply_->listings) want(l.currency_id, l.currency_id);
+    // Listed items' images, and the socket sprite sheet, for their previews:
+    // after the prices' icons.
+    for (const TradeListing& l : reply_->listings)
+        for (const auto& line : l.preview)
+            if (line.kind == "icon") want(item_icon_id(line.text), line.text);
+            else if (line.kind == "sockets") want(kSocketSprite, kSocketSprite);
 }
 
 void PriceCheck::set_base_only(bool base_only) {

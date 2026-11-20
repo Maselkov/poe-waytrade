@@ -148,10 +148,11 @@ private:
     // One-off saves (map marks, profile) go out one at a time, in order.
     DaemonClient sender_;
     std::deque<std::string> outbox_;
-    // Currency icons for the listings, fetched one at a time.
+    // Currency icons and listed items' images, fetched one at a time, as
+    // (icons.h id, ICON request).
     void request_icons();
     DaemonClient icon_client_;
-    std::deque<std::string> icon_queue_;
+    std::deque<std::pair<std::string, std::string>> icon_queue_;
     std::string icon_pending_;
     std::set<std::string> icons_requested_;
     std::optional<PriceReply> reply_;

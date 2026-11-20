@@ -22,6 +22,10 @@
 
 namespace {
 
+// Listing previews: an inventory cell of the item's image (dp; the image's
+// own pixels).
+constexpr float kPreviewCell = 47;
+
 const char* const kPriceDoc = "ui/price_check.rml";
 const char* const kMapDoc = "ui/map_check.rml";
 const char* const kDebugDoc = "ui/debug.rml";
@@ -169,12 +173,21 @@ struct UiPreviewLine {
     Rml::String kind, text;  // kind: enchant, implicit, explicit, ..., divider
     Rml::String tier;        // "T1"; empty: none
 };
+// A socket or link drawn over a listed item's image: a part ("x y w h", in
+// pixels) of the socket sprite sheet, placed in dp from the image's top left.
+struct UiSprite {
+    float x = 0, y = 0, w = 0, h = 0;
+    Rml::String rect;
+};
 struct UiListing {
     Rml::String price, sub, age, count, icon;
     Rml::String tag;  // a gem's level and quality
     // Hover preview of the first listed item.
     bool has_preview = false;
     Rml::String rarity, name, base, meta, more;
+    Rml::String item_icon;  // icons.h id, once the image has arrived
+    float icon_w = 0, icon_h = 0;  // dp
+    Rml::Vector<UiSprite> sockets;  // then the links, drawn over them
     Rml::Vector<UiPreviewLine> lines;
 };
 
@@ -364,6 +377,7 @@ struct OverlayUi::Impl {
     void sync_map(const PriceReply& reply, uint64_t check_id, Model& m);
     void fill_prices(const PriceReply& reply, Model& m);
     void fill_preview(const TradeListing& l, UiListing& u);
+    void place_sockets(const Rml::String& text, UiListing& u);
     // Map mod display order, fixed when a check opens so rows don't jump
     // around while you mark them.
     uint64_t map_order_check = 0;
@@ -451,13 +465,25 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("tier", &UiPreviewLine::tier);
     }
     c.RegisterArray<Rml::Vector<UiPreviewLine>>();
+    if (auto h = c.RegisterStruct<UiSprite>()) {
+        h.RegisterMember("x", &UiSprite::x);
+        h.RegisterMember("y", &UiSprite::y);
+        h.RegisterMember("w", &UiSprite::w);
+        h.RegisterMember("h", &UiSprite::h);
+        h.RegisterMember("rect", &UiSprite::rect);
+    }
+    c.RegisterArray<Rml::Vector<UiSprite>>();
     if (auto h = c.RegisterStruct<UiListing>()) {
+        h.RegisterMember("sockets", &UiListing::sockets);
         h.RegisterMember("has_preview", &UiListing::has_preview);
         h.RegisterMember("rarity", &UiListing::rarity);
         h.RegisterMember("name", &UiListing::name);
         h.RegisterMember("base", &UiListing::base);
         h.RegisterMember("meta", &UiListing::meta);
         h.RegisterMember("more", &UiListing::more);
+        h.RegisterMember("item_icon", &UiListing::item_icon);
+        h.RegisterMember("icon_w", &UiListing::icon_w);
+        h.RegisterMember("icon_h", &UiListing::icon_h);
         h.RegisterMember("lines", &UiListing::lines);
         h.RegisterMember("price", &UiListing::price);
         h.RegisterMember("sub", &UiListing::sub);
@@ -1111,7 +1137,8 @@ bool OverlayUi::Impl::keep_on_screen(const char* path, VkExtent2D extent) {
 // Like a PoE tooltip: name and base, item level (and DPS), then the mods
 // with a divider after the enchants/implicits.
 void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
-    Rml::String ilvl, dps;
+    Rml::String ilvl, dps, sockets;
+    Rml::Vector<UiPreviewLine> influences;
     bool before_explicits = false;
     for (const auto& [kind, text, tier] : l.preview) {
         if (kind == "rarity") u.rarity = text;
@@ -1120,7 +1147,20 @@ void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
         else if (kind == "ilvl" && u.rarity != "gem") ilvl = "Item level " + text;
         else if (kind == "gem") ilvl = text;  // "Level 20 · 23%"
         else if (kind == "dps") dps = text;
-        else {
+        else if (kind == "sockets") sockets = text;
+        else if (kind == "icon") {
+            if (Rml::String id = item_icon_id(text); icons_get(id)) u.item_icon = id;
+        } else if (kind == "cells") {
+            // PoE's inventory cells, a little smaller.
+            int w = 1, h = 1;
+            sscanf(text.c_str(), "%d %d", &w, &h);
+            u.icon_w = kPreviewCell * std::clamp(w, 1, 4);
+            u.icon_h = kPreviewCell * std::clamp(h, 1, 6);
+        } else if (kind == "influence") {
+            Rml::String name = text;
+            if (!name.empty()) name[0] = (char)toupper((unsigned char)name[0]);
+            influences.push_back({"influence", name + " Item", ""});
+        } else {
             bool top = kind == "enchant" || kind == "implicit";
             if (top) before_explicits = true;
             else if (before_explicits) {
@@ -1130,10 +1170,70 @@ void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
             u.lines.push_back({kind, text, tier > 0 ? "T" + std::to_string(tier) : ""});
         }
     }
-    u.meta = ilvl.empty() ? dps : dps.empty() ? ilvl : ilvl + " · " + dps;
+    // Like PoE's item text: influences after the mods.
+    if (!influences.empty()) {
+        auto end = std::find_if(u.lines.begin(), u.lines.end(), [](const UiPreviewLine& p) {
+            return p.kind == "mirrored" || p.kind == "corrupted" || p.kind == "unidentified";
+        });
+        u.lines.insert(end, influences.begin(), influences.end());
+    }
+    // Sockets go on the image, like in game; in words until it and the
+    // socket images are here.
+    bool drawn = !u.item_icon.empty() && u.icon_w > 0 && icons_get(kSocketSprite);
+    if (drawn) place_sockets(sockets, u);
+    for (const Rml::String& part : {ilvl, drawn ? "" : sockets, dps})
+        if (!part.empty()) u.meta += (u.meta.empty() ? "" : " · ") + part;
     u.has_preview = !u.base.empty();
     if (l.count > 1)
         u.more = "+ " + std::to_string(l.count - 1) + " more at this price";
+}
+
+// As the trade site lays sockets out (its CSS, at 47.46px a cell): a
+// one-cell-wide item stacks them; a wider one fills two columns, snaking
+// (left-right, then right-left), the block centred on the item. Images from
+// the socket sprite sheet (daemon/src/trade.rs SOCKET_SPRITE).
+void OverlayUi::Impl::place_sockets(const Rml::String& text, UiListing& u) {
+    // "R-G-B B" -> colours, and whether each links to the one before.
+    Rml::Vector<std::pair<Rml::String, bool>> sockets;
+    bool linked = false;
+    Rml::String colour;
+    for (size_t i = 0; i <= text.size(); i++) {
+        char c = i < text.size() ? text[i] : ' ';
+        if (c != '-' && c != ' ') {
+            colour += c;
+            continue;
+        }
+        if (!colour.empty()) sockets.push_back({colour, linked});
+        colour.clear();
+        linked = c == '-';
+    }
+    if (sockets.empty()) return;
+    // Sprite sheet parts: sockets by colour (abyssal, resonator too), links.
+    auto socket_rect = [](const Rml::String& c) {
+        return c == "R" ? "140 35 35 35" : c == "G" ? "70 105 35 35" : c == "B" ? "105 35 35 35"
+             : c == "A" ? "35 70 35 35" : c == "DV" ? "105 70 35 35" : "140 70 35 35";
+    };
+    const float scale = kPreviewCell / 47.4645f;
+    int n = (int)sockets.size();
+    int cols = u.icon_w > kPreviewCell * 1.5f ? std::min(2, n) : 1;
+    int rows = (n + cols - 1) / cols;
+    float ox = (u.icon_w - cols * kPreviewCell) / 2, oy = (u.icon_h - rows * kPreviewCell) / 2;
+    Rml::Vector<Rml::Vector2f> centres;
+    for (int i = 0; i < n; i++) {
+        int row = i / cols, col = i % cols;
+        if (row % 2 == 1 && cols == 2) col = 1 - col;
+        Rml::Vector2f c{ox + (col + 0.5f) * kPreviewCell, oy + (row + 0.5f) * kPreviewCell};
+        centres.push_back(c);
+        float size = 35 * scale;
+        u.sockets.push_back({c.x - size / 2, c.y - size / 2, size, size, socket_rect(sockets[i].first)});
+    }
+    for (int i = 1; i < n; i++) {
+        if (!sockets[i].second) continue;
+        Rml::Vector2f mid = (centres[i - 1] + centres[i]) * 0.5f;
+        bool across = std::abs(centres[i].x - centres[i - 1].x) > 1;
+        float w = (across ? 38 : 15) * scale, h = (across ? 15 : 38) * scale;
+        u.sockets.push_back({mid.x - w / 2, mid.y - h / 2, w, h, across ? "175 0 38 15" : "175 15 15 38"});
+    }
 }
 
 void OverlayUi::Impl::fill_prices(const PriceReply& reply, Model& m) {
