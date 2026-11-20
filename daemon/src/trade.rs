@@ -440,6 +440,18 @@ fn trade_base(item: &Item) -> &str {
     &item.base
 }
 
+/// A base or a unique is worth something else corrupted (no more crafting,
+/// a different implicit), so it's compared like for like. Other items'
+/// price is in their mods: corruption is left open.
+fn default_corrupted(item: &Item, preset: Preset) -> Corrupted {
+    let like_for_like = preset == Preset::Base || item.rarity == "Unique" || item.rarity == "Gem";
+    match (like_for_like, item.corrupted) {
+        (false, _) => Corrupted::Any,
+        (true, false) => Corrupted::No,
+        (true, true) => Corrupted::Yes,
+    }
+}
+
 impl Trade {
     pub fn new() -> Trade {
         Trade { browser: None, data: None, limiter: RateLimiter::default(), last_used: Instant::now() }
@@ -465,15 +477,7 @@ impl Trade {
             (Some((_, label)), "Rare" | "Normal" | "Magic") if base_known => Some(label),
             _ => None,
         };
-        // Like APT: an uncorrupted item is compared with uncorrupted ones.
-        // A base or a unique is worth something else corrupted (no more
-        // crafting, a different implicit), so it's compared like for like.
-        let like_for_like = preset == Preset::Base || item.rarity == "Unique" || item.rarity == "Gem";
-        let corrupted = match (item.corrupted, like_for_like) {
-            (false, _) => Corrupted::No,
-            (true, true) => Corrupted::Yes,
-            (true, false) => Corrupted::Any,
-        };
+        let corrupted = default_corrupted(item, preset);
         // A map's base names its tier ("Map (Tier 16)"): search that base.
         let base_only = preset == Preset::Base || tiered_map_base(item);
         Ok(Prepared {
@@ -2111,6 +2115,21 @@ mod tests {
                         +30% to Fire Resistance\n+20 to Dexterity and Intelligence\n\
                         12% increased Rarity of Items found\n+12% to Cold Resistance (crafted)\n\
                         8% increased Rarity of Items found (crafted)\n";
+
+    #[test]
+    fn corruption_defaults() {
+        let rare = crate::item::parse(crate::item::tests::FRACTURED_CROWN).unwrap();
+        let rare_c = crate::item::parse(&format!("{}Corrupted\n", crate::item::tests::FRACTURED_CROWN)).unwrap();
+        assert_eq!(default_corrupted(&rare, Preset::Normal), Corrupted::Any);
+        assert_eq!(default_corrupted(&rare_c, Preset::Normal), Corrupted::Any);
+        assert_eq!(default_corrupted(&rare, Preset::Base), Corrupted::No);
+        assert_eq!(default_corrupted(&rare_c, Preset::Base), Corrupted::Yes);
+        let mut unique = crate::item::parse(crate::item::tests::FRACTURED_CROWN).unwrap();
+        unique.rarity = "Unique".into();
+        assert_eq!(default_corrupted(&unique, Preset::Normal), Corrupted::No);
+        unique.corrupted = true;
+        assert_eq!(default_corrupted(&unique, Preset::Normal), Corrupted::Yes);
+    }
 
     #[test]
     fn apt_like_defaults() {
