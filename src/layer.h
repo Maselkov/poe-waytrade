@@ -18,6 +18,7 @@ struct OverlayDevice;
     X(DestroyInstance)                        \
     X(GetPhysicalDeviceQueueFamilyProperties) \
     X(GetPhysicalDeviceMemoryProperties)      \
+    X(GetPhysicalDeviceSurfaceCapabilitiesKHR) \
     X(CreateWaylandSurfaceKHR)                \
     X(DestroySurfaceKHR)
 
@@ -33,6 +34,7 @@ struct OverlayDevice;
     X(BeginCommandBuffer) X(EndCommandBuffer) X(ResetCommandBuffer)                \
     X(CmdBeginRenderPass) X(CmdEndRenderPass)                                      \
     X(CreateFence) X(DestroyFence) X(WaitForFences) X(ResetFences)                 \
+    X(GetFenceStatus)                                                              \
     X(CreateSemaphore) X(DestroySemaphore)                                         \
     /* UI renderer (rml_renderer.cpp) */                                           \
     X(QueueWaitIdle)                                                               \

@@ -14,6 +14,9 @@ struct PriceLine {
     double chaos = 0;
     double divine = 0;
     std::string listings;  // empty if unknown
+    // On an unidentified unique's list of candidates: which unique this is,
+    // so clicking it checks the item as that one (PriceCheck::pick_unique).
+    std::string unique;
 };
 
 // The currency a poe.ninja price is shown in (and its icon): divine from 1 up.
@@ -80,6 +83,11 @@ struct PriceReply {
     std::string league;
     int age_minutes = -1;
     std::vector<PriceLine> prices;
+    // An unidentified unique whose base has uniques with different art: its
+    // size in cells, for MATCHART (0: nothing to tell apart).
+    int art_width = 0, art_height = 0;
+    // A MATCHART reply: the unique(s) the art matched ("A / B" if they share it).
+    std::string matched;
     // status "trade"
     std::vector<TradeFilter> filters;
     std::vector<TradeListing> listings;
@@ -99,6 +107,8 @@ struct PriceReply {
     std::string preset = "normal";  // normal | base
     bool six_link_offered = false;  // a 6-link: the panel shows the 6-link chip
     bool six_link = false;          // search 6-linked items only
+    bool unidentified_offered = false;  // an unidentified item: the panel shows its chip
+    bool unidentified = false;          // search unidentified items only
     bool searched = false;
     // status "map"
     std::string subtitle;
@@ -125,6 +135,12 @@ public:
     void request(const std::string& item_text) { start("PRICE\n" + item_text); }
     void ping() { start("PING\n"); }
     void request_map(const std::string& item_text) { start("MAPCHECK\n" + item_text); }
+    // Which unique an unidentified one is, from the pixels around it:
+    // "<w> <h> <cursor x> <cursor y> <cell>\n" + base64 RGB (see
+    // daemon/src/main.rs).
+    void request_art_match(const std::string& header, const std::string& pixels, const std::string& item_text) {
+        start("MATCHART\n" + header + "\n" + pixels + "\n" + item_text);
+    }
     // Any request body (see daemon/src/main.rs), for one-off messages.
     void send_raw(const std::string& body) { start(body); }
     // Search the trade site with the filters at these indices.
@@ -132,7 +148,8 @@ public:
     // `enabled`: the filters to search with, by index, with their min/max.
     void request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                        const std::string& corrupted, const std::string& preset,
-                       const std::string& listing_status, bool six_link, const std::string& item_text);
+                       const std::string& listing_status, bool six_link, bool unidentified,
+                       const std::string& item_text);
     // Trade filters for a preset (normal | base), without searching.
     void request_prepare(const std::string& preset, const std::string& item_text) {
         start("PREPARE\n" + preset + "\n" + item_text);

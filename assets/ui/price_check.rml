@@ -16,7 +16,8 @@
     <div class="status" data-if="state == 'status'" data-class-error="status_error">{{status}}</div>
 
     <div class="price-card" data-class-alone="state == 'prices'" data-if="(state == 'prices' || state == 'trade') &amp;&amp; price_rows.size > 0">
-        <div data-for="r : price_rows" data-attr-class="'price-row' + (r.answer ? ' answer' : '') + (r.rule ? ' rule' : '') + (r.stale ? ' stale' : '')">
+        <div data-for="r : price_rows" data-attr-class="'price-row' + (r.answer ? ' answer' : '') + (r.rule ? ' rule' : '') + (r.stale ? ' stale' : '') + (r.pick >= 0 ? ' pick' : '')"
+             data-event-click="pick_unique(r.pick)">
             <div class="pr-text">
                 <div class="pr-label">{{r.label}}</div>
                 <div class="pr-meta" data-if="r.meta != '' || r.tag != ''">
@@ -49,6 +50,8 @@
                  data-event-click="toggle_preset">Base item</div>
             <div data-if="six_link_offered" data-attr-class="six_link_on ? 'toggle-chip links on' : 'toggle-chip links'"
                  data-event-click="toggle_six_link">6-link</div>
+            <div data-if="unid_offered" data-attr-class="unid_on ? 'toggle-chip unid on' : 'toggle-chip unid'"
+                 data-event-click="toggle_unidentified">Unidentified</div>
             <div data-attr-class="'toggle-chip corr ' + corrupted_kind + (corrupted_on ? ' on' : '')" data-event-click="toggle_corrupted">{{corrupted_label}}</div>
             <div class="toggle-chip view" data-if="can_switch" data-event-click="switch_view">Map check</div>
         </div>

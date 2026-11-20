@@ -165,6 +165,7 @@ POE_WAYTRADE_UI_DIR=$PWD/assets POE_WAYTRADE_DEMO_ITEM=item.txt \
 | `POE_WAYTRADE_DEMO_EDIT=<filter index>[:max]` | Start typing into that filter's minimum (or maximum), as if it were clicked |
 | `POE_WAYTRADE_DEMO_PRESET=base` | Open a demo item on the Base item preset |
 | `POE_WAYTRADE_DEMO_SETTINGS=<0-3>` | Open the settings page on that tab |
+| `POE_WAYTRADE_ART_DUMP=<file.ppm>` | Save the pixels each art match sends the daemon (the cursor and cell size in a comment), to see what it compares |
 | `POE_WAYTRADE_SNAPSHOT=<file.ppm>` | Save one of the app's rendered frames (after 300 frames), for checking the UI without screenshots |
 | `POE_WAYTRADE_TEST_COPY=1` | Do a Ctrl+D two seconds in, without sending keys |
 | `POE_WAYTRADE_SOCKET=<name>` | Talk to a daemon on another abstract socket (the layer and `poe-waytrade-daemon query`), to test a new daemon next to the installed one |

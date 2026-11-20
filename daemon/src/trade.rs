@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
 /// Stat/currency reference data is refetched after this long.
@@ -258,6 +259,9 @@ pub struct SearchOptions {
     /// Only 6-linked items. Offered for a 6-link (and on by default): links
     /// are a toggle, not a filter, since fewer than six are worth little.
     pub six_link: bool,
+    /// Only unidentified items (offered for an unidentified one; else any).
+    /// Some uniques sell for a gamble on their rolls, Watcher's Eye say.
+    pub unidentified: bool,
 }
 
 /// Which filters an item gets, like APT's presets.
@@ -487,8 +491,9 @@ pub fn searchable(item: &Item) -> bool {
     match item.rarity.as_str() {
         "Rare" | "Magic" => !item.mods.is_empty() || item.links >= 5,
         "Normal" => !item.mods.is_empty() || base_preset_available(item),
-        // Identified uniques: searched by name, with their rolls.
-        "Unique" => item.name.is_some() && !item.mods.is_empty(),
+        // Identified uniques: searched by name, with their rolls. Also
+        // unidentified ones once their art says which unique they are.
+        "Unique" => item.name.is_some() && (!item.mods.is_empty() || item.unidentified),
         // Gems by name, level and quality.
         "Gem" => true,
         // Wickerman limbs have no rarity: searched by base and implicits.
@@ -555,6 +560,7 @@ impl Trade {
                 preset,
                 status: crate::settings::default_status(),
                 six_link: item.links >= 6,
+                unidentified: false,
             },
         })
     }
@@ -636,7 +642,7 @@ impl Trade {
         {
             return Err("bad currency id".into());
         }
-        let name = if is_url { format!("item-{:016x}", fnv1a(currency_id)) } else { currency_id.to_string() };
+        let name = if is_url { item_image_name(currency_id) } else { currency_id.to_string() };
         let path = cache_dir().join("icons").join(format!("{name}.png"));
         if let Ok(bytes) = std::fs::read(&path) {
             return Ok(bytes);
@@ -651,16 +657,7 @@ impl Trade {
             let image = data.images.get(currency_id).ok_or("no icon for this currency")?;
             format!("https://web.poecdn.com{image}")
         };
-        let resp = ureq::get(&url)
-            .set("User-Agent", ninja::USER_AGENT)
-            .timeout(Duration::from_secs(20))
-            .call()
-            .map_err(|e| format!("{url}: {e}"))?;
-        let mut bytes = Vec::new();
-        resp.into_reader().take(1 << 20).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-        let _ = std::fs::create_dir_all(path.parent().unwrap());
-        let _ = std::fs::write(&path, &bytes);
-        Ok(bytes)
+        download_image(&url, &path)
     }
 
     fn browser(&mut self) -> Result<&mut Browser, String> {
@@ -847,6 +844,68 @@ fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -
         total,
         url: format!("https://www.pathofexile.com/trade/search/{league_path}/{id}"),
     }
+}
+
+/// An item's image on web.poecdn.com (a listed item's, or a unique's art
+/// from poe.ninja), cached on disk like `Trade::icon`'s. Needs no `Trade`,
+/// so fetching art doesn't wait for a trade search.
+pub fn item_image(url: &str) -> Result<Vec<u8>, String> {
+    if !url.starts_with(ICON_CDN) || url.contains(char::is_whitespace) {
+        return Err("not a web.poecdn.com URL".into());
+    }
+    let path = item_image_path(url);
+    if let Ok(bytes) = std::fs::read(&path) {
+        return Ok(bytes);
+    }
+    // One download per URL: a second request (the art prefetch and a match
+    // wanting the same image) waits for it and reads the cache.
+    {
+        let mut busy = DOWNLOADING.lock().unwrap();
+        while busy.iter().any(|u| u == url) {
+            busy = DOWNLOADED.wait(busy).unwrap();
+        }
+        if let Ok(bytes) = std::fs::read(&path) {
+            return Ok(bytes);
+        }
+        busy.push(url.to_string());
+    }
+    let result = download_image(url, &path);
+    DOWNLOADING.lock().unwrap().retain(|u| u != url);
+    DOWNLOADED.notify_all();
+    result
+}
+
+/// Whether `item_image` has this one on disk already.
+pub fn item_image_cached(url: &str) -> bool {
+    item_image_path(url).exists()
+}
+
+static DOWNLOADING: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static DOWNLOADED: Condvar = Condvar::new();
+
+fn item_image_path(url: &str) -> PathBuf {
+    cache_dir().join("icons").join(format!("{}.png", item_image_name(url)))
+}
+
+fn item_image_name(url: &str) -> String {
+    format!("item-{:016x}", fnv1a(url))
+}
+
+fn download_image(url: &str, path: &std::path::Path) -> Result<Vec<u8>, String> {
+    let resp = ureq::get(url)
+        .set("User-Agent", ninja::USER_AGENT)
+        .timeout(Duration::from_secs(20))
+        .call()
+        .map_err(|e| format!("{url}: {e}"))?;
+    let mut bytes = Vec::new();
+    resp.into_reader().take(1 << 20).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    // Written whole, then renamed: another thread may be reading the cache.
+    let _ = std::fs::create_dir_all(path.parent().unwrap());
+    let part = path.with_extension("part");
+    if std::fs::write(&part, &bytes).is_ok() {
+        let _ = std::fs::rename(&part, path);
+    }
+    Ok(bytes)
 }
 
 fn cache_dir() -> PathBuf {
@@ -2372,6 +2431,9 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
     if options.six_link {
         q["filters"]["socket_filters"]["filters"]["links"] = json!({ "min": 6 });
     }
+    if options.unidentified {
+        q["filters"]["misc_filters"]["filters"]["identified"] = json!({ "option": "false" });
+    }
     match options.corrupted {
         Corrupted::Any => {}
         Corrupted::No => q["filters"]["misc_filters"]["filters"]["corrupted"] = json!({ "option": "false" }),
@@ -2646,6 +2708,7 @@ mod tests {
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, f.max))).collect();
         let opts = SearchOptions {
             six_link: false,
+            unidentified: false,
             base_only: false,
             corrupted: Corrupted::Yes,
             preset: Preset::Normal,
@@ -2711,6 +2774,7 @@ mod tests {
             let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, f.max))).collect();
             let opts = SearchOptions {
                 six_link: false,
+                unidentified: false,
                 base_only: true,
                 corrupted: Corrupted::No,
                 preset,
@@ -2815,6 +2879,7 @@ mod tests {
         let enabled: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
         let opts = |base_only, corrupted| SearchOptions {
             six_link: false,
+            unidentified: false,
             base_only,
             corrupted,
             preset: Preset::Normal,
@@ -2908,6 +2973,37 @@ mod tests {
     }
 
     #[test]
+    fn unidentified_unique_by_name() {
+        // An unidentified unique, named by the layer once its art matched
+        // (the game's text has no name line).
+        let text = "Item Class: Jewels\nRarity: Unique\nWatcher's Eye\nPrismatic Jewel\n--------\nItem Level: 86\n\
+                    --------\nUnidentified\n";
+        let item = crate::item::parse(text).unwrap();
+        assert!(item.unidentified);
+        assert!(searchable(&item));
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|_| None).collect();
+        let opts = |unidentified| SearchOptions {
+            six_link: false,
+            unidentified,
+            base_only: false,
+            corrupted: Corrupted::No,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
+        let q = query(&item, &filters, &chosen, opts(false));
+        assert_eq!(q["query"]["name"], "Watcher's Eye");
+        assert_eq!(q["query"]["type"], "Prismatic Jewel");
+        assert!(q["query"]["filters"]["misc_filters"]["filters"]["identified"].is_null());
+        let q = query(&item, &filters, &chosen, opts(true));
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["identified"]["option"], "false");
+
+        // Without a name there's nothing to search by.
+        let unnamed = crate::item::parse(&text.replace("Watcher's Eye\n", "")).unwrap();
+        assert!(!searchable(&unnamed));
+    }
+
+    #[test]
     fn unique_rolls() {
         let text = "Item Class: Body Armours\nRarity: Unique\nKaom's Heart\nGlorious Plate\n--------\nItem Level: 80\n--------\n\
                     { Unique Modifier — Life }\n+500 to maximum Life\n\
@@ -2933,6 +3029,7 @@ mod tests {
             &chosen,
             SearchOptions {
                 six_link: false,
+                unidentified: false,
                 base_only: false,
                 corrupted: Corrupted::No,
                 preset: Preset::Normal,
@@ -3075,6 +3172,7 @@ mod tests {
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
         let opts = SearchOptions {
             six_link: false,
+            unidentified: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Base,
@@ -3123,6 +3221,7 @@ mod tests {
                 .collect();
             let opts = SearchOptions {
                 six_link: false,
+                unidentified: false,
                 base_only: false,
                 corrupted: Corrupted::No,
                 preset,
@@ -3157,6 +3256,7 @@ mod tests {
                     filters.iter().map(|f| f.label.starts_with("Memory").then_some((f.min, None))).collect();
                 let opts = SearchOptions {
                     six_link: false,
+                    unidentified: false,
                     base_only: false,
                     corrupted: Corrupted::No,
                     preset,
@@ -3191,6 +3291,7 @@ mod tests {
         assert!(tiered_map_base(&item));
         let opts = SearchOptions {
             six_link: false,
+            unidentified: false,
             base_only: true,
             corrupted: Corrupted::Any,
             preset: Preset::Normal,
@@ -3223,6 +3324,7 @@ mod tests {
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
         let opts = SearchOptions {
             six_link: true,
+            unidentified: false,
             base_only: true,
             corrupted: Corrupted::No,
             preset: Preset::Base,
@@ -3254,6 +3356,7 @@ mod tests {
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
         let opts = SearchOptions {
             six_link: false,
+            unidentified: false,
             base_only: true,
             corrupted: Corrupted::No,
             preset: Preset::Base,
@@ -3315,6 +3418,7 @@ mod tests {
             &chosen,
             SearchOptions {
                 six_link: false,
+                unidentified: false,
                 base_only: false,
                 corrupted: Corrupted::Any,
                 preset: Preset::Normal,
@@ -3334,6 +3438,7 @@ mod tests {
             &chosen,
             SearchOptions {
                 six_link: false,
+                unidentified: false,
                 base_only: false,
                 corrupted: Corrupted::Any,
                 preset: Preset::Normal,
@@ -3537,6 +3642,7 @@ mod tests {
         let all: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, None))).collect();
         let options = SearchOptions {
             six_link: false,
+            unidentified: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Normal,
@@ -3642,6 +3748,7 @@ mod tests {
         let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, f.max))).collect();
         let options = SearchOptions {
             six_link: false,
+            unidentified: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Normal,
@@ -3700,6 +3807,7 @@ mod tests {
             &all,
             SearchOptions {
                 six_link: false,
+                unidentified: false,
                 base_only: false,
                 corrupted: Corrupted::No,
                 preset: Preset::Normal,

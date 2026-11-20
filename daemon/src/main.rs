@@ -11,9 +11,22 @@
 //!     status   ok | not_found | unsupported | loading | error | bad_request
 //!     message  <text>                                  (optional)
 //!     title    <item name>                             (status ok)
-//!     price    <label> <chaos> <divine> <listings|"">  (status ok, 1+)
+//!     price    <label> <chaos> <divine> <listings|""> [<unique>]  (status
+//!              ok, 1+; an unidentified unique's candidates name theirs)
 //!     league   <name>
 //!     age      <minutes since prices were fetched>
+//!     art      <width> <height>   (an unidentified unique whose base has
+//!              uniques with different art: MATCHART can tell which it is;
+//!              its size in cells)
+//!
+//!   request:  "MATCHART\n" + "<width> <height> <cursor x> <cursor y> <cell>"
+//!             + "\n" + base64 of the pixels (RGB, 8 bits a channel, rows
+//!             top to bottom) around the cursor when the item was copied
+//!             ("cell": an inventory cell's pitch in those pixels) + "\n" +
+//!             item text: which unique an unidentified one is, by its art
+//!             (art.rs)
+//!   response: like PRICE's for that unique (several, if they share their
+//!             art), with "matched <name> <score>"; or status no_match
 //!
 //!   request:  "PING\n"   (sent by the layer at game start to wake us up)
 //!   response: status ready | loading
@@ -39,6 +52,8 @@
 //!     option   base_preset <1|0>   (the "base item" preset is offered)
 //!     option   preset <normal|base>
 //!     option   six_link <1|0>   (only 6-linked items; sent for a 6-link only)
+//!     option   unidentified <1|0>   (only unidentified items; sent for an
+//!                                   unidentified item only)
 //!     searched <1|0>
 //!   and, once searched:
 //!     summary  <amount> <currency name> <currency id> <chaos|""> <range>
@@ -57,8 +72,9 @@
 //!             empty: default minimum, no maximum) + "\n" +
 //!             "base" or "category" + "\n" + any|no|yes + "\n" +
 //!             normal|base (preset) + "\n" + instant|available|any (status)
-//!             + "\n" + "6" (6-linked only) or "any" + "\n" + item text: search with those
-//!             filters and options.
+//!             + "\n" + "6" (6-linked only) or "any" + "\n" + "unid"
+//!             (unidentified only) or "any" + "\n" + item text: search with
+//!             those filters and options.
 //!   request:  "PREPARE\n" + normal|base + "\n" + item text: the trade
 //!             filters for that preset, without searching ("base": the item
 //!             as a crafting base, like APT's "Base item" preset).
@@ -108,6 +124,7 @@
 //! `--exit-with-parent` (the launcher) makes us exit when our parent does.
 //! `--version` prints this build's version (see build.rs) and exits.
 
+mod art;
 mod cdp;
 mod item;
 mod lookup;
@@ -128,7 +145,8 @@ use std::time::{Duration, Instant};
 /// This build's version, from `git describe` (see build.rs).
 const VERSION: &str = env!("WAYTRADE_VERSION");
 const SOCKET_NAME: &str = "poe-waytrade";
-const MAX_FRAME: usize = 256 * 1024;
+/// MATCHART's pixels are the biggest requests: a few hundred KiB.
+const MAX_FRAME: usize = 4 * 1024 * 1024;
 const REFRESH: Duration = Duration::from_secs(15 * 60);
 const RETRY: Duration = Duration::from_secs(60);
 /// When socket-activated, exit after this long without requests.
@@ -295,8 +313,10 @@ fn refresh_loop(state: &State) {
                     db.items.len(),
                     db.league
                 );
-                *state.db.write().unwrap() = Some(Arc::new(db));
+                let db = Arc::new(db);
+                *state.db.write().unwrap() = Some(db.clone());
                 *state.last_error.lock().unwrap() = None;
+                prefetch_art(db);
                 REFRESH
             }
             Err(e) => {
@@ -355,8 +375,9 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         let (preset, text) = rest.split_once('\n').unwrap_or((rest, ""));
         respond(state, text, None, trade::Preset::parse(preset))
     } else if let Some(rest) = request.strip_prefix("TRADE\n") {
-        let mut parts = rest.splitn(7, '\n');
-        let (indices, base, corrupted, preset, status, links, text) = (
+        let mut parts = rest.splitn(8, '\n');
+        let (indices, base, corrupted, preset, status, links, identified, text) = (
+            parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
@@ -382,9 +403,12 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
                 preset: trade::Preset::parse(preset),
                 status: trade::Status::parse(status),
                 six_link: links == "6",
+                unidentified: identified == "unid",
             },
         };
         respond(state, text, Some(&search), search.options.preset)
+    } else if let Some(rest) = request.strip_prefix("MATCHART\n") {
+        match_art(state, rest)
     } else if let Some(id) = request.strip_prefix("ICON\n") {
         match state.trade.lock().unwrap().icon(id.trim()) {
             Ok(png) => format!("status\tok\npng\t{}\n", base64(&png)),
@@ -641,6 +665,9 @@ fn trade_response(
     if item.links >= 6 {
         let _ = writeln!(out, "option\tsix_link\t{}", options.six_link as u8);
     }
+    if item.unidentified {
+        let _ = writeln!(out, "option\tunidentified\t{}", options.unidentified as u8);
+    }
 
     let Some(search) = search else {
         let _ = writeln!(out, "searched\t0");
@@ -740,6 +767,107 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
             }
             outcome => write_lookup(&mut out, outcome),
         }
+        if out.starts_with("status\tok") {
+            offer_art_match(&mut out, &db, &item);
+        }
+    }
+    let _ = writeln!(out, "league\t{}", clean(&db.league));
+    let _ = writeln!(out, "age\t{}", db.fetched_at.elapsed().as_secs() / 60);
+    out
+}
+
+/// Fetches the art of every unique an art match could need, one at a time,
+/// so even a base's first match has it on disk. Downloaded once: the URLs
+/// carry a hash of the image, so a cached one never goes stale.
+fn prefetch_art(db: Arc<ninja::PriceDb>) {
+    static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    thread::spawn(move || {
+        let missing: Vec<String> =
+            lookup::matchable_arts(&db).into_iter().filter(|url| !trade::item_image_cached(url)).collect();
+        drop(db);
+        if !missing.is_empty() {
+            let started = Instant::now();
+            let failed = missing.iter().filter(|url| trade::item_image(url).is_err()).count();
+            eprintln!(
+                "art: fetched {} unique images in {}s ({failed} failed)",
+                missing.len() - failed,
+                started.elapsed().as_secs()
+            );
+        }
+        RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+    });
+}
+
+/// An unidentified unique that could be one of several arts: say so (and
+/// how big the item is), so the layer sends its pixels with MATCHART, and
+/// fetch the arts meanwhile.
+fn offer_art_match(out: &mut String, db: &ninja::PriceDb, item: &item::Item) {
+    let arts = lookup::unique_arts(db, item);
+    if arts.is_empty() {
+        return;
+    }
+    let cells: Option<Vec<(u32, u32)>> = arts.iter().map(|(url, _)| art::cells_from_url(url)).collect();
+    // The biggest any unique's art is, or the biggest an item can be.
+    let (w, h) = cells.and_then(|c| c.into_iter().reduce(|a, b| (a.0.max(b.0), a.1.max(b.1)))).unwrap_or((2, 4));
+    let _ = writeln!(out, "art\t{w}\t{h}");
+    // In case the prefetch hasn't got to them yet: MATCHART follows shortly.
+    let urls: Vec<String> = arts.into_iter().map(|(url, _)| url).collect();
+    thread::spawn(move || fetch_all(&urls));
+}
+
+/// Fetches these images at once (each into the cache), with their results.
+fn fetch_all(urls: &[String]) -> Vec<Result<Vec<u8>, String>> {
+    thread::scope(|s| {
+        let fetches: Vec<_> = urls.iter().map(|url| s.spawn(move || trade::item_image(url))).collect();
+        fetches.into_iter().map(|f| f.join().unwrap_or_else(|_| Err("art fetch panicked".into()))).collect()
+    })
+}
+
+/// MATCHART: see the top of this file, and art.rs.
+fn match_art(state: &State, request: &str) -> String {
+    let no_match = |message: &str| format!("status\tno_match\nmessage\t{}\n", clean(message));
+    let mut parts = request.splitn(3, '\n');
+    let (header, pixels, text) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+    let numbers: Vec<f32> = header.split_whitespace().filter_map(|n| n.parse().ok()).collect();
+    let &[width, height, x, y, cell] = numbers.as_slice() else { return bad_request("Bad pixels header") };
+    let (width, height) = (width as usize, height as usize);
+    let Some(rgb) = art::base64_decode(pixels.trim()) else { return bad_request("Bad pixels") };
+    if width == 0 || height == 0 || rgb.len() != width * height * 3 || cell <= 0.0 {
+        return bad_request("Bad pixels");
+    }
+    let capture = art::Capture { width, height, rgb, cursor: (x, y), cell };
+    let Some(item) = item::parse(text) else { return bad_request("Not PoE item text") };
+    let Some(db) = state.db.read().unwrap().clone() else { return no_match("Prices aren't loaded yet") };
+    let arts = lookup::unique_arts(&db, &item);
+    if arts.is_empty() {
+        return no_match("No uniques to tell apart");
+    }
+
+    let mut scores = Vec::new();
+    let urls: Vec<String> = arts.iter().map(|(url, _)| url.clone()).collect();
+    for ((url, names), png) in arts.iter().zip(fetch_all(&urls)) {
+        match png.and_then(|png| art::Art::from_png(&png, art::cells_from_url(url))) {
+            Ok(a) => scores.push(art::score(&capture, &a, item.sockets)),
+            // Without every art, the best match could still be the wrong one.
+            Err(e) => {
+                eprintln!("art: {e}");
+                return no_match(&format!("Couldn't get the art of {}", names.join(" / ")));
+            }
+        }
+    }
+    let scored: Vec<String> =
+        arts.iter().zip(&scores).map(|((_, names), s)| format!("{} {s:.2}", names.join(" / "))).collect();
+    eprintln!("art match for {}: {}", item.base, scored.join(", "));
+    let Some(best) = art::decide(&scores) else { return no_match("No art matched clearly") };
+
+    let names = &arts[best].1;
+    let mut out = String::new();
+    write_lookup(&mut out, lookup::unique_prices_named(&db, &item, names));
+    if out.starts_with("status\tok") {
+        let _ = writeln!(out, "matched\t{}\t{:.2}", clean(&names.join(" / ")), scores[best]);
     }
     let _ = writeln!(out, "league\t{}", clean(&db.league));
     let _ = writeln!(out, "age\t{}", db.fetched_at.elapsed().as_secs() / 60);
@@ -771,7 +899,8 @@ fn write_lookup(out: &mut String, outcome: lookup::Outcome) {
 fn write_prices(out: &mut String, prices: Vec<lookup::Price>) {
     for p in prices {
         let listings = p.listings.map(|n| n.to_string()).unwrap_or_default();
-        let _ = writeln!(out, "price\t{}\t{:.2}\t{:.4}\t{listings}", clean(&p.label), p.chaos, p.divine);
+        let unique = p.unique.map(|u| format!("\t{}", clean(&u))).unwrap_or_default();
+        let _ = writeln!(out, "price\t{}\t{:.2}\t{:.4}\t{listings}{unique}", clean(&p.label), p.chaos, p.divine);
     }
 }
 

@@ -107,6 +107,9 @@ pub struct ItemLine {
     pub chaos_value: f64,
     pub divine_value: Option<f64>,
     pub listing_count: Option<u32>,
+    /// The item's art on web.poecdn.com (art.rs tells unidentified uniques
+    /// apart by it).
+    pub icon: Option<String>,
 }
 
 pub struct PriceDb {
