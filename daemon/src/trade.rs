@@ -382,6 +382,9 @@ struct TradeData {
     /// (stat group, text template) -> every id with that text, in the trade
     /// site's order, for texts with more than one.
     same_text: HashMap<(String, String), Vec<String>>,
+    /// (stat group, text with every number made `#`) -> each stat text with
+    /// fixed numbers that reads so, and its `number_slots`.
+    numbered: HashMap<(String, String), Vec<(String, Slots)>>,
     /// currency id ("divine") -> name ("Divine Orb")
     currencies: HashMap<String, String>,
     /// currency id -> icon path on web.poecdn.com
@@ -410,6 +413,7 @@ impl TradeData {
         let mut data = TradeData {
             stats: HashMap::new(),
             same_text: HashMap::new(),
+            numbered: HashMap::new(),
             currencies: HashMap::new(),
             images: HashMap::new(),
             transfigured: HashMap::new(),
@@ -434,6 +438,11 @@ impl TradeData {
                     let key = (group_id.to_string(), text);
                     match data.stats.get(&key) {
                         None => {
+                            let (template, slots) = number_slots(&key.1);
+                            if slots.iter().any(Option::is_some) {
+                                let numbered = data.numbered.entry((key.0.clone(), template)).or_default();
+                                numbered.push((key.1.clone(), slots));
+                            }
                             data.stats.insert(key, id.to_string());
                         }
                         Some(first) if first != id => {
@@ -1027,7 +1036,39 @@ impl Local {
     }
 }
 
-fn find_stat(data: &TradeData, kind: ModKind, template: &str, local: Local) -> Option<(Target, f64)> {
+/// What `find_stat` found for a mod.
+#[derive(Debug, PartialEq)]
+struct Found {
+    target: Target,
+    /// The mod's value is searched times this: -1 for "reduced" as
+    /// "increased".
+    sign: f64,
+    /// For each of the mod's numbers, whether it's part of the stat's text
+    /// ("for 4 seconds") rather than its value. Empty when none is.
+    fixed: Vec<bool>,
+}
+
+impl Found {
+    /// The mod's value and roll range, without its fixed numbers.
+    fn roll(&self, values: &[f64], ranges: &[Option<(f64, f64)>]) -> Option<(f64, Option<(f64, f64)>)> {
+        if self.fixed.is_empty() {
+            return mod_value(values, ranges);
+        }
+        let keep = |i: &usize| !self.fixed[*i];
+        let values: Vec<f64> = (0..values.len()).filter(keep).map(|i| values[i]).collect();
+        let ranges: Vec<_> = match ranges.len() == self.fixed.len() {
+            true => (0..ranges.len()).filter(keep).map(|i| ranges[i]).collect(),
+            false => Vec::new(),
+        };
+        mod_value(&values, &ranges)
+    }
+}
+
+/// A mod's trade stat by its text, its numbers made `#` (`values` are
+/// those numbers). Some stats have fixed numbers in their text ("#% chance
+/// to gain Onslaught for 4 seconds on Kill"): a mod matches one of those
+/// when its own numbers there are the same.
+fn find_stat(data: &TradeData, kind: ModKind, template: &str, values: &[f64], local: Local) -> Option<Found> {
     let group = kind.trade_group().to_string();
     let mut wordings = vec![(template.to_string(), 1.0)];
     // "10% reduced X" is searched as "#% increased X" with a negative value.
@@ -1049,11 +1090,43 @@ fn find_stat(data: &TradeData, kind: ModKind, template: &str, local: Local) -> O
     } else {
         wordings.into_iter().chain(locals).collect()
     };
+    let found = |text: &str, sign, fixed| {
+        let ids = data.stat_ids(&group, text).or_else(|| data.stat_ids("pseudo", text))?;
+        Some(Found { target: stat_target(select_stats(ids, local)), sign, fixed })
+    };
     // Some stats are only searchable as pseudo stats (item rarity, for one).
-    candidates.into_iter().find_map(|(t, sign)| {
-        let ids = data.stat_ids(&group, &t).or_else(|| data.stat_ids("pseudo", &t))?;
-        Some((stat_target(select_stats(ids, local)), sign))
+    candidates.iter().find_map(|(t, sign)| found(t, *sign, Vec::new())).or_else(|| {
+        candidates.iter().find_map(|(t, sign)| {
+            let (text, slots) = data.numbered.get(&(group.clone(), t.clone()))?.iter().find(|(_, slots)| {
+                slots.len() == values.len()
+                    && slots.iter().zip(values).all(|(slot, v)| slot.is_none_or(|n| (n - v).abs() < 1e-9))
+            })?;
+            found(text, *sign, slots.iter().map(Option::is_some).collect())
+        })
     })
+}
+
+/// For each `#` in a stat's numbered-out text, the fixed number it was, or
+/// `None` for the stat's own value.
+type Slots = Vec<Option<f64>>;
+
+/// A stat's text with every number made `#`, and for each `#` the fixed
+/// number it was, or `None` for the stat's own value: "#% chance to gain
+/// Onslaught for 4 seconds on Kill" -> ("#% chance to gain Onslaught for #
+/// seconds on Kill", [None, Some(4)]).
+fn number_slots(text: &str) -> (String, Slots) {
+    let mut template = String::new();
+    let mut slots = Vec::new();
+    for (i, part) in text.split('#').enumerate() {
+        if i > 0 {
+            template.push('#');
+            slots.push(None);
+        }
+        let (t, values) = templatize(part);
+        template.push_str(&t);
+        slots.extend(values.into_iter().map(Some));
+    }
+    (template, slots)
 }
 
 /// Of stats with the same text, the ones an item's mod can be: a
@@ -1374,13 +1447,13 @@ fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             continue;
         }
         let (template, values) = templatize(&m.text);
-        let Some((value, Some((lo, hi)))) = mod_value(&values, &m.ranges) else { continue };
+        let Some(found) = find_stat(data, m.kind, &template, &values, local) else { continue };
+        let Some((value, Some((lo, hi)))) = found.roll(&values, &m.ranges) else { continue };
         if hi <= lo {
             continue;
         }
-        let Some((target, sign)) = find_stat(data, m.kind, &template, local) else { continue };
         let section = mod_section(m, Section::Mod);
-        let mut filter = Filter::unique(m.text.clone(), target, value * sign, (lo, hi), section);
+        let mut filter = Filter::unique(m.text.clone(), found.target, value * found.sign, (lo, hi), section);
         filter.tier = m.tier;
         filters.push(filter);
     }
@@ -1537,15 +1610,17 @@ fn mod_section(m: &ModLine, section: Section) -> Section {
 /// A mod as a stat filter of its own kind (explicit, fractured, ...).
 fn mod_filter(m: &ModLine, data: &TradeData, local: Local, on: bool, section: Section) -> Option<Filter> {
     let (template, values) = templatize(&m.text);
-    let (target, sign) = find_stat(data, m.kind, &template, local)?;
+    let found = find_stat(data, m.kind, &template, &values, local)?;
+    let roll = found.roll(&values, &m.ranges);
+    let Found { target, sign, .. } = found;
     let section = mod_section(m, section);
-    let mut filter = match mod_value(&values, &m.ranges) {
+    let mut filter = match roll {
         Some((value, range)) => Filter {
             draw_slider: range.is_some(),
             ..Filter::new(m.text.clone(), target, value * sign, range, on, section)
         },
-        // No number ("Warcries cannot Exert Travel Skills"): searched by
-        // whether the item has it, with nothing to slide.
+        // No number ("Warcries cannot Exert Travel Skills"), or only fixed
+        // ones: searched by whether the item has it, with nothing to slide.
         None => Filter {
             label: m.text.clone(),
             target,
@@ -2465,7 +2540,14 @@ mod tests {
         stats.insert(("implicit".into(), "#% of Cold Damage Leeched as Life".into()), "implicit.cold_leech".into());
         let mut transfigured = HashMap::new();
         transfigured.insert("Arc of Oscillating".to_string(), ("Arc".to_string(), "alt_y".to_string()));
-        TradeData { stats, same_text: HashMap::new(), currencies: HashMap::new(), images: HashMap::new(), transfigured }
+        TradeData {
+            stats,
+            same_text: HashMap::new(),
+            numbered: HashMap::new(),
+            currencies: HashMap::new(),
+            images: HashMap::new(),
+            transfigured,
+        }
     }
 
     const RING: &str = "Item Class: Rings\nRarity: Rare\nDoom Loop\nSapphire Ring\n--------\nItem Level: 84\n--------\n\
@@ -3315,8 +3397,12 @@ mod tests {
         assert_eq!(t("#% increased Attack Speed").as_deref(), Some("local #% increased Attack Speed"));
         // Reduced is searched as negative increased, still the local stat.
         assert_eq!(
-            find_stat(&data, ModKind::Explicit, "#% reduced Attack Speed", Local::Weapon),
-            Some((Target::Stat("local #% increased Attack Speed".to_string()), -1.0))
+            find_stat(&data, ModKind::Explicit, "#% reduced Attack Speed", &[], Local::Weapon),
+            Some(Found {
+                target: Target::Stat("local #% increased Attack Speed".to_string()),
+                sign: -1.0,
+                fixed: vec![]
+            })
         );
         // A stat only listed as "(Local)", like the real "#% increased
         // Energy Shield", still matches off armour.
@@ -3347,13 +3433,13 @@ mod tests {
     }
 
     fn t_with(data: &TradeData, local: Local, template: &str) -> Option<String> {
-        single_id(find_stat(data, ModKind::Explicit, template, local))
+        single_id(find_stat(data, ModKind::Explicit, template, &[], local))
     }
 
     /// The id `find_stat` found, when it's a single stat.
-    fn single_id(found: Option<(Target, f64)>) -> Option<String> {
-        match found? {
-            (Target::Stat(id), _) => Some(id),
+    fn single_id(found: Option<Found>) -> Option<String> {
+        match found?.target {
+            Target::Stat(id) => Some(id),
             _ => None,
         }
     }
@@ -3373,7 +3459,7 @@ mod tests {
             ]},
         ]});
         let data = TradeData::from_json(&stats, &Value::Null, &Value::Null);
-        let find = |kind, template, local| single_id(find_stat(&data, kind, template, local));
+        let find = |kind, template, local| single_id(find_stat(&data, kind, template, &[], local));
         let intimidate = "#% chance to Intimidate Enemies for 4 seconds on Hit";
         assert_eq!(find(ModKind::Explicit, intimidate, Local::Weapon).as_deref(), Some("explicit.stat_2089652545"));
         assert_eq!(find(ModKind::Explicit, intimidate, Local::Armour).as_deref(), Some("explicit.stat_78985352"));
@@ -3495,6 +3581,43 @@ mod tests {
             { "hash": "stat.explicit.stat_1330109706", "description": "Regenerate 9 Energy Shield per second" },
         ] });
         assert_eq!(listing_value(&listed, &regen), Some("9".into()));
+    }
+
+    #[test]
+    fn stats_with_fixed_numbers() {
+        assert_eq!(
+            number_slots("#% chance to gain Onslaught for 4 seconds on Kill"),
+            ("#% chance to gain Onslaught for # seconds on Kill".into(), vec![None, Some(4.0)])
+        );
+        assert_eq!(number_slots("Trigger with a 0.25 second Cooldown").1, vec![Some(0.25)]);
+
+        let data = real_data();
+        let ring = |mod_line: &str| {
+            let item = crate::item::parse(&format!(
+                "Item Class: Rings\nRarity: Rare\nDoom Loop\nSapphire Ring\n--------\nItem Level: 84\n--------\n\
+                 +25% to Cold Resistance (implicit)\n--------\n{mod_line}\n"
+            ))
+            .unwrap();
+            build_filters(&item, &data, Preset::Normal).into_iter().find(|f| f.section == Section::Mod)
+        };
+        // The "4" is the stat's text, the 10 its value and roll.
+        let onslaught = ring(
+            "{ Suffix Modifier \"of Onslaught\" (Tier: 1) — Speed }\n\
+             10(8-10)% chance to gain Onslaught for 4 seconds on Kill",
+        )
+        .unwrap();
+        assert_eq!(onslaught.label, "10% chance to gain Onslaught for 4 seconds on Kill");
+        assert_eq!(
+            onslaught.target,
+            Target::AnyStat(vec!["explicit.stat_3023957681".into(), "explicit.stat_665823128".into()])
+        );
+        assert_eq!((onslaught.roll, onslaught.slider), (Some(10.0), Some((8.0, 10.0))));
+        // Another number there is another stat, which the trade site lacks.
+        assert!(ring("10% chance to gain Onslaught for 6 seconds on Kill").is_none());
+        // Only fixed numbers: searched by having it.
+        let unholy = ring("Gain Unholy Might for 4 seconds on Critical Strike").unwrap();
+        assert!(matches!(&unholy.target, Target::Stat(id) if id.starts_with("explicit.")), "{:?}", unholy.target);
+        assert_eq!((unholy.roll, unholy.min), (None, None));
     }
 
     #[test]

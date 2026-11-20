@@ -172,8 +172,18 @@
      "type": "explicit"
     },
     {
+     "id": "explicit.stat_3023957681",
+     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
+     "type": "explicit"
+    },
+    {
      "id": "explicit.stat_1004011302",
      "text": "#% increased Cooldown Recovery Rate",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_665823128",
+     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
      "type": "explicit"
     },
     {
@@ -184,6 +194,11 @@
     {
      "id": "explicit.stat_239144",
      "text": "#% increased Cooldown Recovery Rate",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_2959020308",
+     "text": "Gain Unholy Might for 4 seconds on Critical Strike",
      "type": "explicit"
     },
     {
@@ -235,6 +250,11 @@
     {
      "id": "implicit.stat_1050105434",
      "text": "+# to maximum Mana",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_3023957681",
+     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
      "type": "implicit"
     },
     {
@@ -294,6 +314,11 @@
      "type": "fractured"
     },
     {
+     "id": "fractured.stat_3023957681",
+     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
+     "type": "fractured"
+    },
+    {
      "id": "fractured.stat_1004011302",
      "text": "#% increased Cooldown Recovery Rate",
      "type": "fractured"
@@ -301,6 +326,11 @@
     {
      "id": "fractured.stat_2448920197",
      "text": "#% increased effect",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_665823128",
+     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
      "type": "fractured"
     },
     {
@@ -348,6 +378,11 @@
      "id": "enchant.stat_1004011302",
      "text": "#% increased Cooldown Recovery Rate",
      "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_2959020308",
+     "text": "Gain Unholy Might for 4 seconds on Critical Strike",
+     "type": "enchant"
     }
    ]
   },
@@ -389,6 +424,11 @@
      "id": "scourge.stat_1004011302",
      "text": "#% increased Cooldown Recovery Rate",
      "type": "scourge"
+    },
+    {
+     "id": "scourge.stat_3023957681",
+     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
+     "type": "scourge"
     }
    ]
   },
@@ -424,6 +464,11 @@
     {
      "id": "crafted.stat_4080418644",
      "text": "+# to Strength",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_3023957681",
+     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
      "type": "crafted"
     },
     {
