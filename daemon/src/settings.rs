@@ -28,7 +28,15 @@ pub const KEYS: &[&str] = &[
     "hotkey.settings",
     "stash_scroll",
     "cursor",
+    "hotkey.displays",
+    "auto_watch",
+    "auto_watch_areas",
+    "client_log",
 ];
+
+/// Areas where the display price check starts by itself: mob-free rooms of
+/// item displays (the Templar vaults), by their exact names in Client.txt.
+pub const DEFAULT_WATCH_AREAS: &[&str] = &["Zealot's Vault", "Arkhon's Vault", "Scholar's Vault", "Machinist's Vault"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
@@ -48,6 +56,11 @@ pub struct Settings {
     /// The cursor over the panels: "game" (Wine's) or "desktop" (the
     /// cursor theme's, which keeps its size with fractional scaling).
     pub cursor: String,
+    /// Entering one of `auto_watch_areas` starts pricing item displays.
+    pub auto_watch: bool,
+    pub auto_watch_areas: Vec<String>,
+    /// The game's Client.txt; "" finds it in the Steam libraries.
+    pub client_log: String,
 }
 
 /// Each a key combination as the layer matches it: modifiers and an evdev
@@ -60,6 +73,9 @@ pub struct Hotkeys {
     /// The old map check key; "" turns it off.
     pub map_alias: String,
     pub settings: String,
+    /// Prices the item displays on screen until the area changes; "" turns
+    /// it off.
+    pub displays: String,
 }
 
 impl Default for Settings {
@@ -72,6 +88,9 @@ impl Default for Settings {
             hotkeys: Hotkeys::default(),
             stash_scroll: true,
             cursor: "game".to_string(),
+            auto_watch: true,
+            auto_watch_areas: DEFAULT_WATCH_AREAS.iter().map(|a| a.to_string()).collect(),
+            client_log: String::new(),
         }
     }
 }
@@ -83,6 +102,7 @@ impl Default for Hotkeys {
             locked: "ctrl+alt+32".to_string(),
             map_alias: "alt+32".to_string(),
             settings: "ctrl+alt+31".to_string(),
+            displays: "ctrl+alt+33".to_string(),
         }
     }
 }
@@ -175,6 +195,10 @@ impl Settings {
             "hotkey.settings" => self.hotkeys.settings.clone(),
             "stash_scroll" => if self.stash_scroll { "on" } else { "off" }.to_string(),
             "cursor" => self.cursor.clone(),
+            "hotkey.displays" => self.hotkeys.displays.clone(),
+            "auto_watch" => if self.auto_watch { "on" } else { "off" }.to_string(),
+            "auto_watch_areas" => self.auto_watch_areas.join(";"),
+            "client_log" => self.client_log.clone(),
             _ => String::new(),
         }
     }
@@ -214,6 +238,24 @@ impl Settings {
             }
             "hotkey.map_alias" => {
                 self.hotkeys.map_alias = if value.is_empty() { String::new() } else { parse_combo(value)? };
+            }
+            "hotkey.displays" => {
+                self.hotkeys.displays = if value.is_empty() { String::new() } else { parse_combo(value)? };
+            }
+            "auto_watch" => match value {
+                "on" => self.auto_watch = true,
+                "off" => self.auto_watch = false,
+                _ => return Err("Auto watch is on or off".to_string()),
+            },
+            "auto_watch_areas" => {
+                self.auto_watch_areas =
+                    value.split(';').map(str::trim).filter(|a| !a.is_empty()).map(str::to_string).collect();
+            }
+            "client_log" => {
+                if !(value.is_empty() || value.starts_with('/')) {
+                    return Err("Client.txt's path is absolute, or empty to find it".to_string());
+                }
+                self.client_log = value.to_string();
             }
             "stash_scroll" => match value {
                 "on" => self.stash_scroll = true,
@@ -293,6 +335,14 @@ mod tests {
         s.set("league", "Standard").unwrap();
         s.set("stash_scroll", "off").unwrap();
         s.set("cursor", "desktop").unwrap();
+        s.set("hotkey.displays", "").unwrap();
+        s.set("auto_watch", "off").unwrap();
+        s.set("auto_watch_areas", " Zealot's Vault ;; Arkhon's Vault").unwrap();
+        s.set("client_log", "/games/poe/logs/Client.txt").unwrap();
+        assert_eq!(s.auto_watch_areas, ["Zealot's Vault", "Arkhon's Vault"]);
+        assert_eq!(s.get("auto_watch_areas"), "Zealot's Vault;Arkhon's Vault");
+        assert!(!s.auto_watch);
+        assert_eq!(s.hotkeys.displays, "");
         assert_eq!(s.min_percent, 80);
         assert_eq!(s.get("cursor"), "desktop");
         assert!(!s.stash_scroll);
@@ -309,6 +359,8 @@ mod tests {
             ("league", ""),
             ("stash_scroll", "yes"),
             ("cursor", "theme"),
+            ("auto_watch", "yes"),
+            ("client_log", "logs/Client.txt"),
             ("nonsense", "1"),
         ] {
             let before = s.clone();
@@ -327,6 +379,9 @@ mod tests {
         assert_eq!(s.league, "auto");
         assert!(s.stash_scroll, "missing from older files: on");
         assert_eq!(s.cursor, "game", "missing from older files: the game's");
+        assert!(s.auto_watch, "missing from older files: on");
+        assert_eq!(s.auto_watch_areas.len(), DEFAULT_WATCH_AREAS.len());
+        assert_eq!(s.hotkeys.displays, "ctrl+alt+33");
 
         let s: Settings = serde_json::from_str(r#"{"stash_scroll": false}"#).unwrap();
         assert!(!s.validated().stash_scroll);

@@ -5,7 +5,8 @@ pkgver=0.22.0
 pkgrel=1
 pkgdesc="In-game Vulkan price-check overlay for Path of Exile on Wayland"
 arch=('x86_64')
-license=('GPL-3.0-or-later')
+# The OCR models (item displays) are CC BY-SA 4.0: see ocrs-models-NOTICE.md.
+license=('GPL-3.0-or-later' 'CC-BY-SA-4.0')
 depends=('vulkan-icd-loader' 'wayland' 'freetype2' 'gcc-libs' 'glibc')
 makedepends=('cmake' 'ninja' 'vulkan-headers' 'wayland-protocols' 'shaderc' 'cargo')
 optdepends=('chromium: trade search for rare items (or google-chrome)'
@@ -13,6 +14,14 @@ optdepends=('chromium: trade search for rare items (or google-chrome)'
 # Rust links with lld, which can't read the GCC LTO objects of C deps (ring).
 options=('!lto')
 install=poe-waytrade.install
+# ocrs's models, as the daemon would otherwise download them on first use
+# (daemon/src/ocr.rs). Pinned by hash: a new upload fails the build rather
+# than shipping untested models.
+_models=https://ocrs-models.s3-accelerate.amazonaws.com
+source=("$_models/text-detection.onnx"
+        "$_models/text-recognition.onnx")
+sha256sums=('a917b23dbd9524b465df7e922641b3ff2981623df4ded5a0234004ef2fee7cfe'
+            '86c145c2edb96c8caed5b1ebb8f44d706408922211451c309c625157dd6061c5')
 
 _srcroot="$(realpath "$startdir/../..")"
 
@@ -33,6 +42,8 @@ build() {
 
 check() {
   export CARGO_TARGET_DIR="$srcdir/target"
+  # The OCR tests read the fixtures with the shipped models.
+  export POE_WAYTRADE_OCR_MODELS="$srcdir"
   cargo test --frozen --release --manifest-path "$_srcroot/daemon/Cargo.toml"
 }
 
@@ -42,4 +53,8 @@ package() {
   install -Dm644 -t "$pkgdir/usr/lib/systemd/user" \
     "$_srcroot/packaging/poe-waytrade-daemon.service" \
     "$_srcroot/packaging/poe-waytrade-daemon.socket"
+  install -Dm644 -t "$pkgdir/usr/share/poe-waytrade/ocrs" \
+    "$srcdir/text-detection.onnx" "$srcdir/text-recognition.onnx"
+  install -Dm644 "$_srcroot/packaging/ocrs-models-NOTICE.md" \
+    "$pkgdir/usr/share/licenses/$pkgname/ocrs-models-NOTICE.md"
 }

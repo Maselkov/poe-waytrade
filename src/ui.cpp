@@ -4,6 +4,7 @@
 #include "layer.h"
 #include "price_check.h"
 #include "rml_renderer.h"
+#include "screen_scan.h"
 #include "settings_page.h"
 #include "version.h"
 
@@ -32,7 +33,8 @@ const char* const kMapDoc = "ui/map_check.rml";
 const char* const kDebugDoc = "ui/debug.rml";
 const char* const kSettingsDoc = "ui/settings.rml";
 const char* const kToastDoc = "ui/toast.rml";
-const char* const kDocuments[] = {kPriceDoc, kMapDoc, kSettingsDoc, kToastDoc, kDebugDoc};
+const char* const kScanDoc = "ui/scan_labels.rml";
+const char* const kDocuments[] = {kScanDoc, kPriceDoc, kMapDoc, kSettingsDoc, kToastDoc, kDebugDoc};
 
 // The start-up notice: shown once the daemon has answered (or after a
 // moment without it), for a few seconds, fading out.
@@ -290,6 +292,7 @@ struct Model {
     bool s_scale_env = false;
     bool s_stash_scroll = true;
     bool s_desktop_cursor = false;
+    bool s_auto_watch = true;
     bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
     int s_profile = 1;
     bool s_reset_armed = false;
@@ -444,6 +447,9 @@ struct OverlayUi::Impl {
     double toast_started = -1;  // elapsed seconds; < 0: not yet
     bool toast_off = getenv("POE_WAYTRADE_DEMO_ITEM") || getenv("POE_WAYTRADE_DEMO_SETTINGS");
     void update_toast(PriceCheck& pc, VkExtent2D extent);
+    // The display scan's labels: one element each, above its tooltip.
+    void update_scan_labels(const ScreenScan& scan, VkExtent2D extent);
+    std::vector<std::string> scan_rml;  // each label element's content, as set
     float ui_scale = 1.0f;     // POE_WAYTRADE_UI_SCALE, else the setting
     bool ui_scale_env = false;
     void sync_settings(PriceCheck& pc, Model& m);
@@ -702,6 +708,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_scale_env", &model.s_scale_env);
     c.Bind("s_stash_scroll", &model.s_stash_scroll);
     c.Bind("s_desktop_cursor", &model.s_desktop_cursor);
+    c.Bind("s_auto_watch", &model.s_auto_watch);
     c.Bind("s_scaled", &model.s_scaled);
     c.Bind("s_profile", &model.s_profile);
     c.Bind("s_reset_armed", &model.s_reset_armed);
@@ -801,6 +808,7 @@ void OverlayUi::Impl::bind_model() {
     settings_event("warning_keep", [](SettingsPage& s, Args) { s.warning_keep(); });
     settings_event("stash_scroll", [arg](SettingsPage& s, Args a) { s.set_stash_scroll(arg(a) != 0); });
     settings_event("desktop_cursor", [arg](SettingsPage& s, Args a) { s.set_desktop_cursor(arg(a) != 0); });
+    settings_event("auto_watch", [arg](SettingsPage& s, Args a) { s.set_auto_watch(arg(a) != 0); });
     settings_event("league_pick", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_league(a[0].Get<Rml::String>());
     });
@@ -818,6 +826,7 @@ void OverlayUi::Impl::bind_model() {
 void OverlayUi::Impl::load_documents() {
     for (auto& [path, doc] : docs) doc->Close();
     docs.clear();
+    scan_rml.clear();
     Rml::Factory::ClearStyleSheetCache();
     Rml::Factory::ClearTemplateCache();
     for (const char* path : kDocuments) {
@@ -837,7 +846,7 @@ time_t OverlayUi::Impl::dev_files_mtime() const {
     return newest;
 }
 
-void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
+void OverlayUi::update(PriceCheck& pc, ScreenScan& scan, WaylandInput* input, VkExtent2D extent) {
     Impl& d = *impl_;
     if (!d.ok) return;
     d.frame++;
@@ -893,6 +902,7 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
         if (!want && it->second->IsVisible()) it->second->Hide();
     }
     d.update_toast(pc, extent);
+    d.update_scan_labels(scan, extent);
     if (auto it = d.docs.find(kDebugDoc); it != d.docs.end()) {
         if (d.debug && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
     }
@@ -915,8 +925,9 @@ std::vector<InputRect> OverlayUi::input_rects() const {
     std::vector<InputRect> rects;
     if (!impl_->ok) return rects;
     for (auto& [path, doc] : impl_->docs) {
-        // The start-up notice lets clicks through to the game.
-        if (!doc->IsVisible() || path == kToastDoc) continue;
+        // The start-up notice and the display labels let clicks through to
+        // the game (the labels' document covers the screen).
+        if (!doc->IsVisible() || path == kToastDoc || path == kScanDoc) continue;
         Rml::Vector2f pos = doc->GetAbsoluteOffset(Rml::BoxArea::Border);
         Rml::Vector2f size = doc->GetBox().GetSize(Rml::BoxArea::Border);
         rects.push_back({(int)floorf(pos.x), (int)floorf(pos.y), (int)ceilf(size.x), (int)ceilf(size.y)});
@@ -1235,6 +1246,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
         "Stays open until × or a click in the game",
         "Same as the locked panel, for old habits",
         "This page",
+        "Prices the item displays on screen (vault reliquaries) until you leave the area",
     };
     for (int i = 0; i < SettingsPage::kActions; i++) {
         UiHotkey h;
@@ -1243,7 +1255,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
         h.desc = descs[i];
         h.old = v.hotkeys[i].empty() ? "it off" : combo_label(v.hotkeys[i]);
         h.key = v.hotkeys[i].empty() ? "Off" : combo_label(v.hotkeys[i]);
-        h.can_clear = i == (int)Action::MapAlias && !v.hotkeys[i].empty();
+        h.can_clear = SettingsPage::can_be_off((Action)i) && !v.hotkeys[i].empty();
         if (v.hotkeys[i].empty()) h.state = "off";
         if (s.capturing() == (Action)i) {
             h.key = "Press keys…";
@@ -1273,6 +1285,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_scale_env = ui_scale_env;
     m.s_stash_scroll = v.stash_scroll;
     m.s_desktop_cursor = v.desktop_cursor;
+    m.s_auto_watch = v.auto_watch;
     m.s_profile = s.map_profile();
     m.s_reset_armed = s.reset_armed();
 
@@ -1325,6 +1338,68 @@ void OverlayUi::Impl::update_toast(PriceCheck& pc, VkExtent2D extent) {
     float top = std::min(extent.height * 0.885f, extent.height - size.y - 8 * dp);
     doc->SetProperty(Rml::PropertyId::Left, Rml::Property(std::max(0.0f, (extent.width - size.x) / 2), Rml::Unit::PX));
     doc->SetProperty(Rml::PropertyId::Top, Rml::Property(top, Rml::Unit::PX));
+}
+
+namespace {
+std::string escape_rml(const std::string& s) {
+    std::string out;
+    for (char c : s) {
+        if (c == '<') out += "&lt;";
+        else if (c == '>') out += "&gt;";
+        else if (c == '&') out += "&amp;";
+        else out += c;
+    }
+    return out;
+}
+}  // namespace
+
+void OverlayUi::Impl::update_scan_labels(const ScreenScan& scan, VkExtent2D extent) {
+    auto it = docs.find(kScanDoc);
+    if (it == docs.end()) return;
+    Rml::ElementDocument* doc = it->second;
+    std::vector<ScreenScan::Label> labels = scan.labels();
+    if (labels.empty()) {
+        if (doc->IsVisible()) doc->Hide();
+        return;
+    }
+    if (!doc->IsVisible()) doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+    // As many label elements as labels.
+    while ((size_t)doc->GetNumChildren() < labels.size()) {
+        Rml::ElementPtr e = doc->CreateElement("div");
+        e->SetClass("scan-label", true);
+        doc->AppendChild(std::move(e));
+        scan_rml.emplace_back();
+    }
+    while ((size_t)doc->GetNumChildren() > labels.size()) {
+        doc->RemoveChild(doc->GetLastChild());
+        scan_rml.pop_back();
+    }
+    float dp = context->GetDensityIndependentPixelRatio();
+    for (size_t i = 0; i < labels.size(); i++) {
+        const ScreenScan::Label& l = labels[i];
+        Rml::Element* e = doc->GetChild((int)i);
+        // The amount with its currency's icon, once that's here; else as text.
+        std::string rml = !l.icon.empty() && icons_get(l.icon)
+                              ? "<div class=\"scan-price\"><img class=\"scan-icon\" src=\"icon:" + l.icon + "\"/>" +
+                                    escape_rml(l.amount) + "</div>"
+                              : "<div class=\"scan-price\">" + escape_rml(l.price) + "</div>";
+        if (!l.title.empty()) rml += "<div class=\"scan-title\">" + escape_rml(l.title) + "</div>";
+        if (!l.note.empty()) rml += "<div class=\"scan-note\">" + escape_rml(l.note) + "</div>";
+        if (rml != scan_rml[i]) {
+            e->SetInnerRML(rml);
+            scan_rml[i] = rml;
+        }
+        e->SetClass("best", l.best);
+        e->SetClass("pending", l.pending);
+        // Centred above the plate, from last frame's size (a new label's
+        // first frame may sit a little off).
+        Rml::Vector2f size = e->GetBox().GetSize(Rml::BoxArea::Border);
+        float left = std::clamp(l.x - size.x / 2, 0.0f, std::max(0.0f, (float)extent.width - size.x));
+        float top = l.y - size.y - 4 * dp;
+        if (top < 2 * dp) top = 2 * dp;  // a plate at the top: over it, rather than off screen
+        e->SetProperty(Rml::PropertyId::Left, Rml::Property(left, Rml::Unit::PX));
+        e->SetProperty(Rml::PropertyId::Top, Rml::Property(top, Rml::Unit::PX));
+    }
 }
 
 // Like Awakened PoE Trade: an item checked in the inventory (right half)

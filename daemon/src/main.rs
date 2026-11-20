@@ -28,6 +28,36 @@
 //!   response: like PRICE's for that unique (several, if they share their
 //!             art), with "matched <name> <score>"; or status no_match
 //!
+//!   request:  "SCANFIND\n" + "<width> <height> <full width> <full height>"
+//!             + "\n" + base64 of a grey frame (8 bits a pixel, rows top to
+//!             bottom), scaled down from the game's full size: where item
+//!             displays' tooltips are (scan.rs)
+//!   response: status ok
+//!     plate    <x> <y> <w> <h> <crop x> <crop y> <crop w> <crop h>   (0+,
+//!              in full-size pixels: a tooltip's title plate, and the crop
+//!              to send to SCANITEM)
+//!
+//!   request:  "SCANITEM\n" + "<width> <height> <plate x> <plate y> <plate
+//!             w> <plate h>" + "\n" + base64 of the crop's pixels (RGB, 8
+//!             bits a channel), the plate's box within it: the item in that
+//!             tooltip, read and priced (poe.ninja, or a trade search for
+//!             what it hasn't: Facetor's Lens, rare trinkets)
+//!   response: status   ok | not_found | no_item | loading | error
+//!     title    <item name>
+//!     detail   <what else was read, e.g. "level 4, 23%, corrupted">
+//!     value    <chaos> <divine> <short text, "3.2 div"> <ninja|trade>
+//!              (status ok)
+//!     message  <text>
+//!     line     <a line read off the tooltip>   (0+, for the log)
+//!
+//!   request:  "AREA\n" + where the layer sees the game's Client.txt (its
+//!             working directory's logs/, or empty)
+//!   response: status ok | none
+//!     area     <the area the player last entered>
+//!     entered  <how many area changes so far: a new number is a new area>
+//!     watch    <1|0>   (it's one of the settings' auto_watch_areas)
+//!     message  <why there's no area>   (status none)
+//!
 //!   request:  "PING\n"   (sent by the layer at game start to wake us up)
 //!   response: status ready | loading
 //!
@@ -124,12 +154,15 @@
 //! `--exit-with-parent` (the launcher) makes us exit when our parent does.
 //! `--version` prints this build's version (see build.rs) and exits.
 
+mod area;
 mod art;
 mod cdp;
 mod item;
 mod lookup;
 mod mapcheck;
 mod ninja;
+mod ocr;
+mod scan;
 mod settings;
 mod trade;
 
@@ -145,8 +178,8 @@ use std::time::{Duration, Instant};
 /// This build's version, from `git describe` (see build.rs).
 const VERSION: &str = env!("WAYTRADE_VERSION");
 const SOCKET_NAME: &str = "poe-waytrade";
-/// MATCHART's pixels are the biggest requests: a few hundred KiB.
-const MAX_FRAME: usize = 4 * 1024 * 1024;
+/// SCANITEM's and SCANFIND's pixels are the biggest requests: a few MiB.
+const MAX_FRAME: usize = 16 * 1024 * 1024;
 const REFRESH: Duration = Duration::from_secs(15 * 60);
 const RETRY: Duration = Duration::from_secs(60);
 /// When socket-activated, exit after this long without requests.
@@ -165,6 +198,11 @@ struct State {
     refresh_now: (Mutex<bool>, Condvar),
     /// Started by systemd (logs in the journal) rather than the launcher.
     socket_activated: bool,
+    /// Item displays already priced: (what was read) -> (when, the reply),
+    /// so a display seen again costs no lookup or trade search.
+    scanned: Mutex<std::collections::HashMap<String, (Instant, String)>>,
+    /// The names screen reads are matched against, and when they were got.
+    vocabulary: Mutex<Option<(Instant, Arc<scan::Vocabulary>)>>,
 }
 
 fn main() {
@@ -172,6 +210,15 @@ fn main() {
     if args.get(1).map(String::as_str) == Some("--version") {
         println!("poe-waytrade-daemon {VERSION}");
         return;
+    }
+    if args.get(1).map(String::as_str) == Some("scan") {
+        std::process::exit(match scan_file(&args[2..]) {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("scan failed: {e}");
+                1
+            }
+        });
     }
     if args.get(1).map(String::as_str) == Some("query") {
         std::process::exit(match query(&args[2..]) {
@@ -199,6 +246,8 @@ fn main() {
         leagues: Mutex::new(Vec::new()),
         refresh_now: (Mutex::new(false), Condvar::new()),
         socket_activated: systemd.is_some(),
+        scanned: Mutex::new(std::collections::HashMap::new()),
+        vocabulary: Mutex::new(None),
     });
 
     let listener = match systemd {
@@ -409,6 +458,12 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         respond(state, text, Some(&search), search.options.preset)
     } else if let Some(rest) = request.strip_prefix("MATCHART\n") {
         match_art(state, rest)
+    } else if let Some(rest) = request.strip_prefix("SCANFIND\n") {
+        scan_find(rest)
+    } else if let Some(rest) = request.strip_prefix("SCANITEM\n") {
+        scan_item(state, rest)
+    } else if let Some(hint) = request.strip_prefix("AREA\n") {
+        area_reply(state, hint.trim())
     } else if let Some(id) = request.strip_prefix("ICON\n") {
         match state.trade.lock().unwrap().icon(id.trim()) {
             Ok(png) => format!("status\tok\npng\t{}\n", base64(&png)),
@@ -902,6 +957,342 @@ fn write_prices(out: &mut String, prices: Vec<lookup::Price>) {
         let unique = p.unique.map(|u| format!("\t{}", clean(&u))).unwrap_or_default();
         let _ = writeln!(out, "price\t{}\t{:.2}\t{:.4}\t{listings}{unique}", clean(&p.label), p.chaos, p.divine);
     }
+}
+
+// ---- item displays (scan.rs) ------------------------------------------------
+
+/// How long a display's price (or that it has none) is reused...
+const SCAN_REUSE: Duration = Duration::from_secs(10 * 60);
+/// ...and a failed lookup (a trade search over the rate limit, say): not
+/// tried again each time the display comes back into view.
+const SCAN_RETRY: Duration = Duration::from_secs(30);
+/// How long the trade site's names are used before they're asked for again
+/// (they're cached on disk for a day anyway).
+const VOCABULARY_AGE: Duration = Duration::from_secs(60 * 60);
+
+/// "<numbers...>\n<base64>" -> (numbers, decoded bytes).
+fn pixels_request(request: &str, count: usize) -> Option<(Vec<f32>, Vec<u8>)> {
+    let (header, pixels) = request.split_once('\n')?;
+    let numbers: Vec<f32> = header.split_whitespace().filter_map(|n| n.parse().ok()).collect();
+    if numbers.len() != count {
+        return None;
+    }
+    Some((numbers, art::base64_decode(pixels.trim())?))
+}
+
+/// SCANFIND: see the top of this file.
+fn scan_find(request: &str) -> String {
+    let Some((n, pixels)) = pixels_request(request, 4) else { return bad_request("Bad SCANFIND") };
+    let (width, height) = (n[0] as usize, n[1] as usize);
+    if width == 0 || height == 0 || pixels.len() != width * height || n[2] < n[0] || n[3] < n[1] {
+        return bad_request("Bad SCANFIND pixels");
+    }
+    // A display check is starting: have the OCR models ready.
+    ocr::prepare();
+    let frame = scan::Gray { width, height, pixels };
+    let mut out = "status\tok\n".to_string();
+    for p in scan::find_plates(&frame, n[2] as u32, n[3] as u32) {
+        let (cx, cy, cw, ch) = p.crop;
+        let _ = writeln!(out, "plate\t{:.0}\t{:.0}\t{:.0}\t{:.0}\t{cx}\t{cy}\t{cw}\t{ch}", p.x, p.y, p.w, p.h);
+    }
+    out
+}
+
+/// The names to read items by: the trade site's (every item), or failing
+/// that (no browser for the trade site), poe.ninja's (every priced one).
+fn vocabulary(state: &State, db: Option<&ninja::PriceDb>) -> Option<Arc<scan::Vocabulary>> {
+    let mut slot = state.vocabulary.lock().unwrap();
+    if let Some((at, v)) = slot.as_ref()
+        && at.elapsed() < VOCABULARY_AGE
+    {
+        return Some(v.clone());
+    }
+    let names = match state.trade.lock().unwrap().item_names() {
+        Ok(names) if !names.is_empty() => names,
+        result => {
+            if let Err(e) = result {
+                eprintln!("scan: the trade site's item names: {e}; using poe.ninja's");
+            }
+            Arc::new(ninja_names(db?))
+        }
+    };
+    let v = scan::Vocabulary::shared(names);
+    *slot = Some((Instant::now(), v.clone()));
+    Some(v)
+}
+
+/// poe.ninja's item names, grouped like the trade site's.
+fn ninja_names(db: &ninja::PriceDb) -> Vec<trade::NamedItem> {
+    let mut names = Vec::new();
+    for (name, lines) in &db.items {
+        let Some(line) = lines.first() else { continue };
+        let (name, base, group) = match (&line.base_type, line.gem_level) {
+            (_, Some(_)) => (None, name.clone(), "gem"),
+            (Some(base), None) => (Some(name.clone()), base.clone(), "unique"),
+            (None, None) => (None, name.clone(), "other"),
+        };
+        names.push(trade::NamedItem { name, base, group: group.into() });
+    }
+    for name in db.exchange.keys() {
+        names.push(trade::NamedItem { name: None, base: name.clone(), group: "currency".into() });
+    }
+    for base in db.bases.keys() {
+        names.push(trade::NamedItem { name: None, base: base.clone(), group: "base".into() });
+    }
+    names
+}
+
+/// SCANITEM: see the top of this file.
+fn scan_item(state: &State, request: &str) -> String {
+    let Some((n, rgb)) = pixels_request(request, 6) else { return bad_request("Bad SCANITEM") };
+    let (width, height) = (n[0] as usize, n[1] as usize);
+    if width == 0 || height == 0 || rgb.len() != width * height * 3 {
+        return bad_request("Bad SCANITEM pixels");
+    }
+    let (plate_x, plate_y, plate_w, plate_h) = (n[2], n[3], n[4], n[5]);
+    let Some(db) = state.db.read().unwrap().clone() else {
+        return "status\tloading\nmessage\tLoading prices from poe.ninja...\n".to_string();
+    };
+    let Some(vocabulary) = vocabulary(state, Some(&db)) else {
+        return "status\tloading\nmessage\tLoading item names...\n".to_string();
+    };
+    let started = Instant::now();
+    let lines = match ocr::read(&rgb, width, height) {
+        Ok(lines) => lines,
+        Err(e) => return format!("status\terror\nmessage\t{}\n", clean(&format!("OCR: {e}"))),
+    };
+    let lines = scan::tooltip_lines(&lines, plate_x + plate_w / 2.0, plate_y + plate_h, width as f32);
+    let read = scan::read_item(&lines, &vocabulary, |text| state.trade.lock().unwrap().canonical_mod(text));
+    let read = match read {
+        Ok(read) => read,
+        Err(e) => {
+            eprintln!("scan: {e} ({}ms)", started.elapsed().as_millis());
+            let mut out = "status\tno_item\nmessage\tNo item recognised\n".to_string();
+            for l in &lines {
+                let _ = writeln!(out, "line\t{}", clean(&l.text));
+            }
+            return out;
+        }
+    };
+    let detail = scan_detail(&read);
+    let title = read.item.name.clone().unwrap_or_else(|| read.item.base.clone());
+    let cache_key = format!("{title}\n{}\n{detail}", read.item.base);
+    let reusable = |(at, reply): &(Instant, String)| {
+        at.elapsed() < if reply.starts_with("status\terror") { SCAN_RETRY } else { SCAN_REUSE }
+    };
+    let cached = state.scanned.lock().unwrap().get(&cache_key).filter(|c| reusable(c)).cloned();
+    let mut out = match cached {
+        Some((_, reply)) => reply,
+        None => {
+            let reply = price_screen_item(state, &db, &read, &title, &detail);
+            if reply.starts_with("status\terror") {
+                let message = reply.lines().find_map(|l| l.strip_prefix("message\t")).unwrap_or("");
+                eprintln!("scan: {title}: {message}");
+            }
+            let mut scanned = state.scanned.lock().unwrap();
+            scanned.retain(|_, c| reusable(c));
+            scanned.insert(cache_key, (Instant::now(), reply.clone()));
+            reply
+        }
+    };
+    eprintln!("scan: {title} ({detail}) in {}ms", started.elapsed().as_millis());
+    for l in &read.lines {
+        let _ = writeln!(out, "line\t{}", clean(l));
+    }
+    out
+}
+
+/// What was read besides the name, as the label shows it.
+fn scan_detail(read: &scan::ScreenItem) -> String {
+    let item = &read.item;
+    let mut parts = Vec::new();
+    if let Some(level) = item.gem_level {
+        parts.push(format!("level {level}"));
+    }
+    if item.quality > 0 {
+        parts.push(format!("{}%", item.quality));
+    }
+    if let Some(n) = item.stack_size.filter(|&n| n > 1) {
+        parts.push(format!("x{n}"));
+    }
+    if let Some(ilvl) = item.item_level {
+        parts.push(format!("ilvl {ilvl}"));
+    }
+    if let Some(xp) = read.stored_experience {
+        parts.push(format!("{}M xp", xp / 1_000_000));
+    }
+    if item.corrupted {
+        parts.push("corrupted".into());
+    }
+    if item.rarity == "Rare" {
+        parts.push(format!("{} mods", item.mods.len()));
+    }
+    parts.join(", ")
+}
+
+/// "3.2 div" for a divine or more, else "45c" ("0.5c" under one).
+fn short_price(chaos: f64, divine: f64) -> String {
+    if divine >= 1.0 {
+        format!("{} div", trade::trim_number((divine * 10.0).round() / 10.0))
+    } else if chaos >= 1.0 {
+        format!("{chaos:.0}c")
+    } else {
+        format!("{}c", trade::trim_number((chaos * 10.0).round() / 10.0))
+    }
+}
+
+fn price_screen_item(state: &State, db: &ninja::PriceDb, read: &scan::ScreenItem, title: &str, detail: &str) -> String {
+    let item = &read.item;
+    let head = format!("title\t{}\ndetail\t{}\n", clean(title), clean(detail));
+    let from_trade = |result: Result<trade::TradeResult, String>| match result {
+        Ok(r) => match r.summary.as_ref().and_then(|s| s.chaos) {
+            Some(chaos) => {
+                let divine = db.to_divine(chaos);
+                format!(
+                    "status\tok\n{head}value\t{chaos:.2}\t{divine:.4}\t{}\ttrade\nmessage\t{} listed\n",
+                    clean(&short_price(chaos, divine)),
+                    r.total
+                )
+            }
+            None => format!("status\tnot_found\n{head}message\tNo priced listings on the trade site\n"),
+        },
+        Err(e) => format!("status\terror\n{head}message\t{}\n", clean(&e)),
+    };
+
+    if let Some(xp) = read.stored_experience {
+        // A lens is worth its experience: listings with at least about as much.
+        let result = state.trade.lock().unwrap().search_property(
+            &item.base,
+            ("misc_filters", "stored_experience"),
+            (xp as f64 * 0.95).floor(),
+            &db.league,
+            db,
+        );
+        return from_trade(result);
+    }
+    if item.rarity == "Rare" {
+        // A trinket: its base with all its mods.
+        let mut trade = state.trade.lock().unwrap();
+        let prepared = match trade.prepare(item, trade::Preset::Normal) {
+            Ok(p) => p,
+            Err(e) => return format!("status\terror\n{head}message\t{}\n", clean(&e)),
+        };
+        let enabled: Vec<trade::Choice> = prepared
+            .filters
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.min.is_some())
+            .map(|(index, f)| trade::Choice { index, min: f.min, max: None })
+            .collect();
+        let options = trade::SearchOptions { base_only: true, ..prepared.defaults };
+        return from_trade(trade.search(item, &enabled, options, &db.league, db));
+    }
+
+    let outcome = match lookup::lookup(db, item) {
+        lookup::Outcome::Unsupported(_) if item.rarity == "Normal" => {
+            let prices = lookup::base_prices(db, item);
+            if prices.is_empty() {
+                lookup::Outcome::NotFound(if item.item_level.is_none() {
+                    "No item level read: bases are priced by it".into()
+                } else {
+                    format!("No poe.ninja price for {title}")
+                })
+            } else {
+                lookup::Outcome::Found { title: title.to_string(), prices }
+            }
+        }
+        outcome => outcome,
+    };
+    match outcome {
+        lookup::Outcome::Found { prices, .. } => {
+            // A stack's own price is its last line; anything else, the first
+            // (the most listed).
+            let price = if item.stack_size.is_some_and(|n| n > 1) { prices.last() } else { prices.first() };
+            let Some(p) = price else { return format!("status\tnot_found\n{head}message\tNo price\n") };
+            format!(
+                "status\tok\n{head}value\t{:.2}\t{:.4}\t{}\tninja\n",
+                p.chaos,
+                p.divine,
+                clean(&short_price(p.chaos, p.divine))
+            )
+        }
+        lookup::Outcome::NotFound(m) | lookup::Outcome::Unsupported(m) => {
+            format!("status\tnot_found\n{head}message\t{}\n", clean(&m))
+        }
+    }
+}
+
+/// AREA: see the top of this file.
+fn area_reply(state: &State, hint: &str) -> String {
+    let (setting, watch_areas, auto) = {
+        let s = state.settings.lock().unwrap();
+        (s.client_log.clone(), s.auto_watch_areas.clone(), s.auto_watch)
+    };
+    let Some(path) = area::find_log(&setting, hint) else {
+        return "status\tnone\nmessage\tNo Client.txt found\n".to_string();
+    };
+    let mut follower = area::FOLLOWER.lock().unwrap();
+    let f = follower.get_or_insert_with(area::Follower::default);
+    if let Err(e) = f.poll(&path) {
+        return format!("status\tnone\nmessage\t{}\n", clean(&e));
+    }
+    let Some(area) = f.area.clone() else { return "status\tnone\nmessage\tNo area in Client.txt yet\n".to_string() };
+    let watch = auto && watch_areas.contains(&area);
+    format!("status\tok\narea\t{}\nentered\t{}\nwatch\t{}\n", clean(&area), f.entered, watch as u8)
+}
+
+/// `poe-waytrade-daemon scan <frame.png>`: finds the item displays in a
+/// screenshot and reads them, as the layer's requests would (no prices),
+/// for testing without the game.
+fn scan_file(args: &[String]) -> Result<(), String> {
+    let path = args.first().ok_or("usage: poe-waytrade-daemon scan <frame.png>")?;
+    let file = std::fs::File::open(path).map_err(|e| format!("{path}: {e}"))?;
+    let mut reader = png::Decoder::new(io::BufReader::new(file)).read_info().map_err(|e| e.to_string())?;
+    let mut buf = vec![0; reader.output_buffer_size().ok_or("png too big")?];
+    let info = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
+    let (w, h) = (info.width as usize, info.height as usize);
+    let channels = match info.color_type {
+        png::ColorType::Rgb => 3,
+        png::ColorType::Rgba => 4,
+        other => return Err(format!("{other:?} PNG: RGB or RGBA please")),
+    };
+    let rgb: Vec<u8> = buf[..w * h * channels].chunks(channels).flat_map(|p| [p[0], p[1], p[2]]).collect();
+    let gray: Vec<u8> =
+        rgb.chunks(3).map(|p| ((p[0] as u32 * 299 + p[1] as u32 * 587 + p[2] as u32 * 114) / 1000) as u8).collect();
+    let (hw, hh) = (w / 2, h / 2);
+    let mut half = vec![0u8; hw * hh];
+    for y in 0..hh {
+        for x in 0..hw {
+            let at = |dx: usize, dy: usize| gray[(y * 2 + dy) * w + x * 2 + dx] as u32;
+            half[y * hw + x] = ((at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1)) / 4) as u8;
+        }
+    }
+    let started = Instant::now();
+    let plates = scan::find_plates(&scan::Gray { width: hw, height: hh, pixels: half }, w as u32, h as u32);
+    println!("{} plates in {}ms", plates.len(), started.elapsed().as_millis());
+    let mut trade = trade::Trade::new();
+    let names = trade.item_names()?;
+    let vocabulary = scan::Vocabulary::shared(names);
+    for p in plates {
+        let (cx, cy, cw, ch) = p.crop;
+        let (cx, cy, cw, ch) = (cx as usize, cy as usize, cw as usize, ch as usize);
+        let mut crop = Vec::with_capacity(cw * ch * 3);
+        for y in cy..cy + ch {
+            crop.extend_from_slice(&rgb[(y * w + cx) * 3..(y * w + cx + cw) * 3]);
+        }
+        let started = Instant::now();
+        let lines = ocr::read(&crop, cw, ch)?;
+        let lines = scan::tooltip_lines(&lines, p.x - cx as f32 + p.w / 2.0, p.y - cy as f32 + p.h, cw as f32);
+        let read = scan::read_item(&lines, &vocabulary, |t| trade.canonical_mod(t));
+        println!("plate at {:.0},{:.0} ({}ms):", p.x, p.y, started.elapsed().as_millis());
+        match read {
+            Ok(read) => {
+                println!("  {:?} {:?} {} ({})", read.item.rarity, read.item.name, read.item.base, scan_detail(&read))
+            }
+            Err(e) => println!("  {e}"),
+        }
+    }
+    Ok(())
 }
 
 /// Fields can't contain the protocol's separators.

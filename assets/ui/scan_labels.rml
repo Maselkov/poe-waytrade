@@ -1,0 +1,10 @@
+<rml>
+<head>
+    <title>Displays</title>
+    <link type="text/rcss" href="theme.rcss"/>
+</head>
+<!-- The display scan's price labels (screen_scan.h): ui.cpp adds one
+     .scan-label per display in sight and moves it with its tooltip. -->
+<body id="scan">
+</body>
+</rml>

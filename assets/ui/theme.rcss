@@ -654,3 +654,22 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .toast-state.busy { color: $text-muted; }
 .toast-line { font-size: 11dp; color: $text-muted; margin-top: 3dp; }
 .toast-line.warn { color: $warn; }
+
+/* Display scan labels: a small price tag above each item display's
+   tooltip. The document covers the screen; clicks pass through it. */
+#scan { left: 0; top: 0; width: 100%; height: 100%; }
+.scan-label {
+    position: absolute;
+    max-width: 420dp;
+    padding: 5dp 14dp 7dp;
+    text-align: center;
+    background-color: #111317e8;
+    border: 1dp $panel-border;
+    border-radius: 8dp;
+}
+.scan-label.best { border: 2dp $price; }
+.scan-price { font-size: 24dp; color: $price; }
+.scan-icon { width: 26dp; height: 26dp; margin-right: 4dp; vertical-align: middle; }
+.scan-label.pending .scan-price { color: $text-muted; }
+.scan-title { font-size: 14dp; color: $text; white-space: nowrap; }
+.scan-note { font-size: 12dp; color: $text-muted; }

@@ -3,6 +3,7 @@
 // at a time from poll(), once per frame. Protocol: see daemon/src/main.rs.
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <optional>
 #include <string>
@@ -123,6 +124,19 @@ struct PriceReply {
     std::string league_pinned;  // POE_LEAGUE overrides the setting
     std::string version;        // the daemon's
     std::string log;            // where the daemon logs
+    // SCANFIND: title plates, each x y w h then its crop's x y w h (full-size pixels)
+    std::vector<std::array<float, 8>> plates;
+    // SCANITEM
+    std::string detail;        // what else was read ("level 4, 23%")
+    double value_chaos = -1;   // < 0: no price
+    double value_divine = -1;
+    std::string value_text;    // "3.2 div"
+    std::string value_source;  // ninja | trade
+    std::vector<std::string> lines;  // what was read, for the log
+    // AREA
+    std::string area;
+    long long entered = -1;  // a new number: a new area
+    bool watch = false;      // one of the areas to price displays in
 };
 
 class DaemonClient {
@@ -157,6 +171,11 @@ public:
     // Ask the daemon to open a trade search URL in the user's browser.
     void open_url(const std::string& url) { start("OPEN\n" + url); }
     bool busy() const { return fd_ >= 0; }
+    // Drops the request in flight, if any: its reply is never reported.
+    void cancel() {
+        close_socket();
+        out_buf_.clear();
+    }
 
     // Advances I/O. Returns true exactly once per request, when *out holds
     // the reply (or a status "error" describing what went wrong).

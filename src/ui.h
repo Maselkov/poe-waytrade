@@ -11,6 +11,7 @@
 
 class PriceCheck;
 class RmlRenderer;
+class ScreenScan;
 
 class OverlayUi {
 public:
@@ -20,7 +21,7 @@ public:
     bool ok() const;
 
     // Once per frame, before render(): input, state, layout.
-    void update(PriceCheck& price_check, WaylandInput* input, VkExtent2D extent);
+    void update(PriceCheck& price_check, ScreenScan& scan, WaylandInput* input, VkExtent2D extent);
     // Inside the overlay's render pass (after RmlRenderer::begin_render).
     void render();
     // Where the visible panels are, in swapchain pixels.

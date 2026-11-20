@@ -16,6 +16,7 @@
 #include <set>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 class WaylandInput;
@@ -83,6 +84,13 @@ public:
     // The copy is on its way (it takes a frame or two), or can't be made.
     void capture_started() { capture_wanted_ = false; }
     void capture_taken(uint64_t id, FrameCapture capture);
+
+    // Fetches a currency icon (icons.h) if it isn't here yet: the display
+    // scan's labels show chaos and divine ones.
+    void want_icon(const std::string& id);
+
+    // Presses of the display scan's hotkey since last asked (screen_scan.h).
+    int take_displays_toggles() { return std::exchange(displays_toggles_, 0); }
 
     // The settings page (its own hotkey, or the gear on the panel).
     SettingsPage& settings() { return settings_; }
@@ -231,6 +239,7 @@ private:
     // Checks the item again as the unique `name` (a name line added to its text).
     void check_as(const std::string& name);
 
+    int displays_toggles_ = 0;
     SettingsPage settings_;
     KeyboardGrab grab_;
     bool grab_focused_ = false;  // as last shown

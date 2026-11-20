@@ -49,6 +49,18 @@
             </div>
         </div>
 
+        <div class="group-label spaced">Item displays</div>
+        <div class="setting-row">
+            <div class="setting-text">
+                <div class="setting-name">Price them in vaults</div>
+                <div class="setting-desc">On entering Zealot's, Arkhon's, Scholar's or Machinist's Vault</div>
+            </div>
+            <div class="button-row toggle">
+                <div data-attr-class="s_auto_watch ? 'button on' : 'button'" data-event-click="auto_watch(1)">On</div>
+                <div data-attr-class="s_auto_watch ? 'button' : 'button on'" data-event-click="auto_watch(0)">Off</div>
+            </div>
+        </div>
+
         <div class="group-label spaced">Cursor</div>
         <div class="setting-row">
             <div class="setting-text">

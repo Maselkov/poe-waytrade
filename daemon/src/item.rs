@@ -157,7 +157,7 @@ fn kind_from_header(header: &str) -> Option<ModKind> {
     }
 }
 
-fn mod_line(line: &str) -> ModLine {
+pub(crate) fn mod_line(line: &str) -> ModLine {
     const MARKERS: &[(&str, ModKind)] = &[
         (" (implicit)", ModKind::Implicit),
         (" (crafted)", ModKind::Crafted),

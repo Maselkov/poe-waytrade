@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::{Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
 /// Stat/currency reference data is refetched after this long.
@@ -396,6 +396,23 @@ struct TradeData {
     /// Transfigured gems: name ("Arc of Oscillating") -> the base gem
     /// ("Arc") and the trade site's discriminator ("alt_y").
     transfigured: HashMap<String, (String, String)>,
+    /// Every item the trade site knows by name, for reading names off the
+    /// screen.
+    names: Arc<Vec<NamedItem>>,
+    /// (stat group, lowercase text template) -> the template as the trade
+    /// site writes it: text read off the screen comes in small caps.
+    lower_stats: HashMap<(String, String), String>,
+}
+
+/// An item name from the trade site's item list (/api/trade/data/items).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NamedItem {
+    /// A unique's name; `None` for everything else.
+    pub name: Option<String>,
+    /// The base type, a gem's name (a transfigured one's own), a currency's.
+    pub base: String,
+    /// The list's group: "accessory", "armour", "currency", "gem", "card"...
+    pub group: String,
 }
 
 /// Weapon-local stats the trade site lists with the same text as the global
@@ -421,7 +438,25 @@ impl TradeData {
             currencies: HashMap::new(),
             images: HashMap::new(),
             transfigured: HashMap::new(),
+            names: Arc::new(Vec::new()),
+            lower_stats: HashMap::new(),
         };
+        let mut names = Vec::new();
+        for group in items["result"].as_array().into_iter().flatten() {
+            let group_id = group["id"].as_str().unwrap_or("");
+            for e in group["entries"].as_array().into_iter().flatten() {
+                let Some(base) = e["type"].as_str() else { continue };
+                let unique = e["flags"]["unique"].as_bool() == Some(true);
+                let (name, base) = match (unique, e["name"].as_str(), e["text"].as_str()) {
+                    (true, Some(name), _) => (Some(name.to_string()), base.to_string()),
+                    // A transfigured gem's own name.
+                    (false, _, Some(text)) if group_id == "gem" => (None, text.to_string()),
+                    _ => (None, base.to_string()),
+                };
+                names.push(NamedItem { name, base, group: group_id.to_string() });
+            }
+        }
+        data.names = Arc::new(names);
         for group in items["result"].as_array().into_iter().flatten().filter(|g| g["id"] == "gem") {
             for e in group["entries"].as_array().into_iter().flatten() {
                 if let (Some(base), Some(text), Some(disc)) =
@@ -440,6 +475,7 @@ impl TradeData {
                         _ => text.to_string(),
                     };
                     let key = (group_id.to_string(), text);
+                    data.lower_stats.entry((key.0.clone(), key.1.to_lowercase())).or_insert_with(|| key.1.clone());
                     match data.stats.get(&key) {
                         None => {
                             let (template, slots) = number_slots(&key.1);
@@ -532,6 +568,82 @@ impl Trade {
             eprintln!("trade: closing idle browser");
             self.browser = None;
         }
+    }
+
+    /// Every item name the trade site knows (cached on disk for a day).
+    pub fn item_names(&mut self) -> Result<Arc<Vec<NamedItem>>, String> {
+        self.ensure_data()?;
+        Ok(self.data.as_ref().unwrap().0.names.clone())
+    }
+
+    /// A mod line read off the screen ("+23% TO COLD RESISTANCE"), as the
+    /// game writes it ("+23% to Cold Resistance"), with its kind, if the
+    /// trade site has the stat as an explicit or implicit.
+    pub fn canonical_mod(&mut self, line: &str) -> Option<(ModKind, String)> {
+        self.ensure_data().ok()?;
+        let data = &self.data.as_ref().unwrap().0;
+        let (template, values) = templatize(line.trim());
+        let lower = template.to_lowercase();
+        for (group, kind) in [("explicit", ModKind::Explicit), ("implicit", ModKind::Implicit)] {
+            let Some(text) = data.lower_stats.get(&(group.to_string(), lower.clone())) else { continue };
+            let mut values = values.iter();
+            let line = text
+                .split('#')
+                .enumerate()
+                .map(|(i, part)| {
+                    if i == 0 {
+                        part.to_string()
+                    } else {
+                        format!("{}{part}", values.next().map_or("#".into(), |v| trim_number(*v)))
+                    }
+                })
+                .collect();
+            return Some((kind, line));
+        }
+        None
+    }
+
+    /// Searches one base type ("Facetor's Lens") for listings with at least
+    /// `min` of an item property, e.g. ("misc_filters", "stored_experience").
+    pub fn search_property(
+        &mut self,
+        base: &str,
+        property: (&'static str, &'static str),
+        min: f64,
+        league: &str,
+        prices: &PriceDb,
+    ) -> Result<TradeResult, String> {
+        self.last_used = Instant::now();
+        self.ensure_data()?;
+        let item = Item { rarity: "Currency".into(), base: base.to_string(), ..Default::default() };
+        let filter = Filter::new(
+            property.1.to_string(),
+            Target::Property(property.0, property.1),
+            min,
+            None,
+            true,
+            Section::Base,
+        );
+        let options = SearchOptions {
+            base_only: true,
+            corrupted: Corrupted::Any,
+            preset: Preset::Normal,
+            status: crate::settings::default_status(),
+            six_link: false,
+            unidentified: false,
+        };
+        let body = query(&item, &[filter], &[Some((Some(min), None))], options).to_string();
+        let league_path = ninja::encode(league);
+        let resp = self.request("search", "POST", &format!("/api/trade/search/{league_path}"), Some(&body))?;
+        let (id, total, hashes) = parse_search(&resp.body)?;
+        let mut singles = Vec::new();
+        if !hashes.is_empty() {
+            let path = format!("/api/trade/fetch/{}?query={id}", hashes.join(","));
+            let resp = self.request("fetch", "GET", &path, None)?;
+            let data = &self.data.as_ref().unwrap().0;
+            singles = parse_fetch(&resp.body, data, prices, unix_now(), &[])?;
+        }
+        Ok(trade_result(singles, total, &id, &league_path))
     }
 
     /// The filters and options for an item, without searching. Needs only
@@ -908,7 +1020,7 @@ fn download_image(url: &str, path: &std::path::Path) -> Result<Vec<u8>, String> 
     Ok(bytes)
 }
 
-fn cache_dir() -> PathBuf {
+pub(crate) fn cache_dir() -> PathBuf {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".cache"));
@@ -2609,6 +2721,8 @@ mod tests {
             currencies: HashMap::new(),
             images: HashMap::new(),
             transfigured,
+            names: Arc::new(Vec::new()),
+            lower_stats: HashMap::new(),
         }
     }
 

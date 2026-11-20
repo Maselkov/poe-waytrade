@@ -104,6 +104,9 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_he
             // Alt+D: the old map check key, now the same as Ctrl+Alt+D.
             request_copy(input, Mode::Locked, Purpose::Price);
             break;
+        case Hotkey::Displays:
+            displays_toggles_++;
+            break;
         case Hotkey::Settings:
             if (settings_.visible())
                 settings_.close();
@@ -561,6 +564,11 @@ void PriceCheck::switch_view() {
     // pointer and close.
     mode_ = Mode::Locked;
     changed();
+}
+
+void PriceCheck::want_icon(const std::string& id) {
+    if (id.empty() || icons_get(id) || !icons_requested_.insert(id).second) return;
+    icon_queue_.push_back({id, id});
 }
 
 void PriceCheck::request_icons() {

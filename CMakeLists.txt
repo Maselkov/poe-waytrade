@@ -89,6 +89,7 @@ add_library(VkLayer_poe_waytrade SHARED
   src/uinput_kbd.cpp
   src/item_text.cpp
   src/price_check.cpp
+  src/screen_scan.cpp
   src/settings_page.cpp
   src/stash_scroll.cpp
   src/hotkeys.cpp
@@ -103,7 +104,7 @@ target_compile_definitions(VkLayer_poe_waytrade PRIVATE VK_NO_PROTOTYPES VK_USE_
 # Fonts and UI documents are built in with #embed (C23).
 set_source_files_properties(src/assets.c PROPERTIES
   COMPILE_OPTIONS "-std=gnu23;--embed-dir=${CMAKE_SOURCE_DIR}/assets"
-  OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/assets/ui/theme.rcss;${CMAKE_SOURCE_DIR}/assets/ui/price_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/map_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/debug.rml;${CMAKE_SOURCE_DIR}/assets/ui/settings.rml;${CMAKE_SOURCE_DIR}/assets/ui/toast.rml;${CMAKE_SOURCE_DIR}/assets/ui/gear.png")
+  OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/assets/ui/theme.rcss;${CMAKE_SOURCE_DIR}/assets/ui/price_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/map_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/debug.rml;${CMAKE_SOURCE_DIR}/assets/ui/settings.rml;${CMAKE_SOURCE_DIR}/assets/ui/toast.rml;${CMAKE_SOURCE_DIR}/assets/ui/scan_labels.rml;${CMAKE_SOURCE_DIR}/assets/ui/gear.png")
 pkg_check_modules(WAYLAND_CURSOR REQUIRED IMPORTED_TARGET wayland-cursor)
 target_link_libraries(VkLayer_poe_waytrade PRIVATE PkgConfig::WAYLAND PkgConfig::WAYLAND_CURSOR rmlui_core)
 # The layer is loaded into the game (inside Steam's runtime container), so keep

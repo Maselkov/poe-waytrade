@@ -56,6 +56,7 @@ enum class Hotkey {
     PriceCheckLocked,  // Ctrl+Alt+D: a panel that stays until dismissed
     MapCheck,          // Alt+D: the old map check key, now like Ctrl+Alt+D
     Settings,          // Ctrl+Alt+S: the settings page
+    Displays,          // Ctrl+Alt+F: price the item displays on screen (on/off)
     CopySeen,          // Ctrl+C pressed by the user (fixed)
 };
 

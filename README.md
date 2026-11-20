@@ -101,6 +101,7 @@ Hover an item and press **Ctrl+D**. Open the settings with **Ctrl+Alt+S**.
 | **Ctrl+Alt+D** | A locked panel that stays open until you click its × or click anywhere in the game. |
 | **Ctrl+C** | Your own copy of an item opens a quick look too. |
 | **Ctrl+Alt+S** | Settings. Also the gear at the top left of a panel. |
+| **Ctrl+Alt+F** | Item displays: prices every vault display on screen until you leave the area (see below). Press again to stop. Can be turned off. |
 | **Alt+D** | The old map check key; now the same as Ctrl+Alt+D. Can be turned off. |
 | **Ctrl + mouse wheel** | Stash scroll: switches stash tabs with the cursor anywhere in the game. |
 
@@ -148,6 +149,38 @@ With a trade search (see below):
 - Identified uniques, alongside their poe.ninja price, since that price
   ignores rolls.
 - Skill gems, alongside their poe.ninja price.
+
+### Item displays (vaults)
+
+The displays in Zealot's, Arkhon's, Scholar's and Machinist's Vaults show
+items in tooltips that can't be copied with Ctrl+C. Waytrade reads them off
+the screen instead and puts a price tag above each one, which follows the
+tooltip as you move. The most valuable one in sight gets a gold border.
+
+- It starts by itself when you enter one of those vaults, and stops when you
+  leave. It knows from the game's log (`logs/Client.txt` in the game's
+  folder). **Ctrl+Alt+F** starts or stops it anywhere else, such as in a
+  Heist.
+- Displays are found by the stone pillars on either side of their title
+  plate ("Forbidden Reliquary"). The text is read with
+  [ocrs](https://github.com/robertknight/ocrs), and names are matched
+  against every item the trade site knows, so a misread letter doesn't
+  matter.
+- Uniques, currency, gems (by level, quality and corruption) and bases are
+  priced from poe.ninja. Facetor's Lens is priced with a trade search for its
+  stored experience. Rare Thief's Trinkets get a trade search with their mods.
+- The OCR models (about 12 MB, CC BY-SA 4.0) come with the package, in
+  `/usr/share/poe-waytrade/ocrs/`. A build without them downloads them on
+  first use to `~/.cache/poe-waytrade/ocrs/`. Set `POE_WAYTRADE_OCR_MODELS`
+  to a folder that has `text-detection.onnx` and `text-recognition.onnx` to
+  use your own.
+- The vault list, the automatic start and the log's path are under
+  `auto_watch_areas`, `auto_watch` and `client_log` in
+  `~/.config/poe-waytrade/settings.json`. Automatic start is also on the
+  Hotkeys tab.
+
+`poe-waytrade-daemon scan <screenshot.png>` reads the displays in a
+screenshot without the game, which is handy if a display isn't recognised.
 
 ### Map check
 
@@ -301,6 +334,9 @@ Environment variables, which take precedence over the settings page:
 - HDR (10-bit/PQ) swapchains wouldn't be colour-corrected. PoE1 has no HDR
   mode, so this would only matter for PoE2.
 - No socket colour filters in trade searches.
+- Item displays: only tested on the vault reliquaries' tooltips. Other
+  displays, such as Heist curios, may have a different title plate and not
+  be found. Only English game clients are supported.
 - With fractional scaling, the game's cursor grows over the panels. Wine
   sizes its cursor for scale 1 on surfaces that aren't its own windows.
   Setting the cursor to "Desktop" (Hotkeys tab) avoids it, at the cost of
@@ -325,3 +361,8 @@ Bundled third-party code keeps its own license:
   protocol, under its own permissive licence (in the file).
 - `assets/fonts` has Inter and Cinzel, both under the SIL Open Font License
   (licence files alongside).
+- The daemon uses [ocrs](https://github.com/robertknight/ocrs) (MIT or
+  Apache-2.0). Its pre-trained models, which the package ships, are under CC
+  BY-SA 4.0: Ocrs models (https://github.com/robertknight/ocrs-models),
+  trained on the HierText dataset by Google Research
+  ([packaging/ocrs-models-NOTICE.md](packaging/ocrs-models-NOTICE.md)).
