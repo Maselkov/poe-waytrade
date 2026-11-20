@@ -73,10 +73,10 @@
                         <div class="range" data-event-mousedown="range_press(f.index)" data-event-drag="range_drag(f.index)">
                             <div class="range-inner">
                                 <div class="range-track"/>
-                                <div class="range-roll" data-if="!f.enabled &amp;&amp; f.roll_pct &gt;= 0" data-style-left="f.roll_pct + '%'"/>
                                 <div class="range-fill" data-style-left="f.min_pct + '%'" data-style-width="(f.max_pct - f.min_pct) + '%'"/>
+                                <div class="range-roll" data-if="f.roll_pct &gt;= 0" data-style-left="f.roll_pct + '%'"/>
                                 <div class="range-handle" data-style-left="f.min_pct + '%'"/>
-                                <div class="range-handle" data-style-left="f.max_pct + '%'"/>
+                                <div class="range-handle" data-if="f.has_max" data-style-left="f.max_pct + '%'"/>
                             </div>
                         </div>
                     </div>

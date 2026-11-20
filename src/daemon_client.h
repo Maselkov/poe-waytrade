@@ -32,6 +32,7 @@ struct TradeFilter {
     int tier = 0;         // affix tier, 1 best; 0: none
     std::string roll;     // the item's own value; empty if none
     std::string column;   // short name over the listings' values ("Ele res")
+    bool draw_slider = true;  // else lo..hi only bounds the wheel's steps
 };
 
 struct TradeListing {

@@ -28,6 +28,7 @@
 //!              implicit|exarch|eater|mod|fractured|crafted|map|<influence: shaper, elder, ...>>
 //!              <maximum|""> <affix tier|""> <the item's value|"">
 //!              <short name, for a column of the listings' values ("Ele res")>
+//!              <1|0 slider drawn (else the range only bounds wheel steps)>
 //!     option   base <base type> <category label>   (if the base can be
 //!                                                  searched on its own)
 //!     option   base_only <1|0>
@@ -603,7 +604,7 @@ fn trade_response(
             .map_or((String::new(), String::new()), |(lo, hi)| (trade::trim_number(lo), trade::trim_number(hi)));
         let _ = writeln!(
             out,
-            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}\t{max}\t{}\t{}\t{}",
+            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}\t{max}\t{}\t{}\t{}\t{}",
             on as u8,
             clean(&f.label),
             trade::trim_number(f.step),
@@ -611,7 +612,8 @@ fn trade_response(
             f.section.as_str(),
             f.tier.map(|t| t.to_string()).unwrap_or_default(),
             f.roll.map(trade::trim_number).unwrap_or_default(),
-            clean(&trade::column_name(&f.label))
+            clean(&trade::column_name(&f.label)),
+            f.draw_slider as u8
         );
     }
     if let Some(label) = prepared.category_label {
