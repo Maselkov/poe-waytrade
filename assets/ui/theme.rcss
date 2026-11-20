@@ -134,17 +134,17 @@ body {
    in faint text when there's none). Each half is clicked to type into
    (PriceCheck::edit_bounds) and scrolled to step; the half being typed into
    is framed in place, so nothing moves. */
-/* Inline blocks of one minimum width, not a nested flexbox: RmlUi sized that to
-   its first half, and a half growing as its number changed moved the row. */
-.bounds { flex-shrink: 0; display: block; white-space: nowrap; margin-left: 8dp; background-color: $chip; border-radius: 6dp; }
-.bound { display: inline-block; min-width: 30dp; text-align: center; padding: 1dp 5dp; border: 1dp transparent; border-radius: 6dp; color: $text-strong; }
+/* Every size fixed, none taken from the text, so a number changing never
+   moves the row. (No "empty" class here: .empty, below, adds padding.) */
+.bounds { flex-shrink: 0; display: flex; width: 77dp; height: 18dp; margin-left: 8dp; background-color: $chip; border-radius: 6dp; }
+.bound { flex: none; width: 38dp; height: 16dp; line-height: 16dp; text-align: center; white-space: nowrap; border: 1dp transparent; border-radius: 6dp; color: $text-strong; }
 .bound:hover { background-color: #262b34; }
-.bound.empty { color: $text-faint; }
+.bound.no-max { color: $text-faint; }
 .bound.editing { border-color: $accent; background-color: #1d1a33; color: $accent-text; }
-.bound-gap { display: inline-block; vertical-align: middle; width: 1dp; height: 12dp; background-color: $off; }
+.bound-gap { flex: none; width: 1dp; height: 12dp; margin-top: 3dp; background-color: $off; }
 .filter.off .bounds { background-color: transparent; }
 .filter.off .bound { color: $text-faint; }
-.filter.off .bound.empty { color: #3a3f48; }
+.filter.off .bound.no-max { color: #3a3f48; }
 /* A filter with only a maximum, or none to show. */
 .min { flex-shrink: 0; min-width: 40dp; text-align: center; background-color: $chip; border: 1dp transparent; border-radius: 6dp; padding: 1dp 6dp; color: $text-strong; margin-left: 8dp; }
 .filter.off .min { background-color: transparent; color: $text-faint; }

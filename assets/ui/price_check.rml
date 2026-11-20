@@ -75,7 +75,7 @@
                         <div class="bounds" data-if="f.split">
                             <div class="bound" data-class-editing="f.edit_field == 0" data-event-click="edit_bounds(f.index, 0)" data-event-mousescroll="bounds_scroll(f.index, 0)">{{f.lo}}<span class="star" data-if="f.max_roll"> ★</span></div>
                             <div class="bound-gap"/>
-                            <div class="bound" data-class-editing="f.edit_field == 1" data-class-empty="f.hi_empty" data-event-click="edit_bounds(f.index, 1)" data-event-mousescroll="bounds_scroll(f.index, 1)">{{f.hi}}</div>
+                            <div class="bound" data-class-editing="f.edit_field == 1" data-class-no-max="f.hi_empty" data-event-click="edit_bounds(f.index, 1)" data-event-mousescroll="bounds_scroll(f.index, 1)">{{f.hi}}</div>
                         </div>
                         <div class="min" data-if="!f.split">{{f.bounds}}</div>
                     </div>
