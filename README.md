@@ -1,375 +1,285 @@
-# Waytrade (prototype)
+# Waytrade
 
-In-frame price checks for Path of Exile on Linux/Wayland.
+In-game price checks for Path of Exile on Linux, for when the game runs as a
+native Wayland client.
 
-A Vulkan layer that draws an RmlUi panel inside the game's own frames
-(MangoHud-style) and reads hotkeys and the clipboard from the game's own
-Wayland connection. Works with Path of Exile running under Proton as a
-**native Wayland** client.
+Hover an item, press **Ctrl+D**, and a panel opens next to it with the
+item's price: poe.ninja for currency, uniques, gems, maps and other priced
+items, and a ready-made trade search for rares. Maps get a check for
+dangerous mods. PoE1 only for now.
 
-Hover an item and press a hotkey; the layer sends Ctrl+C, reads the item text
-PoE copies, and shows it in a panel with its price
-(poe.ninja, via a small daemon). PoE1 only for now. Modelled on Awakened PoE
-Trade:
+## Why Waytrade, and how it's different
 
-- **Ctrl+D**: a quick look. It closes as soon as you move the mouse away. To
-  use it (toggle trade filters, open the trade site), keep holding Ctrl and
-  move onto it; it then stays until the mouse leaves it with Ctrl released
-  (holding Ctrl keeps it open wherever the mouse goes).
-- **Ctrl+Alt+D**: a panel that stays open until you click its × or click
-  anywhere in the game. Only these locked panels have a ×; the quick look
-  closes by itself.
-- Your own Ctrl+C on an item opens a quick look too.
-- Ctrl+D keeps your clipboard: what it held (text, images, every format it
-  was offered in) is saved before the game copies the item and put back
-  right after. The restored content is served by the game's process, like
-  `wl-copy` does; KDE's Klipper keeps it once the game exits. The item text
-  still shows up in clipboard managers' history: they see the game's copy,
-  and Klipper can't be told to forget a single entry.
-- Like APT, the panel sits right next to PoE's inventory when you check an
-  item there (or next to the stash for items on the left half of the
-  screen). PoE's side panels are 986/1600 of the window height wide.
+Price check overlays usually run as a separate, transparent window kept on
+top of the game, with global hotkeys and clipboard access to see what you
+copy. On Wayland, a client can't put itself above a fullscreen game, listen
+to keys sent to another window, or read the clipboard in the background, at
+least not in a way that works the same on every compositor. That's why those
+overlays need the game on X11 or XWayland.
 
-**Maps** (and invitations, heist contracts and blueprints) open the map
-check instead, with the same keys: a one-line verdict at the top ("1 deadly
-mod · 1 warning · 5 unmarked", "No dangerous mods · 3 unmarked"; unmarked mods
-are counted so they don't get skimmed past), the map's rarity, pack size and
-"More ..." bonuses, its poe.ninja price (for a rare map, the white map's), and
-its mods. Click a mod to cycle it through deadly → warning → good → unmarked;
-marks are per profile (I/II/III) and saved in
-`~/.config/poe-waytrade/map-mods.json` (moved there from
-`~/.config/poe-overlay/` the first time, if you have marks from before the
-rename). Reflect, no regen, less recovery, −max res, cannot leech, player
-curses and a few others come pre-marked.
+Waytrade works differently. It is a Vulkan layer, loaded into the game the way
+MangoHud is:
 
-**Price check** in the map check switches to the map's trade search: its base
-("Map (Tier 16)", which names the tier), its More currency/scarabs/maps/cards
-bonuses (ticked), pack size and rarity (unticked), and blight. **Map check**
-switches back; each view keeps its state, and switching locks the panel.
-Expedition logbooks open on their price, with the map check one click away.
-Alt+D, the old map check key, still works and now does the same as
-Ctrl+Alt+D.
+- **The panel is drawn into the game's own frames.** There's no second
+  window to keep on top, so it works in fullscreen, on any compositor, and
+  leaves the game's direct scanout alone while no panel is open.
+- **Hotkeys and the clipboard come from the game's own Wayland connection.**
+  There's nothing to set up as a global shortcut, and no portal or
+  compositor-specific permission is needed.
+- **Your clipboard is kept.** Ctrl+D saves whatever the clipboard held (text,
+  images, every format) and puts it back after the game copies the item.
+- **It's light.** It's a small library in the game plus a small Rust daemon
+  for prices. A headless Chromium starts only for trade searches (the trade
+  site requires a real browser) and stops when unused.
 
-The game keeps keyboard focus (the panel is part of its window), so the
-overlay never uses keys PoE does; in particular there's no Esc to close.
+The catch is that the game has to run on Proton's Wayland driver. If you play
+on X11 or XWayland, other price check overlays already work there, and
+Waytrade doesn't support X11 (and has no plans to).
 
-When the game starts, a small notice rises in under the login box saying the
-overlay is ready (or that prices are still loading, or that the price daemon
-isn't answering) and naming the price check and settings keys. It goes away
-after six seconds, and clicks go through it.
+## Quick start
 
-**Settings**: Ctrl+Alt+S, or the gear at the top left of a panel. Four tabs:
+You need:
 
-- **Hotkeys**: click a key, press the new combination. All four can be
-  rebound (Alt+D can also be turned off); Ctrl+C stays the copy key. A key
-  without Ctrl or Alt gets a warning first, since the game sees it too, and a
-  combination another action has swaps the two. Holding the quick look
-  key's modifiers (Ctrl, by default) keeps a quick look open.
-- **Price check**: the league ("Current" follows poe.ninja into each new
-  league), which listings a search starts with (instant buyout, + in person,
-  any), how far below your roll a ticked filter starts (10% by default), and
-  the panel size.
-- **Map check**: the active profile, and resetting its marks.
-- **About**: versions, where the logs are, whether typing into panels works.
+- A Wayland session (KDE Plasma, GNOME, Sway, Hyprland, COSMIC, ...).
+- Path of Exile on Steam with a Proton that has the Wayland driver
+  (`PROTON_ENABLE_WAYLAND`).
+- Write access to `/dev/uinput`, which Waytrade uses to send Ctrl+C to the
+  game. Most desktops grant it to the logged-in user. Otherwise, add yourself
+  to the `input` group.
+- Optional: Chromium or Google Chrome for trade searches, and `xdg-utils` to
+  open searches in your browser.
 
-The daemon keeps them in `~/.config/poe-waytrade/settings.json` and applies
-each change at once. `POE_LEAGUE` and `POE_WAYTRADE_UI_SCALE` still win over
-the page.
-
-Priced: currency, fragments, essences, divination cards, omens, oils,
-fossils, tattoos and other exchange items; uniques (incl. 5L/6L and
-unidentified); skill gems (level/quality/corruption); maps, invitations,
-beasts; Wickerman limbs (Viscera, matched by their implicits); white and
-magic cluster jewels (by enchant, passive count and item level bracket);
-plain bases of item level 82+ (by item level and influences).
-
-Currency and other exchange items are priced from poe.ninja, whose figures
-come from the in-game Currency Exchange, where currency actually trades. The
-trade site's bulk exchange (whisper-and-trade listings from stash tabs) is
-left out: APT marks it as legacy for anything on the Currency Exchange.
-
-Skill gems get a trade search too, next to their poe.ninja price: gem level
-(ticked at max level) and quality (ticked from 16%, or 20% on a transfigured
-gem), matching corruption, and transfigured gems searched as the trade site
-knows them. Like APT, level and quality are minimums: a better gem listed
-for less is competition (an uncorrupted gem never meets one, since going
-past 20 takes a corruption). Listings show each gem's level and quality on its row.
-
-Identified uniques show their poe.ninja price too, but since that ignores
-rolls, they also get trade filters like APT's: one for each mod that rolls
-(fixed mods are left out), unticked, with a minimum 10% of the mod's range
-below your roll (or exactly a perfect roll). The search finds that unique by
-name.
-
-Rare and magic items get filters for the official trade site instead, set up
-like Awakened PoE Trade's defaults: life, mana, attributes and resistances
-from any mod (crafted ones included) become totals, and only total life and
-the resistance totals start ticked; other mods are listed, unticked, with a
-minimum 10% below your roll. Pick "Any Ring" or the exact base, and whether
-corrupted items count (uncorrupted items exclude them by default). Searches
-count **instant buyout** listings only by default (merchant tabs, which
-can't be price-fixed: the seller can't list low and refuse to sell); the
-button next to Search switches to instant buyout plus in-person sellers, or
-any listing. Nothing is
-searched until you press **Search**, since every search counts against GGG's
-rate limit; changing anything afterwards marks the listings as out of date
-until you search again.
-
-Every price check copies the item with Ctrl+C, which PoE fills with the
-advanced description: each mod's affix name, tier and roll range. Every filter with a range has a slim slider strip under
-it, so ticking a row never moves the others: unticked, it's a faint track
-marking where your item's value sits; ticked, it's a two-handle slider,
-like APT's: the left handle sets the minimum, the right one a maximum (at the
-far right: none). The minimum defaults to your roll minus 10% (the slider
-reaches down to it even below the tier), and a roll at the top of its tier defaults to exactly that value
-(marked with a gold star). Scrolling the mouse wheel over a filter's value
-moves its minimum one step. **Clicking the value types into it**: the
-overlay takes the keyboard from the game while you type (so digits don't
-drink flasks), Tab switches between minimum and maximum, Enter applies and
-ticks the filter, Esc or a click in the game cancels, and the keyboard goes
-back to the game. This needs a compositor with layer-shell (KDE Plasma,
-Sway, Hyprland and other wlroots ones, COSMIC); on GNOME or gamescope the
-panel says typing isn't available, and the wheel and sliders still work. Weapons
-also get physical/elemental DPS, attack speed and critical strike chance
-filters from their properties; armour pieces get armour, evasion, energy
-shield, ward and block filters (unticked), scaled to 20% quality the way the
-trade site searches them. 5- and 6-links get a links filter, ticked except
-on a rare 5-link, and an unlinked 6-socket gets a sockets filter.
-
-Every filter is listed, grouped under headings (weapon/armour/base item,
-enchant, implicit, totals, mods); clicking a row ticks it, and ticked rows
-get an accent bar. Each mod's affix tier from the advanced copy sits in a
-column on the right (T1 gold, T2 silver, T3 bronze, lower ones grey), next
-to its value.
-Fractured mods count in the totals and also get a filter of their own that
-searches them as fractured, shown in PoE's fractured gold.
-
-Like APT, unfinished bases with crafting value (fractured, synthesised,
-influenced, cluster or magic jewels, or item level 82+, without crafted
-mods, corruption or 20% quality) get a **Base item** button: it searches the
-exact base with a minimum item level, the fractured/synthesised/influence
-flags, fractured mods, enchants, implicits (unless influenced or fractured)
-and, on magic items, tier 1–2 mods. Magic items' bases are worked out from
-the advanced copy's affix names ("Fecund Paladin Crown of the Genius" →
-Paladin Crown), so they can be searched by exact base too.
-
-Any non-unique 5- or 6-link also gets the Base item button, with the links
-ticked. White and magic ones open in it, since they're worth their links and
-base rather than their mods; for these, item level and implicits start
-unticked unless the base also has crafting value.
-
-Mods that are one of a list rather than a number are searched as exactly
-that, ticked: a cluster jewel's "Added Small Passive Skills grant" (two-line
-grants included), an anointed notable ("Allocates Charisma"), Forbidden
-Flame/Flesh's ascendancy notable. A cluster jewel's passive count is
-searched exactly and its jewel sockets as a minimum. Searing Exarch and
-Eater of Worlds items get a filter for their implicit's tier (Lesser to
-Perfect, from advanced copy), or for the eldritch item flag, ticked on the
-Base item preset.
-
-After a search, the panel shows a one-line estimate (the median of the 10
-cheapest listings, with the price range and a "Low value" tag under 5c), then
-the listings grouped by price with currency icons, how many there are, and
-how long ago they were listed, plus a button to open the same search in your
-browser. Hovering a listing shows the listed item (name, item level, DPS and
-mods with their tiers, like PoE's tooltip) beside the panel.
-
-## How it works
-
-- `src/layer.cpp`: loader negotiation and dispatch chaining. Intercepts
-  instance/device creation, `vkGetDeviceQueue*`, swapchain create/destroy,
-  `vkQueuePresentKHR`, and `vkCreateWaylandSurfaceKHR`/`vkDestroySurfaceKHR`.
-- `src/overlay.cpp`: on each present, records a render pass (load op LOAD)
-  over the swapchain image, draws the UI, waits on the app's semaphores and
-  hands present our own semaphore instead.
-- `src/wl_input.cpp`: takes the `wl_display` the app passed to
-  `vkCreateWaylandSurfaceKHR`, binds its own `wl_seat`/`wl_keyboard` on a
-  private event queue, and polls it non-blockingly each frame. The compositor
-  delivers key events to every keyboard object of the focused client, so this
-  sees keys whenever the game has focus, with no Wine hooks or `/dev/input`.
-  It does the same with a `wl_data_device` for the clipboard, draining the
-  transfer pipe a bit each frame so the present thread never blocks on Wine.
-- `src/uinput_kbd.cpp`: a virtual keyboard on `/dev/uinput` that sends
-  Ctrl+C. Wayland has no other way to inject keys into a window; the
-  compositor treats the device as a normal keyboard. Needs write access to
-  `/dev/uinput` (systemd's uaccess ACL usually grants it to the logged-in
-  user; otherwise the `input` group).
-- `src/price_check.cpp`: hotkey → save the clipboard (all its mime types,
-  up to 150 ms) → Ctrl+C → wait up to 1 s for a new clipboard transfer →
-  restore the saved clipboard (through `ext-data-control-v1`, which needs no
-  input serial, or the data device) → parse (`src/item_text.cpp`) → show. Only clipboard changes right
-  after a Ctrl+C/Ctrl+D count, so stale clipboard contents never pop up.
-  The item text then goes to the daemon via `src/daemon_client.cpp`, which
-  also never blocks the frame.
-- `src/ui.cpp`, `src/rml_renderer.cpp`, `assets/ui/`: the UI. RmlUi
-  documents (`.rml`) styled by `theme.rcss`, bound to a data model that
-  mirrors the price check's state, drawn by our own small Vulkan renderer
-  (which also linearises colours for sRGB swapchains). Fonts and UI files
-  are built into the `.so` with `#embed`, since the layer can't see host
-  paths from inside Steam's container. `theme.rcss` starts with
-  `@define $name value;` lines (RCSS has no variables; the loader
-  substitutes them), so the palette, accent included, lives in one place.
-- `src/wl_pointer.cpp`: mouse input. Pointer events go to the surface under
-  the cursor, so the layer attaches a transparent subsurface of its own to
-  the game's surface, sized to the visible panels, with an input region
-  covering just them: clicks there reach the UI and never the game. With no
-  panel visible it's unmapped.
-- `src/wl_grab.cpp`: typing into a panel. The game keeps keyboard focus, so
-  to type a number the layer briefly takes it: on a Wayland connection of
-  its own, a 1x1 transparent layer-shell surface on the overlay layer with
-  exclusive keyboard interactivity and an empty input region (clicks still
-  reach the panels and the game). Destroying it gives the keyboard back.
-- `daemon/` (Rust): `poe-waytrade-daemon` listens on the abstract Unix socket
-  `@poe-waytrade` (reachable from inside Steam's runtime container, since
-  abstract sockets ignore mount namespaces; other users are rejected via
-  `SO_PEERCRED`). It loads poe.ninja's PoE1 data for the current league at
-  start and every 15 minutes, so lookups never wait on the network. The
-  protocol is described at the top of `daemon/src/main.rs`.
-  It's socket-activated: systemd owns `@poe-waytrade`, starts the daemon on
-  the first connection and the daemon exits after 30 minutes idle. The layer
-  pings it when the game starts, so prices are loaded by the first lookup.
-- Trade search (`daemon/src/trade.rs`, `daemon/src/cdp.rs`): pathofexile.com
-  is behind Cloudflare, which refuses plain HTTP clients. Like Awakened PoE
-  Trade (Electron's Chromium), the daemon uses a real browser: a headless
-  Chromium/Chrome, as-is with its own user agent, driven over the DevTools
-  pipe, making same-origin `fetch()` calls from a page on the site. It starts
-  on the first rare price check and closes after 10 minutes unused. Mod
-  lines map to trade stat ids by their text with numbers replaced by `#`
-  (stat list cached daily in `~/.cache/poe-waytrade`). The daemon follows
-  GGG's `X-Rate-Limit-*` headers and refuses requests that would hit a limit
-  rather than risk an IP timeout.
-
-The `.so` exports only the three loader entry points and links libstdc++
-statically, so its RmlUi can't clash with another UI library in the process
-(e.g. MangoHud's).
-
-## Build and test
+**1. Install.** Get the latest
+[release](https://github.com/Maselkov/poe-waytrade/releases):
 
 ```bash
-cmake -S . -B build -G Ninja && cmake --build build
+sudo pacman -U poe-waytrade-*.pkg.tar.zst                 # Arch Linux
 ```
-
-The build also writes a manifest pointing at the built library, so you can
-test without installing:
 
 ```bash
-VK_ADD_IMPLICIT_LAYER_PATH=$PWD/build/layer ENABLE_POE_WAYTRADE=1 vkcube --wsi wayland
+sudo tar -C / -xzf poe-waytrade-*-x86_64.tar.gz           # other distros (recent glibc)
 ```
 
-The daemon:
-
-```bash
-cd daemon && cargo run --release                 # serve
-cargo run --release -- query item.txt            # ask a running daemon
-```
-
-## Install (Arch)
+Or build the Arch package from a checkout:
 
 ```bash
 cd packaging/arch && makepkg -si
 ```
 
-This installs the layer (`/usr/lib/libVkLayer_poe_waytrade.so` plus a manifest
-in `/usr/share/vulkan/implicit_layer.d/`), the `waytrade` launcher,
-`/usr/bin/poe-waytrade-daemon` and its systemd user socket + service, and enables the socket for all users
-(`systemctl --global`), so there is nothing to start by hand from the next
-login on (`systemctl --user start poe-waytrade-daemon.socket` for the current
-one). Remove with `pacman -R poe-waytrade`. The daemon follows poe.ninja's
-current softcore league unless another is picked in the settings; setting
-`POE_LEAGUE` in the service (`systemctl --user edit poe-waytrade-daemon.service`)
-overrides both.
-
-## CI and releases
-
-GitHub Actions runs three jobs in Arch containers (the layer needs GCC 15
-for `#embed`) on every push to main and every pull request: `lint`
-(rustfmt, clippy with warnings as errors), `test` (the daemon's tests, the
-`waytrade` launcher) and `package` (the Arch package, which builds the
-layer and the daemon, and a check that the layer exports only the three
-Vulkan loader entry points). [AGENTS.md](AGENTS.md) lists the commands to
-run them locally.
-
-To release, bump `pkgver` in `packaging/arch/PKGBUILD`, commit, and push a
-matching tag:
-
-```
-git tag v0.12.0 && git push origin v0.12.0
-```
-
-The release workflow attaches the Arch package and a tarball of the same
-files laid out from `/` (for other distros with a recent glibc), with
-checksums.
-
-## Use with Path of Exile
-
-Steam launch options, like MangoHud's:
+**2. Set Path of Exile's Steam launch options** (Properties → General):
 
 ```
 waytrade %command%
 ```
 
-`waytrade` turns the layer on (`ENABLE_POE_WAYTRADE=1`; it's inert
-otherwise), uses Proton's Wayland driver (`PROTON_ENABLE_WAYLAND=1`), and
-runs the price daemon for as long as the game does, unless one is already
-serving (e.g. from the systemd socket), so it works without systemd too.
-The daemon's log is in `~/.local/state/poe-waytrade/daemon.log`; add
-`POE_WAYTRADE_LOG=/tmp/poe-waytrade.log` before `waytrade` for the layer's.
+This turns the overlay on, starts the game on Proton's Wayland driver, and
+runs the price daemon for as long as the game does.
 
-The same by hand: `ENABLE_POE_WAYTRADE=1 PROTON_ENABLE_WAYLAND=1 %command%`,
-with the daemon from systemd. With `PROTON_ENABLE_WAYLAND=0` the game runs
-on XWayland: the panel still draws, but there are no hotkeys or clipboard, so
-it can't price anything. X11 support isn't planned, since other price check
-overlays already work on X11 and XWayland.
+**3. Play.** A notice under the login screen says when the overlay is ready.
+Hover an item and press **Ctrl+D**. Open the settings with **Ctrl+Alt+S**.
 
-`POE_WAYTRADE_DEBUG=1` adds a debug window (focus, last key, clipboard state).
+## Using it
 
-Working on the UI without the game:
+### Hotkeys
 
-```bash
-POE_WAYTRADE_UI_DIR=$PWD/assets POE_WAYTRADE_DEMO_ITEM=item.txt \
-  VK_ADD_IMPLICIT_LAYER_PATH=$PWD/build/layer ENABLE_POE_WAYTRADE=1 vkcube --wsi wayland
-```
+| Key | What it does |
+|---|---|
+| **Ctrl+D** | Quick look. Closes as soon as you move the mouse away. To use the panel, keep holding Ctrl and move onto it; it then stays until the mouse leaves it with Ctrl released. |
+| **Ctrl+Alt+D** | A locked panel that stays open until you click its × or click anywhere in the game. |
+| **Ctrl+C** | Your own copy of an item opens a quick look too. |
+| **Ctrl+Alt+S** | Settings. Also the gear at the top left of a panel. |
+| **Alt+D** | The old map check key; now the same as Ctrl+Alt+D. Can be turned off. |
 
-`POE_WAYTRADE_UI_DIR` loads `ui/*` from disk and reloads them when they
-change; `POE_WAYTRADE_DEMO_ITEM` opens the panel on start with that item text
-(as copied from the game; maps open the map check). `POE_WAYTRADE_UI_SCALE`
-scales the whole UI. `POE_WAYTRADE_SNAPSHOT=<file.ppm>` saves one of the app's own rendered frames
-(after 300 frames) and `POE_WAYTRADE_DEMO_SEARCH=1` makes a demo item search by
-itself, for checking the UI without screenshots. `POE_WAYTRADE_DEMO_EDIT=<filter index>` starts
-typing into that filter's value, as if it were clicked. `POE_WAYTRADE_DEMO_SETTINGS=<0-3>` opens the
-settings page on that tab. `POE_WAYTRADE_DEMO_PRESET=base` opens a demo item on
-the Base item preset. `POE_WAYTRADE_TEST_COPY=1`
-does a Ctrl+D two seconds in without sending keys; `tests/clipboard-kwin.sh
-[text|image]` uses it in a nested, invisible KWin to check that the
-clipboard is restored. `POE_WAYTRADE_SOCKET=name`
-makes the layer (and
-`poe-waytrade-daemon query`) talk to a daemon on another abstract socket, for
-testing a new daemon next to the installed one.
+All of them except Ctrl+C can be rebound. The game keeps the keyboard (the
+panel is part of its window), so it sees your hotkeys too. Pick combinations
+PoE doesn't use. That's also why there's no Esc to close a panel. Hotkeys are
+physical keys: on a non-US layout, a hotkey stays on the same key, and its
+label names the US key there.
 
-## Known limitations / next steps
+The panel opens next to PoE's inventory when you check an item there, or
+next to the stash for items on the left half of the screen.
 
-- Hotkeys still reach the game too (it keeps the keyboard), so they should be
-  combinations PoE doesn't use. Their labels name US keys: a hotkey is a
-  physical key, wherever the layout puts its letter.
-- Mouse input under fractional scaling assumes the app renders at full
-  resolution if it runs under Wine, at logical size otherwise;
-  `POE_WAYTRADE_SCALE` overrides the pixel-per-logical-unit ratio.
-- No X11 (or XWayland) input, and none planned: other price check overlays
-  already cover X11.
-- Only one device gets the overlay (RmlUi is a process-wide singleton).
-- HDR (10-bit/PQ) swapchains wouldn't be colour-corrected (sRGB ones are).
-  PoE1 has no HDR mode, so this only matters for PoE2.
-- Magic items' exact base is only known from advanced copy's affix names;
-  with plain Ctrl+C a magic item searches its category.
-- Trade search has no socket colour filters (APT has none either).
+### What gets priced
+
+From poe.ninja:
+
+- Currency, fragments, essences, divination cards, omens, oils, fossils,
+  tattoos and other Currency Exchange items. These prices come from the
+  in-game Currency Exchange, where currency actually trades.
+- Uniques, including 5L/6L and unidentified ones.
+- Skill gems, by level, quality and corruption.
+- Maps, invitations and beasts.
+- Wickerman limbs (Viscera), matched by their implicits.
+- White and magic cluster jewels, by enchant, passive count and item level
+  bracket.
+- Plain bases of item level 82+, by item level and influences.
+
+With a trade search (see below):
+
+- Rare and magic items.
+- Identified uniques, alongside their poe.ninja price, since that price
+  ignores rolls.
+- Skill gems, alongside their poe.ninja price.
+
+### Map check
+
+Maps, invitations, heist contracts and blueprints open the map check:
+
+- A one-line verdict at the top, such as "1 deadly mod · 1 warning ·
+  5 unmarked". Unmarked mods are counted so they don't get skimmed past.
+- The map's rarity, pack size and "More ..." bonuses.
+- Its poe.ninja price. For a rare map, that's the white map's price.
+- Its mods. Click a mod to cycle it through deadly → warning → good →
+  unmarked.
+
+Marks are kept per profile (I/II/III). Reflect, no regen, less recovery,
+−max res, cannot leech, player curses and a few others come pre-marked.
+
+**Price check** switches to the map's trade search. It searches the map's base
+("Map (Tier 16)") and blight, with its More currency/scarabs/maps/cards
+bonuses ticked and its pack size and rarity unticked. **Map check** switches
+back. Each view keeps its state, and switching locks the panel. Expedition
+logbooks open on their price, with the map check one click away.
+
+### Trade search
+
+Items without a fixed price get filters for the official trade site:
+
+- **Rare and magic items:** life, mana, attributes and resistances from any
+  mod (crafted ones included) become totals. Only total life and the
+  resistance totals start ticked. Other mods are listed unticked.
+- **Identified uniques:** one filter per mod that rolls (fixed mods are left
+  out), unticked. The search finds the unique by name.
+- **Skill gems:** gem level (ticked at max level) and quality (ticked from
+  16%, or 20% on a transfigured gem), with matching corruption. Level and
+  quality are minimums, since a better gem listed for less is competition.
+- **Weapons:** physical/elemental DPS, attack speed and critical strike
+  chance.
+- **Armour:** armour, evasion, energy shield, ward and block (unticked),
+  scaled to 20% quality the way the trade site searches them.
+- **Links:** 5- and 6-links get a links filter, ticked except on a rare
+  5-link. An unlinked 6-socket gets a sockets filter.
+
+You can also pick "Any Ring" or the exact base, and whether corrupted items
+count. Uncorrupted items exclude them by default.
+
+Each filter's minimum starts 10% of the mod's range below your roll (you can
+change this in the settings). A roll at the top of its tier starts at exactly
+that value, marked with a gold star. Waytrade copies items with PoE's advanced
+description, so each mod's tier shows next to its value (T1 gold, T2 silver,
+T3 bronze). Fractured mods count in the totals and also get a filter of their
+own.
+
+Ways to adjust a filter:
+
+- **Click a row** to tick it.
+- **Drag the slider** under it. The left handle sets the minimum and the
+  right one the maximum (none at the far right).
+- **Scroll the wheel** over its value to move the minimum one step.
+- **Click the value to type.** The overlay takes the keyboard from the game
+  while you type, so digits don't drink flasks. Tab switches between minimum
+  and maximum. Enter applies and ticks the filter. Esc or a click in the game
+  cancels. Typing needs a compositor with layer-shell (KDE Plasma, Sway,
+  Hyprland and other wlroots ones, COSMIC). On GNOME and gamescope, use the
+  wheel and sliders.
+
+**Base item:** unfinished bases with crafting value (fractured, synthesised,
+influenced, cluster or magic jewels, or item level 82+, without crafted mods,
+corruption or 20% quality) get a **Base item** button. It searches the exact
+base with a minimum item level, the fractured/synthesised/influence flags,
+fractured mods, enchants, implicits and, on magic items, tier 1–2 mods. Any
+non-unique 5- or 6-link gets it too, with the links ticked. White and magic
+ones open on it, since they're worth their links and base.
+
+Mods that are one of a list rather than a number are searched exactly and
+ticked. Examples are a cluster jewel's added small passives, an anointment, or
+Forbidden Flame/Flesh's notable. Searing Exarch and Eater of Worlds items get
+a filter for their implicit's tier.
+
+**Searching.** Nothing is searched until you press **Search**, since every
+search counts against GGG's rate limit. By default it counts only
+**instant buyout** listings, which can't be price-fixed. The button next to
+Search adds in-person sellers, or any listing. The results show:
+
+- An estimate: the median of the 10 cheapest listings, with the price range.
+- The listings, grouped by price, with how long ago they were listed.
+  Hovering a listing shows the item.
+- A button to open the same search in your browser.
+
+If you change a filter afterwards, the results are marked out of date until
+you search again.
+
+### Settings
+
+Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
+
+- **Hotkeys:** click a key, then press the new combination. A key without Ctrl
+  or Alt gets a warning, since the game sees it too. Choosing a combination
+  another action uses swaps the two.
+- **Price check:**
+  - The league. "Current" follows poe.ninja into each new league.
+  - Which listings a search starts with.
+  - How far below your roll a ticked filter starts.
+  - The panel size.
+- **Map check:** the active profile, and resetting its marks.
+- **About:** versions, where the logs are, and whether typing into panels works.
+
+Settings are stored in `~/.config/poe-waytrade/settings.json`, and map marks in
+`~/.config/poe-waytrade/map-mods.json`.
+
+Environment variables, which take precedence over the settings page:
+
+| Variable | Effect |
+|---|---|
+| `POE_LEAGUE` | League to price in |
+| `POE_WAYTRADE_UI_SCALE` | Scales the whole UI |
+| `POE_WAYTRADE_SCALE` | Overrides the pixel-per-logical-unit ratio, if clicks land in the wrong place under fractional scaling |
+
+## Troubleshooting
+
+- **No notice when the game starts, or the hotkeys do nothing.** Check that
+  the launch options include `waytrade %command%`. Also check that the game
+  isn't on XWayland (`PROTON_ENABLE_WAYLAND=0`): on XWayland the panel can
+  draw, but it gets no keys or clipboard.
+- **The notice says the price daemon isn't answering.** Read its log,
+  `~/.local/state/poe-waytrade/daemon.log`.
+- **The panel says "open /dev/uinput: Permission denied".** Ctrl+D can't
+  send the game its Ctrl+C. See the `/dev/uinput` requirement under Quick
+  start. Until it's fixed, pressing Ctrl+C on an item yourself still works.
+- **Trade searches fail.** Install Chromium or Google Chrome.
+- **More detail.** Put `POE_WAYTRADE_LOG=/tmp/poe-waytrade.log` before
+  `waytrade` in the launch options for the overlay's log. Add
+  `POE_WAYTRADE_DEBUG=1` for a debug window showing focus, the last key and
+  the clipboard state.
+
+## Known limitations
+
+- PoE1 only.
+- Native Wayland only. There's no X11 or XWayland input, and none is planned:
+  other price check overlays already cover X11.
+- Only one Vulkan device gets the overlay.
+- HDR (10-bit/PQ) swapchains wouldn't be colour-corrected. PoE1 has no HDR
+  mode, so this would only matter for PoE2.
+- With a plain (non-advanced) copy, a magic item's exact base isn't known, so
+  it searches by category.
+- No socket colour filters in trade searches.
+- The item text still shows up in clipboard managers' history. They see the
+  game's copy, and Klipper can't be told to forget a single entry.
+
+## Development
+
+How it works, building, testing the UI without the game, and releases are in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## License
 
 poe-waytrade is free software under the GNU General Public License, version
 3 or (at your option) any later version; see [LICENSE](LICENSE).
 
-Bundled third-party code keeps its own license: `third_party/rmlui` is RmlUi 6.3 core (MIT); `third_party/stb` has
-stb_image (public domain). `protocols/wlr-layer-shell-unstable-v1.xml` is
-wlroots' layer-shell protocol (its own permissive licence, in the file).
-`assets/fonts` has Inter and
-Cinzel, both under the SIL Open Font License (licence files alongside).
+Bundled third-party code keeps its own license:
+- `third_party/rmlui` is RmlUi 6.3 core (MIT).
+- `third_party/stb` has stb_image (public domain).
+- `protocols/wlr-layer-shell-unstable-v1.xml` is wlroots' layer-shell
+  protocol, under its own permissive licence (in the file).
+- `assets/fonts` has Inter and Cinzel, both under the SIL Open Font License
+  (licence files alongside).
