@@ -1,6 +1,6 @@
 [package]
 name = "poe-waytrade-daemon"
-version = "21.0.0"
+version = "0.22.0"
 edition = "2024"
 description = "Price lookups for the poe-waytrade Vulkan layer"
 license = "GPL-3.0-or-later"

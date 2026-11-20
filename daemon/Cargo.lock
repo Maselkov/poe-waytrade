@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "poe-waytrade-daemon"
-version = "21.0.0"
+version = "0.22.0"
 dependencies = [
  "libc",
  "png",
