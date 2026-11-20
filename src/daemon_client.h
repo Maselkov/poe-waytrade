@@ -31,6 +31,7 @@ struct TradeFilter {
     std::string max;      // empty if none
     int tier = 0;         // affix tier, 1 best; 0: none
     std::string roll;     // the item's own value; empty if none
+    std::string column;   // short name over the listings' values ("Ele res")
 };
 
 struct TradeListing {
@@ -49,6 +50,9 @@ struct TradeListing {
         int tier = 0;  // affix tier, 1 best; 0: none
     };
     std::vector<PreviewLine> preview;
+    // What the listing has of the search's enabled filters: (filter index,
+    // "158" / "81%").
+    std::vector<std::pair<int, std::string>> values;
 };
 
 // The median of the fetched listings.
@@ -92,6 +96,8 @@ struct PriceReply {
     std::string listing_status = "instant";
     bool base_preset = false;       // the "Base item" preset is offered
     std::string preset = "normal";  // normal | base
+    bool six_link_offered = false;  // a 6-link: the panel shows the 6-link chip
+    bool six_link = false;          // search 6-linked items only
     bool searched = false;
     // status "map"
     std::string subtitle;
@@ -123,7 +129,7 @@ public:
     // `enabled`: the filters to search with, by index, with their min/max.
     void request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                        const std::string& corrupted, const std::string& preset,
-                       const std::string& listing_status, const std::string& item_text);
+                       const std::string& listing_status, bool six_link, const std::string& item_text);
     // Trade filters for a preset (normal | base), without searching.
     void request_prepare(const std::string& preset, const std::string& item_text) {
         start("PREPARE\n" + preset + "\n" + item_text);

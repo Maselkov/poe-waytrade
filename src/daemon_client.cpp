@@ -64,6 +64,7 @@ PriceReply parse_reply(const std::string& body) {
             if (f.size() >= 11) t.max = f[10];
             if (f.size() >= 12) t.tier = atoi(f[11].c_str());
             if (f.size() >= 13) t.roll = f[12];
+            if (f.size() >= 14) t.column = f[13];
             reply.filters.push_back(t);
         } else if (f[0] == "listing" && f.size() >= 5) {
             TradeListing l{f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]};
@@ -71,6 +72,8 @@ PriceReply parse_reply(const std::string& body) {
             reply.listings.push_back(l);
         } else if (f[0] == "preview" && f.size() >= 3 && !reply.listings.empty()) {
             reply.listings.back().preview.push_back({f[1], f[2], f.size() >= 4 ? atoi(f[3].c_str()) : 0});
+        } else if (f[0] == "value" && f.size() >= 3 && !reply.listings.empty()) {
+            reply.listings.back().values.push_back({atoi(f[1].c_str()), f[2]});
         } else if (f[0] == "summary" && f.size() >= 6) {
             reply.summary = TradeSummary{f[1], f[2], f[3], f[5], f[4].empty() ? -1 : strtod(f[4].c_str(), nullptr)};
             reply.summary->capped = f.size() >= 7 && f[6] == "1";
@@ -89,6 +92,7 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "status") reply.listing_status = f[2];
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "base_preset") reply.base_preset = f[2] == "1";
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "preset") reply.preset = f[2];
+        else if (f[0] == "option" && f.size() >= 3 && f[1] == "six_link") reply.six_link_offered = true, reply.six_link = f[2] == "1";
         else if (f[0] == "url") reply.url = f[1];
         else if (f[0] == "setting" && f.size() >= 3) reply.settings.push_back({f[1], f[2]});
         else if (f[0] == "setting") reply.settings.push_back({f[1], ""});
@@ -105,12 +109,12 @@ PriceReply parse_reply(const std::string& body) {
 
 void DaemonClient::request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                                  const std::string& corrupted, const std::string& preset,
-                                 const std::string& listing_status, const std::string& item_text) {
+                                 const std::string& listing_status, bool six_link, const std::string& item_text) {
     std::string indices;
     for (const TradeFilter& f : enabled)
         indices += (indices.empty() ? "" : ",") + std::to_string(f.index) + ":" + f.min + ":" + f.max;
     start("TRADE\n" + indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + preset + "\n" + listing_status +
-          "\n" + item_text);
+          "\n" + (six_link ? "6" : "any") + "\n" + item_text);
 }
 
 void DaemonClient::start(const std::string& body) {

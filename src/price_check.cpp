@@ -514,6 +514,13 @@ void PriceCheck::toggle_corrupted() {
     changed();
 }
 
+void PriceCheck::toggle_six_link() {
+    if (!reply_ || reply_->status != "trade" || !reply_->six_link_offered) return;
+    reply_->six_link = !reply_->six_link;
+    stale_ = reply_->searched;
+    changed();
+}
+
 void PriceCheck::search() {
     if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
     std::vector<TradeFilter> enabled;
@@ -521,7 +528,7 @@ void PriceCheck::search() {
         if (f.enabled) enabled.push_back(f);
     status_.clear();
     daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, reply_->preset, reply_->listing_status,
-                         item_text_);
+                          reply_->six_link, item_text_);
     changed();
 }
 
