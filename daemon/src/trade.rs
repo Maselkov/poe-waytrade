@@ -375,6 +375,12 @@ struct TradeData {
     transfigured: HashMap<String, (String, String)>,
 }
 
+/// Weapon-local stats the trade site lists with the same text as the global
+/// one, without "(Local)": impale and intimidate on hit. Its order of the two
+/// differs between groups, so they're told apart by id (APT's data has the
+/// same pairs). Read as "(Local)" stats.
+const UNLABELLED_LOCAL: [&str; 2] = ["stat_725880290", "stat_2089652545"];
+
 impl TradeData {
     /// From /api/trade/data/stats, /api/trade/data/static and
     /// /api/trade/data/items.
@@ -398,7 +404,11 @@ impl TradeData {
             let group_id = group["id"].as_str().unwrap_or("");
             for e in group["entries"].as_array().into_iter().flatten() {
                 if let (Some(id), Some(text)) = (e["id"].as_str(), e["text"].as_str()) {
-                    data.stats.entry((group_id.to_string(), text.to_string())).or_insert_with(|| id.to_string());
+                    let text = match id.rsplit_once('.') {
+                        Some((_, stat)) if UNLABELLED_LOCAL.contains(&stat) => format!("{text} (Local)"),
+                        _ => text.to_string(),
+                    };
+                    data.stats.entry((group_id.to_string(), text)).or_insert_with(|| id.to_string());
                 }
             }
         }
@@ -932,29 +942,67 @@ fn category(item: &Item) -> Option<(&'static str, &'static str)> {
         "Two Hand Maces" => ("weapon.twomace", "Two-Handed Mace"),
         "Two Hand Swords" => ("weapon.twosword", "Two-Handed Sword"),
         "Wands" => ("weapon.wand", "Wand"),
+        "Fishing Rods" => ("weapon.rod", "Fishing Rod"),
         "Maps" => ("map", "Map"),
         c if c.ends_with("Flasks") => ("flask", "Flask"),
         _ => return None,
     })
 }
 
-fn find_stat(data: &TradeData, kind: ModKind, template: &str, local: bool) -> Option<(String, f64)> {
-    let group = kind.trade_group().to_string();
-    let mut candidates = Vec::new();
-    // Weapons/armour list their own-item mods as separate "(Local)" stats.
-    if local {
-        candidates.push((format!("{template} (Local)"), 1.0));
+/// Which of an item's mods apply to the item itself, which the trade site
+/// lists as separate "(Local)" stats.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Local {
+    None,
+    /// All of them: damage, attack speed, accuracy, leech, poison.
+    Weapon,
+    /// Only its defences. Accuracy or attack speed on gloves is global, and
+    /// the "(Local)" stat would match no gloves at all.
+    Armour,
+}
+
+impl Local {
+    fn of(item: &Item) -> Local {
+        match category(item) {
+            Some((c, _)) if c.starts_with("weapon.") => Local::Weapon,
+            // Like APT: a quiver's mods are all global.
+            Some(("armour.quiver", _)) => Local::None,
+            Some((c, _)) if c.starts_with("armour.") => Local::Armour,
+            _ => Local::None,
+        }
     }
-    candidates.push((template.to_string(), 1.0));
+
+    fn applies(self, template: &str) -> bool {
+        match self {
+            Local::None => false,
+            Local::Weapon => true,
+            Local::Armour => ["Armour", "Evasion", "Energy Shield"].iter().any(|d| template.contains(d)),
+        }
+    }
+}
+
+fn find_stat(data: &TradeData, kind: ModKind, template: &str, local: Local) -> Option<(String, f64)> {
+    let group = kind.trade_group().to_string();
+    let mut wordings = vec![(template.to_string(), 1.0)];
     // "10% reduced X" is searched as "#% increased X" with a negative value.
     for (from, to) in [("reduced", "increased"), ("less", "more")] {
         if template.contains(from) {
-            candidates.push((template.replace(from, to), -1.0));
+            wordings.push((template.replace(from, to), -1.0));
         }
     }
     if let Some(rest) = template.strip_prefix("-#") {
-        candidates.push((format!("+#{rest}"), -1.0));
+        wordings.push((format!("+#{rest}"), -1.0));
     }
+    // A local mod tries every wording's "(Local)" stat first, so a weapon's
+    // "reduced Attack Speed" finds the local stat, not the global one. Any
+    // other mod tries them last: a stat only listed as "(Local)" ("#%
+    // increased Energy Shield") still matches, as in APT.
+    let locals = wordings.iter().map(|(t, sign)| (format!("{t} (Local)"), *sign)).collect::<Vec<_>>();
+    let candidates = if local.applies(template) {
+        locals.into_iter().chain(wordings).collect::<Vec<_>>()
+    } else {
+        wordings.into_iter().chain(locals).collect()
+    };
     // Some stats are only searchable as pseudo stats (item rarity, for one).
     candidates.into_iter().find_map(|(t, sign)| {
         data.stats
@@ -1251,7 +1299,7 @@ fn memory_strands_filter(item: &Item) -> Option<Filter> {
 /// Like APT for uniques: no totals, only the mods that roll (fixed ones
 /// don't tell copies apart), all unticked.
 fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
-    let local = category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."));
+    let local = Local::of(item);
     let mut filters = weapon_filters(item, false);
     filters.extend(memory_strands_filter(item));
     let (options, picked) = option_filters(item, data);
@@ -1420,7 +1468,7 @@ fn mod_section(m: &ModLine, section: Section) -> Section {
 }
 
 /// A mod as a stat filter of its own kind (explicit, fractured, ...).
-fn mod_filter(m: &ModLine, data: &TradeData, local: bool, on: bool, section: Section) -> Option<Filter> {
+fn mod_filter(m: &ModLine, data: &TradeData, local: Local, on: bool, section: Section) -> Option<Filter> {
     let (template, values) = templatize(&m.text);
     let (stat_id, sign) = find_stat(data, m.kind, &template, local)?;
     let section = mod_section(m, section);
@@ -1457,7 +1505,7 @@ fn viscera_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         .iter()
         .filter_map(|m| {
             let m = ModLine { kind: ModKind::Implicit, ..m.clone() };
-            let mut filter = mod_filter(&m, data, false, true, Section::Mod)?;
+            let mut filter = mod_filter(&m, data, Local::None, true, Section::Mod)?;
             let (_, values) = templatize(&m.text);
             if let Some((_, Some((lo, hi)))) = mod_value(&values, &m.ranges)
                 && hi > lo
@@ -1468,10 +1516,6 @@ fn viscera_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             Some(filter)
         })
         .collect()
-}
-
-fn has_local_mods(item: &Item) -> bool {
-    category(item).is_some_and(|(c, _)| c.starts_with("weapon.") || c.starts_with("armour."))
 }
 
 /// APT's "base item" preset: what makes the item worth as a crafting base.
@@ -1510,7 +1554,7 @@ fn gem_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
 }
 
 fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
-    let local = has_local_mods(item);
+    let local = Local::of(item);
     let mut filters = Vec::new();
     let flag = |label: String, key: &'static str| Filter {
         label,
@@ -1614,7 +1658,7 @@ fn influence_filters(item: &Item, on: bool) -> Vec<Filter> {
 /// A rare's mod as an unticked row of its own. A crafted mod is listed only
 /// when the trade site has it as a crafted stat: one only searchable as a
 /// pseudo stat (item rarity) would repeat the explicit mod's row.
-fn listed_filter(m: &ModLine, data: &TradeData, local: bool) -> Option<Filter> {
+fn listed_filter(m: &ModLine, data: &TradeData, local: Local) -> Option<Filter> {
     let filter = mod_filter(m, data, local, false, Section::Mod)?;
     let crafted_stat = matches!(&filter.target, Target::Stat(id) if id.starts_with("crafted."));
     (m.kind != ModKind::Crafted || crafted_stat).then_some(filter)
@@ -1636,7 +1680,7 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     if preset == Preset::Base {
         return base_filters(item, data);
     }
-    let local = has_local_mods(item);
+    let local = Local::of(item);
     let mut listed = Vec::new();
     // Fractured mods also count in totals, but can be searched as fractured.
     let mut fractured = Vec::new();
@@ -3101,6 +3145,99 @@ mod tests {
         assert_eq!(resist_parts("+#% to all Elemental Resistances"), Some((3, false)));
         assert_eq!(resist_parts("+#% to Fire and Chaos Resistances"), Some((1, true)));
         assert_eq!(resist_parts("+# to maximum Life"), None);
+    }
+
+    #[test]
+    fn local_stats_on_armour_are_only_defences() {
+        let mut data = test_data();
+        for text in ["+# to Accuracy Rating", "#% increased Attack Speed", "#% increased Energy Shield"] {
+            data.stats.insert(("explicit".into(), text.into()), format!("global {text}"));
+            data.stats.insert(("explicit".into(), format!("{text} (Local)")), format!("local {text}"));
+        }
+        let gloves = "Item Class: Gloves\nRarity: Rare\nDoom Hold\nSorcerer Gloves\n--------\n\
+                      Energy Shield: 65 (augmented)\n--------\nItem Level: 71\n--------\n\
+                      { Suffix Modifier \"of the Marksman\" (Tier: 3) — Attack }\n\
+                      +304(251-350) to Accuracy Rating\n\
+                      { Suffix Modifier \"of Mastery\" (Tier: 2) — Attack, Speed }\n\
+                      11(11-13)% increased Attack Speed\n\
+                      { Prefix Modifier \"Arcing\" (Tier: 4) — Defences, Energy Shield }\n\
+                      40(39-50)% increased Energy Shield\n";
+        let item = crate::item::parse(gloves).unwrap();
+        assert_eq!(Local::of(&item), Local::Armour);
+        let targets: Vec<_> = build_filters(&item, &data, Preset::Normal)
+            .into_iter()
+            .filter_map(|f| match f.target {
+                Target::Stat(id) => Some(id),
+                _ => None,
+            })
+            .collect();
+        assert!(targets.contains(&"global +# to Accuracy Rating".to_string()), "{targets:?}");
+        assert!(targets.contains(&"global #% increased Attack Speed".to_string()), "{targets:?}");
+        assert!(targets.contains(&"local #% increased Energy Shield".to_string()), "{targets:?}");
+
+        // On a weapon, accuracy and attack speed are its own.
+        let t = |template| find_stat(&data, ModKind::Explicit, template, Local::Weapon).map(|(id, _)| id);
+        assert_eq!(t("+# to Accuracy Rating").as_deref(), Some("local +# to Accuracy Rating"));
+        assert_eq!(t("#% increased Attack Speed").as_deref(), Some("local #% increased Attack Speed"));
+        // Reduced is searched as negative increased, still the local stat.
+        assert_eq!(
+            find_stat(&data, ModKind::Explicit, "#% reduced Attack Speed", Local::Weapon),
+            Some(("local #% increased Attack Speed".to_string(), -1.0))
+        );
+        // A stat only listed as "(Local)", like the real "#% increased
+        // Energy Shield", still matches off armour.
+        data.stats.remove(&("explicit".into(), "#% increased Energy Shield".into()));
+        assert_eq!(
+            t_with(&data, Local::None, "#% increased Energy Shield"),
+            Some("local #% increased Energy Shield".to_string())
+        );
+
+        // Like APT, a quiver's attack speed is global.
+        let quiver = crate::item::parse(
+            "Item Class: Quivers\nRarity: Rare\nDoom Quiver\nSerrated Arrow Quiver\n--------\nItem Level: 80\n\
+             --------\n10% increased Attack Speed\n",
+        )
+        .unwrap();
+        assert_eq!(Local::of(&quiver), Local::None);
+        // Like APT, a fishing rod is a weapon.
+        let rod = crate::item::parse(
+            "Item Class: Fishing Rods\nRarity: Rare\nDoom Hook\nFishing Rod\n--------\nItem Level: 80\n\
+             --------\n+300 to Accuracy Rating\n",
+        )
+        .unwrap();
+        assert_eq!(Local::of(&rod), Local::Weapon);
+        assert_eq!(
+            t_with(&data, Local::of(&quiver), "#% increased Attack Speed"),
+            Some("global #% increased Attack Speed".to_string())
+        );
+    }
+
+    fn t_with(data: &TradeData, local: Local, template: &str) -> Option<String> {
+        find_stat(data, ModKind::Explicit, template, local).map(|(id, _)| id)
+    }
+
+    #[test]
+    fn unlabelled_local_stats() {
+        // Order as on the trade site: local first in one group, global first
+        // in the other.
+        let stats = serde_json::json!({"result": [
+            {"id": "explicit", "entries": [
+                {"id": "explicit.stat_2089652545", "text": "#% chance to Intimidate Enemies for 4 seconds on Hit"},
+                {"id": "explicit.stat_78985352", "text": "#% chance to Intimidate Enemies for 4 seconds on Hit"},
+            ]},
+            {"id": "fractured", "entries": [
+                {"id": "fractured.stat_3739863694", "text": "#% chance to Impale Enemies on Hit with Attacks"},
+                {"id": "fractured.stat_725880290", "text": "#% chance to Impale Enemies on Hit with Attacks"},
+            ]},
+        ]});
+        let data = TradeData::from_json(&stats, &Value::Null, &Value::Null);
+        let find = |kind, template, local| find_stat(&data, kind, template, local).map(|(id, _)| id);
+        let intimidate = "#% chance to Intimidate Enemies for 4 seconds on Hit";
+        assert_eq!(find(ModKind::Explicit, intimidate, Local::Weapon).as_deref(), Some("explicit.stat_2089652545"));
+        assert_eq!(find(ModKind::Explicit, intimidate, Local::Armour).as_deref(), Some("explicit.stat_78985352"));
+        let impale = "#% chance to Impale Enemies on Hit with Attacks";
+        assert_eq!(find(ModKind::Fractured, impale, Local::Weapon).as_deref(), Some("fractured.stat_725880290"));
+        assert_eq!(find(ModKind::Fractured, impale, Local::None).as_deref(), Some("fractured.stat_3739863694"));
     }
 
     // ---- against replies captured by fixtures/refresh.py ----
