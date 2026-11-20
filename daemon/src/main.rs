@@ -24,9 +24,10 @@
 //!   Viscera limbs, with theirs and a filter (with a maximum) per implicit.
 //!   Nothing is searched until the layer asks:
 //!     filter   <index> <1|0 enabled> <label> <minimum|""> <slider low>
-//!              <slider high> <step> <1|0 max roll> <weapon|base|armour|sockets|total|enchant|
+//!              <slider high> <step> <1|0 max roll> <weapon|base|armour|total|enchant|
 //!              implicit|exarch|eater|mod|fractured|crafted|map|<influence: shaper, elder, ...>>
 //!              <maximum|""> <affix tier|""> <the item's value|"">
+//!              <short name, for a column of the listings' values ("Ele res")>
 //!     option   base <base type> <category label>   (if the base can be
 //!                                                  searched on its own)
 //!     option   base_only <1|0>
@@ -36,6 +37,7 @@
 //!     option   status <instant|available|any>   (instant buyout, + in person, any)
 //!     option   base_preset <1|0>   (the "base item" preset is offered)
 //!     option   preset <normal|base>
+//!     option   six_link <1|0>   (only 6-linked items; sent for a 6-link only)
 //!     searched <1|0>
 //!   and, once searched:
 //!     summary  <amount> <currency name> <currency id> <chaos|""> <range>
@@ -44,6 +46,9 @@
 //!              or "41h–5d"|""> <count> <currency id>   (same prices grouped)
 //!     preview  <kind> <text> <affix tier|"">   (lines describing the first item of the
 //!              listing above, for a hover preview: see trade::Preview)
+//!     value    <filter index> <text, e.g. "158" or "81%">   (what the listing
+//!              above has of an enabled filter; listings are only grouped
+//!              when these match)
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
 //!   request:  "TRADE\n" + comma-separated enabled filters, each "index",
@@ -51,7 +56,7 @@
 //!             empty: default minimum, no maximum) + "\n" +
 //!             "base" or "category" + "\n" + any|no|yes + "\n" +
 //!             normal|base (preset) + "\n" + instant|available|any (status)
-//!             + "\n" + item text: search with those
+//!             + "\n" + "6" (6-linked only) or "any" + "\n" + item text: search with those
 //!             filters and options.
 //!   request:  "PREPARE\n" + normal|base + "\n" + item text: the trade
 //!             filters for that preset, without searching ("base": the item
@@ -345,8 +350,9 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         let (preset, text) = rest.split_once('\n').unwrap_or((rest, ""));
         respond(state, text, None, trade::Preset::parse(preset))
     } else if let Some(rest) = request.strip_prefix("TRADE\n") {
-        let mut parts = rest.splitn(6, '\n');
-        let (indices, base, corrupted, preset, status, text) = (
+        let mut parts = rest.splitn(7, '\n');
+        let (indices, base, corrupted, preset, status, links, text) = (
+            parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
             parts.next().unwrap_or(""),
@@ -370,6 +376,7 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
                 corrupted: trade::Corrupted::parse(corrupted),
                 preset: trade::Preset::parse(preset),
                 status: trade::Status::parse(status),
+                six_link: links == "6",
             },
         };
         respond(state, text, Some(&search), search.options.preset)
@@ -596,14 +603,15 @@ fn trade_response(
             .map_or((String::new(), String::new()), |(lo, hi)| (trade::trim_number(lo), trade::trim_number(hi)));
         let _ = writeln!(
             out,
-            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}\t{max}\t{}\t{}",
+            "filter\t{i}\t{}\t{}\t{min}\t{lo}\t{hi}\t{}\t{}\t{}\t{max}\t{}\t{}\t{}",
             on as u8,
             clean(&f.label),
             trade::trim_number(f.step),
             f.max_roll as u8,
             f.section.as_str(),
             f.tier.map(|t| t.to_string()).unwrap_or_default(),
-            f.roll.map(trade::trim_number).unwrap_or_default()
+            f.roll.map(trade::trim_number).unwrap_or_default(),
+            clean(&trade::column_name(&f.label))
         );
     }
     if let Some(label) = prepared.category_label {
@@ -615,6 +623,9 @@ fn trade_response(
     let _ = writeln!(out, "option\tstatus\t{}", options.status.as_str());
     let _ = writeln!(out, "option\tbase_preset\t{}", prepared.base_preset as u8);
     let _ = writeln!(out, "option\tpreset\t{}", options.preset.as_str());
+    if item.links >= 6 {
+        let _ = writeln!(out, "option\tsix_link\t{}", options.six_link as u8);
+    }
 
     let Some(search) = search else {
         let _ = writeln!(out, "searched\t0");
@@ -650,6 +661,9 @@ fn trade_response(
                 for (kind, text, tier) in &l.preview {
                     let tier = tier.map(|t| t.to_string()).unwrap_or_default();
                     let _ = writeln!(out, "preview\t{kind}\t{}\t{tier}", clean(text));
+                }
+                for (index, text) in &l.values {
+                    let _ = writeln!(out, "value\t{index}\t{}", clean(text));
                 }
             }
             let _ = writeln!(out, "total\t{}\nurl\t{}", r.total, clean(&r.url));

@@ -184,28 +184,37 @@ body {
 
 .section-label { font-size: 10dp; letter-spacing: 0.5dp; color: $text-faint; margin: 6dp 0 2dp; }
 
-/* Price summary */
-.summary { display: flex; align-items: center; margin: 10dp 14dp 0; padding: 10dp 12dp; background-color: #1a1d24; border-radius: 10dp; }
-.summary.stale { opacity: 0.45; }
-.summary-icon { width: 30dp; height: 30dp; margin-right: 10dp; }
-.coin.big { width: 26dp; height: 26dp; border-radius: 13dp; margin-right: 10dp; }
-.summary-text { flex: 1; }
-.summary-price { font-size: 17dp; font-weight: 500; color: $price; }
-.summary-price .label { font-size: 12dp; font-weight: 400; color: $text-muted; }
-.summary-price .sub { font-size: 12dp; font-weight: 400; color: $text-muted; }
-.summary-range { font-size: 11dp; color: $text-muted; margin-top: 2dp; }
-.summary .tag { margin: 0 0 0 8dp; }
-/* An item priced by poe.ninja alone (currency, fragments, gems, ...):
-   a row per price, each with its currency's icon. */
-.summary.ninja-card { display: block; margin-bottom: 12dp; }
-.summary-line { display: flex; align-items: center; padding: 2dp 0; }
-.summary-line.compact .summary-icon { width: 22dp; height: 22dp; }
-.summary-line.compact .coin.big { width: 20dp; height: 20dp; border-radius: 10dp; }
-.summary-line.compact .summary-price { font-size: 15dp; }
-.summary-foot { display: flex; align-items: center; margin-top: 4dp; }
-.summary-foot .summary-range { flex: 1; margin-top: 0; }
+/* The price card: a row per price, its label on the left and the amount,
+   then the currency's icon, on the right. poe.ninja's rows come first; the
+   answer (a stack's total, or the trade estimate) is last, bigger, below a
+   rule. A faint line under a row's label says where its price comes from;
+   the price is centred on the label and that line together. */
+.price-card { margin: 10dp 14dp 0; padding: 7dp 12dp 8dp; background-color: #1a1d24; border-radius: 10dp; }
+.price-card.alone { margin-bottom: 12dp; }
+.price-row { display: flex; align-items: center; min-height: 20dp; padding: 2dp 0; }
+.price-row.rule { border-top: 1dp $panel-border; margin-top: 4dp; padding-top: 6dp; }
+.price-row.stale { opacity: 0.45; }
+.pr-text { flex: 1; min-width: 0; margin-right: 10dp; }
+.pr-label { color: $text-muted; }
+.pr-value { display: flex; align-items: center; flex-shrink: 0; }
+.pr-amount { font-size: 14dp; font-weight: 500; color: $price; }
+/* Every row's icon centred in one column, whatever its size, and a little
+   lower than the line box's middle: digits sit low in Inter's line box. */
+.pr-icon-box { display: flex; justify-content: center; align-items: center; width: 22dp; margin-left: 4dp; }
+.pr-icon { position: relative; top: 1dp; width: 18dp; height: 18dp; }
+.pr-sub { color: $text-muted; font-size: 11dp; margin-left: 6dp; }
+.pr-note { color: $text-faint; }
+.price-row.answer { min-height: 26dp; }
+.answer .pr-amount { font-size: 19dp; }
+.answer .pr-icon { width: 22dp; height: 22dp; }
+.pr-meta { display: flex; align-items: center; margin-top: 1dp; font-size: 11dp; color: $text-faint; }
+.pr-meta-text { flex: 1; min-width: 0; }
+.pr-meta .tag { margin: 0 0 0 8dp; font-size: 10dp; padding: 0 6dp; }
+.pr-foot { margin-top: 4dp; }
 /* Trade search options */
-.options { display: flex; align-items: center; padding: 10dp 14dp 2dp; }
+/* The chips sit at the right, where they are on every item: a rare's base
+   toggle fills the space to their left, a unique has nothing there. */
+.options { display: flex; align-items: center; justify-content: flex-end; padding: 10dp 14dp 2dp; }
 /* Fixed layout: labels never wrap, and the corrupted button keeps one width,
    so clicking either control doesn't move anything. Like the filter rows,
    the base and corruption chips always name the item's own base and state,
@@ -249,20 +258,47 @@ body {
    influenced, synthesised and high item level bases. */
 .toggle-chip.preset { width: 70dp; margin-right: 8dp; }
 .toggle-chip.preset.on { background-color: #2a2546; border-color: $accent; color: $accent-text; }
+/* "6-link": a 6-link searches 6-linked items only; dim, any links. */
+.toggle-chip.links { width: 52dp; margin-right: 8dp; }
+.toggle-chip.links.on { background-color: #2a2546; border-color: $accent; color: $accent-text; }
 
 /* Trade results */
 .results { border-top: 1dp $divider; padding: 8dp 14dp 12dp; }
-.results-head { display: flex; justify-content: space-between; font-size: 11dp; color: $text-muted; margin-bottom: 4dp; }
-.listing { display: flex; align-items: center; padding: 5dp 0; }
-.coin { width: 12dp; height: 12dp; border-radius: 6dp; background-color: #c9a24f; margin-right: 8dp; flex-shrink: 0; }
-.amount { flex: 1; color: $price; font-weight: 500; }
-.cur-icon { width: 18dp; height: 18dp; margin-right: 6dp; flex-shrink: 0; }
-.gem-tag { color: $gem; font-size: 11dp; margin-left: 6dp; }
+/* The listings as a table: price, a gem's level and quality, what each has
+   of the searched filters (three at most), how many, and when listed. */
+.list-head { display: flex; align-items: center; padding: 0 0 3dp; font-size: 10dp; color: $text-faint; }
+.listing { display: flex; align-items: center; padding: 5dp 0; border-top: 1dp #1a1d23; }
+.amount { flex: 1; min-width: 0; display: flex; align-items: center; }
+.col { flex-shrink: 0; width: 48dp; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col.gem { width: 44dp; color: $gem; }
+.col.value { color: $mod; }
+.list-head .col.gem { color: $text-faint; }
+.head-col { position: relative; overflow: visible; }
+.col-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A cut name in full, over the header, on hover. */
+.col-full {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    margin-bottom: 2dp;
+    padding: 2dp 6dp;
+    white-space: nowrap;
+    background-color: #1b1f26;
+    border: 1dp $panel-border;
+    border-radius: 6dp;
+    color: $text;
+}
+.head-col:hover .col-full { display: block; }
+.count-cell { flex-shrink: 0; width: 34dp; display: flex; justify-content: flex-end; }
+.list-head .count-cell { color: $text-faint; }
+.amount-value { color: $price; font-weight: 500; }
+.cur-icon { position: relative; top: 1dp; width: 18dp; height: 18dp; margin-left: 5dp; flex-shrink: 0; }
+.amount-sub { color: $text-muted; font-size: 11dp; margin-left: 6dp; }
 .pv-name.gem { color: $gem; }
-.count { background-color: $chip; border-radius: 6dp; padding: 1dp 6dp; font-size: 11dp; color: $text; margin-left: 6dp; }
-.age { width: 58dp; text-align: right; }
-.amount .sub { color: $text-muted; font-weight: 400; }
-.age { color: $text-faint; }
+.count { background-color: $chip; border-radius: 6dp; padding: 1dp 6dp; font-size: 11dp; color: $text; }
+.age { flex-shrink: 0; width: 58dp; text-align: right; color: $text-faint; }
+.listing .age.old { color: #41464f; }
 .empty { color: $text-muted; padding: 6dp 0; }
 
 .actions { display: flex; margin-top: 8dp; }
@@ -358,12 +394,6 @@ body {
 #debug { left: auto; right: 40dp; width: 340dp; }
 #debug .line { padding: 1dp 14dp; font-size: 11dp; }
 
-/* A unique's poe.ninja price above its trade filters */
-.ninja { display: flex; flex-wrap: wrap; align-items: baseline; padding: 10dp 14dp 0; color: $text-muted; }
-.ninja-source { font-size: 11dp; margin-right: 8dp; }
-.ninja-price { color: $price; margin-right: 10dp; }
-.ninja-price .label { color: $text-muted; }
-.ninja-price .sub { color: $text-muted; font-size: 11dp; }
 
 /* Hover preview of a listed item, beside the panel (away from the inventory
    or stash it sits against), PoE-tooltip style. */

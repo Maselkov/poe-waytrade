@@ -138,7 +138,9 @@ def main():
     hashes = search["result"][:10]
     save("trade-search.json", {"id": search["id"], "complexity": search.get("complexity"), "result": hashes,
                                "total": search["total"], "inexact": search.get("inexact", False)})
-    fetched = get(f"{TRADE}/fetch/{','.join(hashes)}?query={search['id']}")
+    # Named in the fetch, the search's pseudo total comes with each item
+    # (pseudoMods), as the daemon asks for it.
+    fetched = get(f"{TRADE}/fetch/{','.join(hashes)}?query={search['id']}&pseudos[]=pseudo.pseudo_total_life")
     entries = []
     for e in fetched["result"]:
         item = {k: v for k, v in e["item"].items() if k != "icon"}

@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 
 namespace {
@@ -149,9 +150,19 @@ private:
 
 // ---- the data model ---------------------------------------------------------
 
-struct UiPrice {
-    Rml::String label, main, sub;
+// A row of the price card: a label on the left, the price on the right
+// ("93" and the chaos icon), and a faint line under it about where the price
+// comes from. poe.ninja's rows come first; the last row is the answer
+// (a stack's total, or the trade search's estimate), in bigger type below a
+// rule.
+struct UiPriceRow {
+    Rml::String label;
+    Rml::String main;  // the amount, or amount and currency until its icon arrives
     Rml::String icon;  // currency id, once its icon has arrived
+    Rml::String sub;   // a divine price in chaos
+    Rml::String note;  // in place of a price: "Search to price this item"
+    Rml::String meta, tag;
+    bool answer = false, rule = false, stale = false;
 };
 struct UiFilter {
     int index = 0;
@@ -169,7 +180,7 @@ struct UiFilter {
     float roll_pct = -1;               // the item's own value; < 0: none
     bool has_slider = false, max_roll = false;
     Rml::String tier;     // "T1"; empty: none
-    Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | exarch | eater | mod | fractured | crafted | map | shaper, elder, ... (influence)
+    Rml::String section;  // weapon | base | armour | total | enchant | implicit | exarch | eater | mod | fractured | crafted | map | shaper, elder, ... (influence)
 };
 struct UiGroup {
     Rml::String label;
@@ -187,7 +198,9 @@ struct UiSprite {
 };
 struct UiListing {
     Rml::String price, sub, age, count, icon;
-    Rml::String tag;  // a gem's level and quality
+    Rml::String gem_level, gem_quality;  // a gem's, in their own columns
+    Rml::Vector<Rml::String> cols;       // its values for the filters' columns
+    bool old = false;                    // listed a day or more ago
     // Hover preview of the first listed item.
     bool has_preview = false;
     Rml::String rarity, name, base, meta, more;
@@ -195,6 +208,12 @@ struct UiListing {
     float icon_w = 0, icon_h = 0;  // dp
     Rml::Vector<UiSprite> sockets;  // then the links, drawn over them
     Rml::Vector<UiPreviewLine> lines;
+};
+
+// A column over the listings: a searched filter's short name, and its label
+// in full (shown on hover).
+struct UiColumn {
+    Rml::String name, full;
 };
 
 struct UiMapStat {
@@ -222,7 +241,7 @@ struct UiAbout {
 struct Model {
     Rml::String name, base, subtitle, rarity;
     Rml::String state;  // status | prices | trade
-    Rml::String status, source, thin, total, hint;
+    Rml::String status, total, hint;
     bool status_error = false, searching = false, has_url = false, closable = false;
     // Trade search options
     // The base and corruption chips name the item's own base and state, and
@@ -230,16 +249,19 @@ struct Model {
     // corruption).
     Rml::String base_label, corrupted_label, corrupted_kind;  // kind: yes | no
     bool has_base = false, corrupted_on = false;
+    bool six_link_offered = false, six_link_on = false;  // the 6-link chip
     bool base_preset = false, preset_base = false;  // offered / active
     bool base_only = false, searched = false, stale = false;
-    Rml::Vector<UiPrice> prices;
+    // The price card, and its source line when poe.ninja alone prices the item
+    Rml::Vector<UiPriceRow> price_rows;
+    Rml::String price_foot, foot_tag;
     Rml::Vector<UiGroup> filter_groups;
     Rml::Vector<UiListing> listings;
-    // Price summary (the low end of the fetched listings)
-    bool has_summary = false, low_value = false;
-    Rml::String summary_price, summary_icon, summary_sub, summary_range;
-    // A unique's poe.ninja price, shown big until a trade search prices it
-    Rml::String ninja_icon, ninja_meta;
+    // The listings' table: gem columns, the filters' columns, and how many
+    // more filters were searched than have a column ("+2").
+    bool gem_level_col = false, gem_quality_col = false;
+    Rml::Vector<UiColumn> list_cols;
+    Rml::String list_more;
     Rml::Vector<Rml::String> debug_lines;
     // Map check
     Rml::String verdict, verdict_kind;  // kind: deadly | warning | clean
@@ -275,8 +297,6 @@ Rml::String format(const char* fmt, double v) {
     return buf;
 }
 
-Rml::String chaos_text(double chaos) { return format(chaos < 10 ? "%.1fc" : "%.0fc", chaos); }
-
 // "2184" -> "2,184"
 Rml::String thousands(const std::string& digits) {
     if (digits.empty() || digits.find_first_not_of("0123456789") != std::string::npos) return digits;
@@ -288,6 +308,43 @@ Rml::String thousands(const std::string& digits) {
     }
     return out;
 }
+
+// "3.3", "93", "29,400"
+Rml::String amount_text(double v) { return v < 10 ? format("%.1f", v) : thousands(format("%.0f", v)); }
+
+Rml::String chaos_text(double chaos) { return amount_text(chaos) + "c"; }
+
+// "stack of 28" -> "Stack of 28"
+Rml::String capitalized(Rml::String s) {
+    if (!s.empty() && s[0] >= 'a' && s[0] <= 'z') s[0] = (char)(s[0] - 'a' + 'A');
+    return s;
+}
+
+Rml::String joined(const std::vector<Rml::String>& parts) {
+    Rml::String out;
+    for (const Rml::String& p : parts)
+        if (!p.empty()) out += (out.empty() ? "" : " \u00b7 ") + p;
+    return out;
+}
+
+// A poe.ninja price: chaos, or divines (and their worth in chaos) from one up.
+UiPriceRow ninja_row(const PriceLine& p) {
+    UiPriceRow r;
+    r.label = p.label.empty() ? "poe.ninja" : capitalized(p.label);
+    bool divine = p.divine >= 1.0;
+    Rml::String amount = amount_text(divine ? p.divine : p.chaos);
+    const char* id = price_icon(p);
+    if (icons_get(id)) {
+        r.main = amount;
+        r.icon = id;
+    } else {
+        r.main = amount + (divine ? " div" : "c");
+    }
+    if (divine) r.sub = chaos_text(p.chaos);
+    return r;
+}
+
+bool thin(const std::string& listed) { return !listed.empty() && atoi(listed.c_str()) < 5; }
 
 int count_listings(const PriceReply& reply) {
     int n = 0;
@@ -394,7 +451,6 @@ struct OverlayUi::Impl {
     bool keep_on_screen(const char* path, VkExtent2D extent);
     void mark_cut_mods();
     void sync_map(const PriceReply& reply, uint64_t check_id, Model& m);
-    void fill_prices(const PriceReply& reply, Model& m);
     void fill_preview(const TradeListing& l, UiListing& u);
     void place_sockets(const Rml::String& text, UiListing& u);
     // Map mod display order, fixed when a check opens so rows don't jump
@@ -457,11 +513,17 @@ bool OverlayUi::Impl::init(RmlRenderer* renderer) {
 
 void OverlayUi::Impl::bind_model() {
     Rml::DataModelConstructor c = context->CreateDataModel("ui");
-    if (auto h = c.RegisterStruct<UiPrice>()) {
-        h.RegisterMember("label", &UiPrice::label);
-        h.RegisterMember("main", &UiPrice::main);
-        h.RegisterMember("sub", &UiPrice::sub);
-        h.RegisterMember("icon", &UiPrice::icon);
+    if (auto h = c.RegisterStruct<UiPriceRow>()) {
+        h.RegisterMember("label", &UiPriceRow::label);
+        h.RegisterMember("main", &UiPriceRow::main);
+        h.RegisterMember("icon", &UiPriceRow::icon);
+        h.RegisterMember("sub", &UiPriceRow::sub);
+        h.RegisterMember("note", &UiPriceRow::note);
+        h.RegisterMember("meta", &UiPriceRow::meta);
+        h.RegisterMember("tag", &UiPriceRow::tag);
+        h.RegisterMember("answer", &UiPriceRow::answer);
+        h.RegisterMember("rule", &UiPriceRow::rule);
+        h.RegisterMember("stale", &UiPriceRow::stale);
     }
     if (auto h = c.RegisterStruct<UiFilter>()) {
         h.RegisterMember("index", &UiFilter::index);
@@ -496,6 +558,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("rect", &UiSprite::rect);
     }
     c.RegisterArray<Rml::Vector<UiSprite>>();
+    c.RegisterArray<Rml::Vector<Rml::String>>();
     if (auto h = c.RegisterStruct<UiListing>()) {
         h.RegisterMember("sockets", &UiListing::sockets);
         h.RegisterMember("has_preview", &UiListing::has_preview);
@@ -513,9 +576,17 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("age", &UiListing::age);
         h.RegisterMember("count", &UiListing::count);
         h.RegisterMember("icon", &UiListing::icon);
-        h.RegisterMember("tag", &UiListing::tag);
+        h.RegisterMember("gem_level", &UiListing::gem_level);
+        h.RegisterMember("gem_quality", &UiListing::gem_quality);
+        h.RegisterMember("cols", &UiListing::cols);
+        h.RegisterMember("old", &UiListing::old);
     }
-    c.RegisterArray<Rml::Vector<UiPrice>>();
+    if (auto h = c.RegisterStruct<UiColumn>()) {
+        h.RegisterMember("name", &UiColumn::name);
+        h.RegisterMember("full", &UiColumn::full);
+    }
+    c.RegisterArray<Rml::Vector<UiColumn>>();
+    c.RegisterArray<Rml::Vector<UiPriceRow>>();
     c.RegisterArray<Rml::Vector<UiFilter>>();
     if (auto h = c.RegisterStruct<UiGroup>()) {
         h.RegisterMember("label", &UiGroup::label);
@@ -523,7 +594,6 @@ void OverlayUi::Impl::bind_model() {
     }
     c.RegisterArray<Rml::Vector<UiGroup>>();
     c.RegisterArray<Rml::Vector<UiListing>>();
-    c.RegisterArray<Rml::Vector<Rml::String>>();
     if (auto h = c.RegisterStruct<UiMapStat>()) {
         h.RegisterMember("label", &UiMapStat::label);
         h.RegisterMember("value", &UiMapStat::value);
@@ -559,8 +629,6 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("state", &model.state);
     c.Bind("status", &model.status);
     c.Bind("status_error", &model.status_error);
-    c.Bind("source", &model.source);
-    c.Bind("thin", &model.thin);
     c.Bind("total", &model.total);
     c.Bind("hint", &model.hint);
     c.Bind("closable", &model.closable);
@@ -569,6 +637,8 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("base_preset", &model.base_preset);
     c.Bind("preset_base", &model.preset_base);
     c.Bind("corrupted_on", &model.corrupted_on);
+    c.Bind("six_link_offered", &model.six_link_offered);
+    c.Bind("six_link_on", &model.six_link_on);
     c.Bind("corrupted_label", &model.corrupted_label);
     c.Bind("corrupted_kind", &model.corrupted_kind);
     c.Bind("base_only", &model.base_only);
@@ -581,17 +651,15 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("profile", &model.profile);
     c.Bind("searching", &model.searching);
     c.Bind("has_url", &model.has_url);
-    c.Bind("prices", &model.prices);
+    c.Bind("price_rows", &model.price_rows);
+    c.Bind("price_foot", &model.price_foot);
+    c.Bind("foot_tag", &model.foot_tag);
     c.Bind("filter_groups", &model.filter_groups);
     c.Bind("listings", &model.listings);
-    c.Bind("has_summary", &model.has_summary);
-    c.Bind("low_value", &model.low_value);
-    c.Bind("summary_price", &model.summary_price);
-    c.Bind("summary_icon", &model.summary_icon);
-    c.Bind("summary_sub", &model.summary_sub);
-    c.Bind("summary_range", &model.summary_range);
-    c.Bind("ninja_icon", &model.ninja_icon);
-    c.Bind("ninja_meta", &model.ninja_meta);
+    c.Bind("gem_level_col", &model.gem_level_col);
+    c.Bind("gem_quality_col", &model.gem_quality_col);
+    c.Bind("list_cols", &model.list_cols);
+    c.Bind("list_more", &model.list_more);
     c.Bind("debug_lines", &model.debug_lines);
     c.Bind("can_switch", &model.can_switch);
     c.Bind("map_price", &model.map_price);
@@ -634,6 +702,9 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("toggle_corrupted", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->toggle_corrupted();
+    });
+    c.BindEventCallback("toggle_six_link", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->toggle_six_link();
     });
     c.BindEventCallback("search", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->search();
@@ -904,18 +975,20 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         if (m.preset_base) m.base_only = true;
         m.has_base = !reply->category_label.empty();
         m.corrupted_on = reply->corrupted != "any";
+        m.six_link_offered = reply->six_link_offered;
+        m.six_link_on = reply->six_link;
         m.corrupted_kind = reply->item_corrupted ? "yes" : "no";
         m.corrupted_label = reply->item_corrupted ? "Corrupted" : "Uncorrupted";
-        m.source = reply->league;
-        // A unique's poe.ninja price, which doesn't know its rolls.
-        fill_prices(*reply, m);
-        if (!reply->prices.empty()) {
-            const PriceLine& p = reply->prices[0];
-            m.ninja_icon = m.prices[0].icon;
-            const Rml::String& listed = p.listings;
-            if (!listed.empty() && atoi(listed.c_str()) < 5) m.thin = listed + " listed";
-            m.ninja_meta = (listed.empty() ? "" : listed + " listed \u00b7 ") + "poe.ninja";
-            if (item && item->rarity == "Unique") m.ninja_meta += " \u00b7 rolls not counted";
+        // A unique's poe.ninja price, which doesn't know its rolls, above the
+        // trade search's estimate (filled in below).
+        for (const PriceLine& p : reply->prices) m.price_rows.push_back(ninja_row(p));
+        if (!m.price_rows.empty()) {
+            const Rml::String& listed = reply->prices[0].listings;
+            UiPriceRow& last = m.price_rows.back();
+            last.meta = joined({listed.empty() ? "" : thousands(listed) + " listed",
+                                m.price_rows[0].label == "poe.ninja" ? "" : "poe.ninja",
+                                item && item->rarity == "Unique" ? "rolls not counted" : ""});
+            if (thin(listed)) last.tag = "thin";
         }
         // Groups in panel order; the top one takes its name from what's in it.
         auto has = [&](const char* section) {
@@ -967,37 +1040,124 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.filter_groups.erase(std::remove_if(m.filter_groups.begin(), m.filter_groups.end(),
                                              [](const UiGroup& g) { return g.filters.empty(); }),
                               m.filter_groups.end());
+        // Columns over the listings: a gem's level and quality, and what each
+        // listing has of the searched filters, in panel order, three at most.
+        // A column the same on every row (a gem level searched exactly, an
+        // item level all listings share) says nothing: it's left out.
+        auto value_of = [](const TradeListing& l, int index) -> std::string {
+            for (const auto& v : l.values)
+                if (v.first == index) return v.second;
+            return "";
+        };
+        auto varies = [&](auto&& get) {
+            std::set<std::string> seen;
+            for (const TradeListing& l : reply->listings) seen.insert(get(l));
+            seen.erase("");
+            return seen.size() > 1 || (seen.size() == 1 && reply->listings.size() == 1);
+        };
+        std::vector<int> cols;
+        int more = 0;
+        for (const UiGroup& g : m.filter_groups)
+            for (const UiFilter& f : g.filters) {
+                if (f.section == "gem" || !varies([&](const TradeListing& l) { return value_of(l, f.index); })) continue;
+                if (cols.size() < 3) cols.push_back(f.index);
+                else more++;
+            }
+        for (int index : cols)
+            for (const TradeFilter& f : reply->filters)
+                if (f.index == index) m.list_cols.push_back({f.column.empty() ? f.label : f.column, f.label});
+        if (more) m.list_more = "+" + std::to_string(more);
+
         for (const TradeListing& l : reply->listings) {
             UiListing u;
-            u.price = l.amount + " " + l.currency;
+            // The amount and its currency's icon; the name until the icon arrives.
+            u.price = l.amount;
+            if (icons_get(l.currency_id)) u.icon = l.currency_id;
+            else u.price += " " + l.currency;
             // Skip conversions too small to read ("0.0c").
             if (l.chaos >= 0.1 && l.currency != "Chaos Orb") u.sub = chaos_text(l.chaos);
             u.age = l.age;
             if (l.count > 1) u.count = "×" + std::to_string(l.count);
-            if (icons_get(l.currency_id)) u.icon = l.currency_id;
-            // A gem's level and quality, on its row (like APT's columns).
-            for (const auto& p : l.preview)
-                if (p.kind == "gem") u.tag = p.text;
+            // A gem's level and quality ("Level 20 · 23%"), each in its column.
+            for (const auto& p : l.preview) {
+                if (p.kind != "gem") continue;
+                const std::string& t = p.text;
+                if (size_t at = t.find("Level "); at != std::string::npos)
+                    u.gem_level = t.substr(at + 6, t.find_first_not_of("0123456789", at + 6) - (at + 6));
+                if (size_t pct = t.find('%'); pct != std::string::npos) {
+                    size_t start = t.find_last_not_of("0123456789", pct - 1) + 1;
+                    u.gem_quality = t.substr(start, pct + 1 - start);
+                }
+            }
+            for (int index : cols) {
+                std::string v = value_of(l, index);
+                u.cols.push_back(v.empty() ? "\u2013" : v);
+            }
+            // Listed a day or more ago (the newest of a group): often sold,
+            // or not really for sale.
+            int age = atoi(l.age.c_str());
+            size_t unit = l.age.find_first_not_of("0123456789");
+            char u_unit = unit == std::string::npos ? 0 : l.age[unit];
+            u.old = u_unit == 'd' || (u_unit == 'h' && age >= 24);
             fill_preview(l, u);
             m.listings.push_back(u);
         }
+        // A gem's level and quality columns, unless they're the same on every row.
+        auto gem_varies = [&](Rml::String UiListing::*field) {
+            std::set<Rml::String> seen;
+            for (const UiListing& u : m.listings)
+                if (!(u.*field).empty()) seen.insert(u.*field);
+            return seen.size() > 1 || (seen.size() == 1 && m.listings.size() == 1);
+        };
+        m.gem_level_col = gem_varies(&UiListing::gem_level);
+        m.gem_quality_col = gem_varies(&UiListing::gem_quality);
+        // The trade search's estimate: there before the search, so the card
+        // doesn't grow when it comes in.
+        UiPriceRow trade;
+        trade.label = "Trade";
+        trade.answer = true;
+        trade.rule = !m.price_rows.empty();
         if (reply->summary) {
             const TradeSummary& s = *reply->summary;
-            m.has_summary = true;
-            m.summary_price = (s.capped ? "≤ " : "≈ ") + s.amount + " " + s.currency;
-            if (icons_get(s.currency_id)) m.summary_icon = s.currency_id;
-            if (s.chaos >= 0.1 && s.currency != "Chaos Orb") m.summary_sub = chaos_text(s.chaos);
-            m.low_value = s.chaos >= 0 && s.chaos < 5;
-            m.summary_range = std::to_string(count_listings(*reply)) + " of " + thousands(reply->total) + " · " + s.range;
+            // "≤": the low end is old listings, likely sold or not for sale.
+            Rml::String amount = (s.capped ? "≤ " : "") + s.amount;
+            if (icons_get(s.currency_id)) {
+                trade.main = amount;
+                trade.icon = s.currency_id;
+            } else {
+                trade.main = amount + " " + s.currency;
+            }
+            if (s.chaos >= 0.1 && s.currency != "Chaos Orb") trade.sub = chaos_text(s.chaos);
+            // "15–19 Chaos Orb" -> "15–19": the icon above names the currency.
+            Rml::String range = s.range;
+            Rml::String suffix = " " + s.currency;
+            if (range.size() > suffix.size() && range.compare(range.size() - suffix.size(), suffix.size(), suffix) == 0)
+                range.resize(range.size() - suffix.size());
+            trade.meta = std::to_string(count_listings(*reply)) + " of " + thousands(reply->total) + " \u00b7 " + range;
+            trade.stale = m.stale;
+        } else {
+            trade.note = m.searching          ? "Searching…"
+                       : !m.searched          ? "Search to price this item"
+                       : m.listings.empty()   ? "No listings"
+                                              : "No estimate";
         }
+        m.price_rows.push_back(trade);
     } else if (reply->status == "ok") {
         m.state = "prices";
-        fill_prices(*reply, m);
+        // One row per price: a single price, a currency's "each" and its
+        // stack's total (the answer), or an item's variants side by side.
+        for (const PriceLine& p : reply->prices) m.price_rows.push_back(ninja_row(p));
+        for (size_t i = 0; i < m.price_rows.size(); i++) {
+            UiPriceRow& r = m.price_rows[i];
+            r.answer = m.price_rows.size() == 1 || r.label.rfind("Stack of", 0) == 0;
+            r.rule = r.answer && i > 0;
+        }
         Rml::String listed = reply->prices.empty() ? "" : reply->prices[0].listings;
-        bool thin = !listed.empty() && atoi(listed.c_str()) < 5;
-        if (thin) m.thin = listed + " listed · thin";
-        m.source = (!listed.empty() && !thin ? listed + " listed · " : "") + "poe.ninja · " + reply->league;
-        if (reply->age_minutes >= 0) m.source += " · " + std::to_string(reply->age_minutes) + " min ago";
+        bool named = std::any_of(m.price_rows.begin(), m.price_rows.end(),
+                                 [](const UiPriceRow& r) { return r.label == "poe.ninja"; });
+        m.price_foot = joined({listed.empty() ? "" : thousands(listed) + " listed", named ? "" : "poe.ninja", reply->league,
+                               reply->age_minutes >= 0 ? std::to_string(reply->age_minutes) + " min ago" : ""});
+        if (thin(listed)) m.foot_tag = "thin";
     } else {
         m.state = "status";
         m.status = !reply->message.empty() ? reply->message : reply->status;
@@ -1278,21 +1438,6 @@ void OverlayUi::Impl::place_sockets(const Rml::String& text, UiListing& u) {
         bool across = std::abs(centres[i].x - centres[i - 1].x) > 1;
         float w = (across ? 38 : 15) * scale, h = (across ? 15 : 38) * scale;
         u.sockets.push_back({mid.x - w / 2, mid.y - h / 2, w, h, across ? "175 0 38 15" : "175 15 15 38"});
-    }
-}
-
-void OverlayUi::Impl::fill_prices(const PriceReply& reply, Model& m) {
-    for (const PriceLine& p : reply.prices) {
-        UiPrice u;
-        u.label = p.label;
-        if (p.divine >= 1.0) {
-            u.main = format(p.divine >= 10 ? "%.0f div" : "%.1f div", p.divine);
-            u.sub = chaos_text(p.chaos);
-        } else {
-            u.main = chaos_text(p.chaos);
-        }
-        if (const char* id = price_icon(p); icons_get(id)) u.icon = id;
-        m.prices.push_back(u);
     }
 }
 
