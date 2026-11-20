@@ -1110,8 +1110,19 @@ void OverlayUi::Impl::update_toast(PriceCheck& pc, VkExtent2D extent) {
 // (left half) right against the stash's right edge. PoE's side panels are
 // 986/1600 of the window height wide.
 void OverlayUi::Impl::place(PriceCheck& pc, VkExtent2D extent) {
+    const char* was_shown = shown_panel;
     shown_panel = panel_doc(pc);
-    if (pc.check_id() == placed_check) return;
+    if (pc.check_id() == placed_check) {
+        // Switching between price and map check: the other panel opens where
+        // this one is, which is where it was dragged to.
+        auto from = docs.find(was_shown), to = docs.find(shown_panel);
+        if (shown_panel == was_shown || from == docs.end() || to == docs.end()) return;
+        Rml::Vector2f pos = from->second->GetAbsoluteOffset(Rml::BoxArea::Border);
+        to->second->SetClass("preview-right", from->second->IsClassSet("preview-right"));
+        to->second->SetProperty(Rml::PropertyId::Left, Rml::Property(pos.x, Rml::Unit::PX));
+        to->second->SetProperty(Rml::PropertyId::Top, Rml::Property(pos.y, Rml::Unit::PX));
+        return;
+    }
     placed_check = pc.check_id();
     auto it = docs.find(shown_panel);
     float ax, ay;
