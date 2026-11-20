@@ -35,6 +35,10 @@ constexpr int kStopLooking = 3;
 constexpr auto kRetryLoading = std::chrono::seconds(2);
 // Tracking: how well the plate and name must match where they're looked for.
 constexpr float kTrackScore = 0.7f;
+// A tooltip partly off screen is tracked by what's on it: at least this
+// much of the template, and of its width and height.
+constexpr float kMinVisible = 0.35f;
+constexpr float kMinVisibleSide = 0.4f;
 // A display seen again within this long is recognised by its name's
 // pixels and shows its price at once; it's read again all the same, since
 // name bands look much alike (the frame around the name is the same on
@@ -122,34 +126,79 @@ namespace {
 
 // Where a plate is in a region (grey, full size): coarse at quarter size
 // everywhere, then at half size around the best, then to the pixel.
+// Normalized cross-correlation of a template (any mean) with the part of it
+// inside the image, at (x, y), which may be partly outside: -2 if less than
+// kMinVisible of it is in.
+float ncc_clipped(const uint8_t* img, int iw, int ih, const std::vector<float>& t, int tw, int th, int x, int y) {
+    int x0 = std::max(0, -x), y0 = std::max(0, -y), x1 = std::min(tw, iw - x), y1 = std::min(th, ih - y);
+    if (x1 <= x0 || y1 <= y0) return -2;
+    int n = (x1 - x0) * (y1 - y0);
+    if (n < kMinVisible * tw * th) return -2;
+    double sv = 0, svv = 0, st = 0, stt = 0, svt = 0;
+    for (int ty = y0; ty < y1; ty++) {
+        const uint8_t* row = img + (size_t)(y + ty) * iw + x;
+        const float* trow = t.data() + (size_t)ty * tw;
+        for (int tx = x0; tx < x1; tx++) {
+            double v = row[tx], tv = trow[tx];
+            sv += v;
+            svv += v * v;
+            st += tv;
+            stt += tv * tv;
+            svt += v * tv;
+        }
+    }
+    double vv = svv - sv * sv / n, tt = stt - st * st / n;
+    if (vv < 1 || tt < 1e-6) return 0;
+    return (float)((svt - sv * st / n) / std::sqrt(vv * tt));
+}
+
+// The best place for template `t` in image `g` (w x h, a level of region `r`
+// shrunk by `k`) within [x_lo, x_hi] x [y_lo, y_hi], which may run past the
+// image where the screen cuts the region. In-image places take the fast path.
+float best_in(const uint8_t* g, int w, int h, const ScreenScan::Template& t, int x_lo, int x_hi, int y_lo, int y_hi,
+              int* bx, int* by) {
+    float best = -2;
+    for (int y = y_lo; y <= y_hi; y++)
+        for (int x = x_lo; x <= x_hi; x++) {
+            bool inside = x >= 0 && y >= 0 && x + t.w <= w && y + t.h <= h;
+            float s = inside ? ncc(g, w, t.v, t.norm, t.w, t.h, x, y) : ncc_clipped(g, w, h, t.v, t.w, t.h, x, y);
+            if (s > best) best = s, *bx = x, *by = y;
+        }
+    return best;
+}
+
+// How far a template (tw x th) may start, in an image w x h, on a region cut
+// by the screen on some sides: past a cut side, as long as enough stays in.
+void place_range(const ScreenScan::Region& r, int w, int h, int tw, int th, int* x_lo, int* x_hi, int* y_lo,
+                 int* y_hi) {
+    int hang_x = (int)(tw * (1 - kMinVisibleSide)), hang_y = (int)(th * (1 - kMinVisibleSide));
+    *x_lo = r.cut_left ? -hang_x : 0;
+    *x_hi = r.cut_right ? w - tw + hang_x : w - tw;
+    *y_lo = r.cut_top ? -hang_y : 0;
+    *y_hi = r.cut_bottom ? h - th + hang_y : h - th;
+}
+
 ScreenScan::Match match_plate(const ScreenScan::Plate& p, const ScreenScan::Region& r, const uint8_t* g1) {
     ScreenScan::Match m;
-    int w4, h4, w2, h2;
+    int w4, h4, w2, h2, lo_x, hi_x, lo_y, hi_y;
+    // Coarse at quarter size, everywhere in the region...
     std::vector<uint8_t> g4 = shrink(g1, r.w, r.h, 4, &w4, &h4);
-    float best = -2;
     int bx = 0, by = 0;
-    for (int y = 0; y + p.t4.h <= h4; y++)
-        for (int x = 0; x + p.t4.w <= w4; x++) {
-            float s = ncc(g4.data(), w4, p.t4.v, p.t4.norm, p.t4.w, p.t4.h, x, y);
-            if (s > best) best = s, bx = x, by = y;
-        }
+    place_range(r, w4, h4, p.t4.w, p.t4.h, &lo_x, &hi_x, &lo_y, &hi_y);
+    if (best_in(g4.data(), w4, h4, p.t4, lo_x, hi_x, lo_y, hi_y, &bx, &by) <= -2) return m;
+    // ...then at half size around it...
     std::vector<uint8_t> g2 = shrink(g1, r.w, r.h, 2, &w2, &h2);
-    float half = -2;
     int hx = bx * 2, hy = by * 2;
-    for (int y = std::max(0, by * 2 - 2); y <= std::min(h2 - p.t2.h, by * 2 + 2); y++)
-        for (int x = std::max(0, bx * 2 - 2); x <= std::min(w2 - p.t2.w, bx * 2 + 2); x++) {
-            float s = ncc(g2.data(), w2, p.t2.v, p.t2.norm, p.t2.w, p.t2.h, x, y);
-            if (s > half) half = s, hx = x, hy = y;
-        }
+    place_range(r, w2, h2, p.t2.w, p.t2.h, &lo_x, &hi_x, &lo_y, &hi_y);
+    float half = best_in(g2.data(), w2, h2, p.t2, std::max(lo_x, bx * 2 - 2), std::min(hi_x, bx * 2 + 2),
+                         std::max(lo_y, by * 2 - 2), std::min(hi_y, by * 2 + 2), &hx, &hy);
     m.score = half;
     if (half < kTrackScore) return m;
-    float full = -2;
+    // ...and to the pixel at full size.
     int fx = hx * 2, fy = hy * 2;
-    for (int y = std::max(0, hy * 2 - 1); y <= std::min(r.h - p.t1.h, hy * 2 + 1); y++)
-        for (int x = std::max(0, hx * 2 - 1); x <= std::min(r.w - p.t1.w, hx * 2 + 1); x++) {
-            float s = ncc(g1, r.w, p.t1.v, p.t1.norm, p.t1.w, p.t1.h, x, y);
-            if (s > full) full = s, fx = x, fy = y;
-        }
+    place_range(r, r.w, r.h, p.t1.w, p.t1.h, &lo_x, &hi_x, &lo_y, &hi_y);
+    float full = best_in(g1, r.w, r.h, p.t1, std::max(lo_x, hx * 2 - 1), std::min(hi_x, hx * 2 + 1),
+                         std::max(lo_y, hy * 2 - 1), std::min(hi_y, hy * 2 + 1), &fx, &fy);
     m.found = true;
     m.score = full;
     m.x = (float)(r.x + fx);
@@ -607,11 +656,17 @@ std::vector<ScreenScan::Region> ScreenScan::regions_wanted() const {
         int m = unsure ? std::max(96, (int)t.h * 2) : std::max({24, (int)t.h / 2, (int)(speed * 0.06f)});
         Region r;
         r.id = t.id;
-        r.x = std::max(0, (int)ex - m);
-        r.y = std::max(0, (int)ey - m);
-        r.w = std::min(extent_w_, (int)(ex + t.w) + m) - r.x;
-        r.h = std::min(extent_h_, (int)(ey + t.th) + m) - r.y;
-        if (r.w >= t.w && r.h >= t.th) out.push_back(r);
+        int x0 = (int)ex - m, y0 = (int)ey - m, x1 = (int)(ex + t.w) + m, y1 = (int)(ey + t.th) + m;
+        r.x = std::max(0, x0);
+        r.y = std::max(0, y0);
+        r.w = std::min(extent_w_, x1) - r.x;
+        r.h = std::min(extent_h_, y1) - r.y;
+        // Cut by the screen: matched on the part that's on it.
+        r.cut_left = x0 < 0;
+        r.cut_top = y0 < 0;
+        r.cut_right = x1 > extent_w_;
+        r.cut_bottom = y1 > extent_h_;
+        if (r.w >= t.w * kMinVisibleSide && r.h >= t.th * kMinVisibleSide) out.push_back(r);
     }
     return out;
 }

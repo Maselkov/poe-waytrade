@@ -42,7 +42,9 @@ layout(std430, set = 0, binding = 3) writeonly buffer Results { vec4 result[]; }
 // and position (low 12 bits): atomicMax keeps the best. Zeroed by stage 2.
 layout(std430, set = 0, binding = 4) coherent buffer Best { uint best[]; };
 
-shared float s_sum[64], s_sq[64], s_dot[64];
+// Sums over the template's samples on screen: image, image², template,
+// template², image x template, count.
+shared float s_v[64], s_vv[64], s_t[64], s_tt[64], s_vt[64], s_n[64];
 
 float grey(vec2 p) {
     vec3 c = texture(frame, p / vec2(width, height)).rgb;
@@ -61,41 +63,54 @@ float best_score(uint b) { return float(b >> 12) / 1048575.0 * 2.0 - 1.0; }
 int best_index(uint b) { return int(b & 4095u); }
 
 // This workgroup's NCC of a template (step: its pixel in frame pixels) at
-// `at`, on every `rows`-th row of it; every invocation gets the result.
-float ncc(int offset, int tw, int th, float norm, int step_, int rows, vec2 at) {
+// `at`, on every `rows`-th row of it, over its samples on screen (a tooltip
+// partly off the edge is matched on what's left; under 35% of it on
+// screen scores -1); every invocation gets the result.
+float ncc(int offset, int tw, int th, int step_, int rows, vec2 at) {
     uint lid = gl_LocalInvocationID.x;
-    float sum = 0.0, sq = 0.0, d = 0.0;
+    float sv = 0.0, svv = 0.0, st = 0.0, stt = 0.0, svt = 0.0, n = 0.0;
     int used = (th + rows - 1) / rows;
+    vec2 size = vec2(width, height);
     for (int k = int(lid); k < tw * used; k += 64) {
         int i = (k / tw) * rows * tw + k % tw;  // template index
         vec2 p = at + vec2(i % tw, i / tw) * float(step_);
-        float v;
-        // The 2x2 pixels at a half-size template pixel; at a quarter-size
-        // one, the middle 2x2 of its 4x4 (close enough for the coarse pass,
-        // and a quarter of the samples).
-        v = step_ == 2 ? grey(p + 1.0)
-                       : 0.25 * (grey(p + vec2(1, 1)) + grey(p + vec2(3, 1)) + grey(p + vec2(1, 3)) + grey(p + vec2(3, 3)));
-        sum += v;
-        sq += v * v;
-        d += v * templ[offset + i];
+        // The template pixel's frame pixels must all be on screen.
+        if (p.x < 0.0 || p.y < 0.0 || p.x + float(step_) > size.x || p.y + float(step_) > size.y) continue;
+        float v = step_ == 2 ? grey(p + 1.0)
+                             : 0.25 * (grey(p + vec2(1, 1)) + grey(p + vec2(3, 1)) + grey(p + vec2(1, 3)) +
+                                       grey(p + vec2(3, 3)));
+        float t = templ[offset + i];
+        sv += v;
+        svv += v * v;
+        st += t;
+        stt += t * t;
+        svt += v * t;
+        n += 1.0;
     }
-    s_sum[lid] = sum;
-    s_sq[lid] = sq;
-    s_dot[lid] = d;
+    s_v[lid] = sv;
+    s_vv[lid] = svv;
+    s_t[lid] = st;
+    s_tt[lid] = stt;
+    s_vt[lid] = svt;
+    s_n[lid] = n;
     for (uint s = 32; s > 0; s >>= 1) {
         barrier();
         if (lid < s) {
-            s_sum[lid] += s_sum[lid + s];
-            s_sq[lid] += s_sq[lid + s];
-            s_dot[lid] += s_dot[lid + s];
+            s_v[lid] += s_v[lid + s];
+            s_vv[lid] += s_vv[lid + s];
+            s_t[lid] += s_t[lid + s];
+            s_tt[lid] += s_tt[lid + s];
+            s_vt[lid] += s_vt[lid + s];
+            s_n[lid] += s_n[lid + s];
         }
     }
     barrier();
-    float n = float(tw * used);
-    float var = s_sq[0] - s_sum[0] * s_sum[0] / n;
-    if (var < 1.0 || norm < 1e-3) return -1.0;
-    // The template's norm is over all its rows: scale it to the rows used.
-    return s_dot[0] / (sqrt(var) * norm * sqrt(float(used) / float(th)));
+    float total = s_n[0];
+    if (total < 0.35 * float(tw * used)) return -1.0;
+    float vv = s_vv[0] - s_v[0] * s_v[0] / total;
+    float tt = s_tt[0] - s_t[0] * s_t[0] / total;
+    if (vv < 1.0 || tt < 1e-6) return -1.0;
+    return (s_vt[0] - s_v[0] * s_t[0] / total) / sqrt(vv * tt);
 }
 
 void main() {
@@ -110,14 +125,14 @@ void main() {
         if (pos >= side0 * side0) return;
         vec2 at = base + vec2(pos % side0, pos / side0) * 4.0 - float(radius);
         // Every other row: the coarse pass only has to land within 2 pixels.
-        float score = ncc(s.offset4, s.tw4, s.th4, s.norm4, 4, 2, at);
+        float score = ncc(s.offset4, s.tw4, s.th4, 4, 2, at);
         if (gl_LocalInvocationID.x == 0) atomicMax(best[slot * 2], pack_best(score, pos));
     } else if (pc.stage == 1) {
         if (pos >= 25) return;
         int coarse = best_index(best[slot * 2]);
         vec2 found = base + vec2(coarse % side0, coarse / side0) * 4.0 - float(radius);
         vec2 at = found + vec2(pos % 5 - 2, pos / 5 - 2);
-        float score = ncc(s.offset2, s.tw2, s.th2, s.norm2, 2, 1, at);
+        float score = ncc(s.offset2, s.tw2, s.th2, 2, 1, at);
         if (gl_LocalInvocationID.x == 0) atomicMax(best[slot * 2 + 1], pack_best(score, pos));
     } else {
         if (gl_LocalInvocationID.x != 0 || pos != 0) return;

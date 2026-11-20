@@ -44,7 +44,10 @@ void main() {
         for (int i = 0; i < count; i++) {
             vec4 r = slots[i].rect;
             if (pos.x >= r.x - 2.0 && pos.x <= r.z + 2.0 && pos.y >= r.y - 2.0 && pos.y <= r.w + 2.0) {
-                if (result[i].w > 0.5) pos += result[i].xy;
+                // Kept on screen, like the layout keeps it: a tooltip partly
+                // past the edge doesn't take its tag with it.
+                if (result[i].w > 0.5)
+                    pos += clamp(result[i].xy, -r.xy, vec2(width, height) - r.zw);
                 break;
             }
         }

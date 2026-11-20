@@ -53,6 +53,9 @@ public:
     struct Region {
         uint64_t id = 0;  // the tooltip's
         int x = 0, y = 0, w = 0, h = 0;
+        // Sides cut by the screen's edge: the tooltip may be partly past
+        // them, and is matched on what's on screen.
+        bool cut_left = false, cut_top = false, cut_right = false, cut_bottom = false;
     };
     std::vector<Region> regions_wanted() const;
     // The regions asked for (same order), as the swapchain's pixels, from
