@@ -41,12 +41,14 @@ const PLATE_WIDTHS: (f32, f32) = (4.0, 30.0);
 /// lines need).
 const CROP_WIDTH: f32 = 2.3;
 const CROP_HEIGHT: f32 = 11.0;
-/// The curio display plate, as the game draws it at 1080 pixels high (grey;
-/// the plate's inside, without its edges, averaged over the two in a Grand
-/// Heist screenshot so it isn't one plate's lighting). On half-size frames
-/// they score 0.7-0.8, anything else under 0.5.
+/// The curio display plate (grey; the plate's inside, without its edges,
+/// averaged over the two in a Grand Heist screenshot so it isn't one
+/// plate's lighting), at its size in frames CURIO_HEIGHT_AT high: measured
+/// in a 1440p game, where it's 1.35 times this. It's sensitive to scale (2%
+/// off costs a lot of its score). On half-size frames real plates score
+/// 0.75-0.9, anything else under 0.5.
 const CURIO_PNG: &[u8] = include_bytes!("../assets/curio-plate.png");
-const CURIO_HEIGHT_AT: f32 = 1080.0;
+const CURIO_HEIGHT_AT: f32 = 1440.0 / 1.35;
 const CURIO_SCORE: f32 = 0.6;
 /// A curio display's tooltip is about three times its plate's width, and
 /// tall (weapons list many lines): its crop, in frame heights.
@@ -138,11 +140,29 @@ fn find_art(
     let full = Template::new(&art.resized(tw, th));
     let coarse = Template::new(&art.resized(hw, hh));
     let mut candidates: Vec<(f32, usize, usize)> = Vec::new();
-    for y in 0..=half.height - hh {
-        for x in 0..=half.width - hw {
-            let s = score(half, half_ii, &coarse, x, y);
-            if s >= COARSE_SCORE {
-                candidates.push((s, x * 2, y * 2));
+    if hw >= 24 && hh >= 8 {
+        // A big template (the curio plate): coarser still first, a quarter of
+        // the work per place and a quarter of the places, then each
+        // candidate's best spot nearby at half.
+        let quarter = half.resized(half.width / 2, half.height / 2);
+        let quarter_ii = Integral::new(&quarter);
+        let rough = Template::new(&art.resized(hw / 2, hh / 2));
+        for y in 0..=quarter.height.saturating_sub(hh / 2) {
+            for x in 0..=quarter.width.saturating_sub(hw / 2) {
+                if score(&quarter, &quarter_ii, &rough, x, y) >= COARSE_SCORE - 0.1
+                    && let Some(b) = best_near(half, half_ii, &coarse, x * 2, y * 2, 2).filter(|b| b.0 >= COARSE_SCORE)
+                {
+                    candidates.push((b.0, b.1 * 2, b.2 * 2));
+                }
+            }
+        }
+    } else {
+        for y in 0..=half.height - hh {
+            for x in 0..=half.width - hw {
+                let s = score(half, half_ii, &coarse, x, y);
+                if s >= COARSE_SCORE {
+                    candidates.push((s, x * 2, y * 2));
+                }
             }
         }
     }
@@ -587,6 +607,15 @@ pub fn read_item(
     Ok(ScreenItem { item, stored_experience, lines: texts })
 }
 
+/// Whether any of these lines is an item's name (a unique's or a base's),
+/// even though read_item couldn't make an item of them.
+pub fn names_an_item(lines: &[Line], vocabulary: &Vocabulary) -> bool {
+    lines.iter().take(4).any(|l| {
+        vocabulary.closest(&vocabulary.uniques, &l.text).is_some()
+            || vocabulary.closest(&vocabulary.bases, &l.text).is_some()
+    })
+}
+
 /// "LEVEL: 4 (MAX)" after "LEVEL" -> "4 (MAX)". A colon OCR dropped is fine;
 /// another word after the label isn't ("LEVEL" doesn't start "REQUIRES
 /// LEVEL 40", nor "LEVELLED ...").
@@ -745,7 +774,14 @@ mod tests {
     #[test]
     fn nothing_known() {
         let v = vocabulary();
-        assert!(read_item(&lines(&["ATTACK, PROJECTILE", "HITS ENEMIES"]), &v, |_| None).is_err());
+        let ls = lines(&["ATTACK, PROJECTILE", "HITS ENEMIES"]);
+        assert!(read_item(&ls, &v, |_| None).is_err());
+        assert!(!names_an_item(&ls, &v));
+        // A unique's name without its base (the rest covered): not an item
+        // yet, but one to read again.
+        let covered = lines(&["MOTHER'S EMBRACE", "00:00"]);
+        assert!(read_item(&covered, &v, |_| None).is_err());
+        assert!(names_an_item(&covered, &v));
     }
 
     #[test]
@@ -823,6 +859,22 @@ mod tests {
         let lower = curios.iter().find(|p| p.y > 300.0).unwrap();
         let (cx, cy, cw, ch) = lower.crop;
         assert!(cx <= 175 && cx + cw >= 715 && cy <= 450 && cy + ch >= 880, "{:?}", lower.crop);
+    }
+
+    /// Half of a frame recorded in a Grand Heist at 3456x1440: three curio
+    /// displays (Vortex Remnant, Replica Veil of the Night, Soul Remnant).
+    #[test]
+    fn finds_curio_plates_in_game() {
+        let (rgb, w, h) = load_png("heist-half.png");
+        let gray = Gray { width: w, height: h, pixels: rgb.chunks(3).map(|p| p[0]).collect() };
+        let started = std::time::Instant::now();
+        let plates = find_plates(&gray, 3456, 1440);
+        eprintln!("found {plates:?} in {}ms", started.elapsed().as_millis());
+        let near = |x: f32, y: f32| {
+            plates.iter().any(|p| p.kind == PlateKind::Curio && (p.x - x).abs() < 8.0 && (p.y - y).abs() < 8.0)
+        };
+        assert!(near(1472.0, 122.0) && near(314.0, 826.0) && near(2118.0, 554.0), "{plates:?}");
+        assert_eq!(plates.len(), 3, "{plates:?}");
     }
 
     #[test]

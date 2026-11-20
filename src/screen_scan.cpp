@@ -40,6 +40,8 @@ constexpr int kHideAfter = 8;
 constexpr int kStopLooking = kHideAfter;
 // The daemon is still loading prices or names: ask again after this.
 constexpr auto kRetryLoading = std::chrono::seconds(2);
+// A display read as partly hidden: read again (from a newer frame) after this.
+constexpr auto kReread = std::chrono::seconds(1);
 // Tracking: how well the plate and name must match where they're looked for.
 constexpr float kTrackScore = 0.7f;
 // A tooltip partly off screen is tracked by what's on it: at least this
@@ -371,6 +373,12 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
                 t.retry_at = now + kRetryLoading;
                 continue;
             }
+            if (reply.status == "unreadable") {
+                // Covered by another tooltip: crop it again from a later frame.
+                t.reread_at = now + kReread;
+                t.request.clear();
+                continue;
+            }
             std::string lines;
             for (const auto& l : reply.lines) lines += (lines.empty() ? "" : " | ") + l;
             poe_log("displays: %s %s (%s) %s%s%s [%s]", reply.status.c_str(), reply.title.c_str(),
@@ -543,6 +551,18 @@ void ScreenScan::poll_find(Clock::time_point now) {
             changed();
         }
     }
+    // Partly hidden displays, cropped again from this frame where they are.
+    for (Tracked& t : tracked_) {
+        if (!t.reread_at || now < *t.reread_at || t.lost != 0 || t.replied) continue;
+        float tx, ty;
+        then(t, &tx, &ty);
+        int px = (int)tx, py = (int)ty, cx = px + t.crop_dx, cy = py + t.crop_dy;
+        int x0 = std::max(0, cx), y0 = std::max(0, cy);
+        int x1 = std::min(frame_w_, cx + t.crop_w), y1 = std::min(frame_h_, cy + t.crop_h);
+        if (x1 - x0 < t.crop_w / 2 || y1 - y0 < t.crop_h / 4 || px < x0 || py < y0) continue;
+        t.request_job = crop_request(x0, y0, x1 - x0, y1 - y0, px, py, (int)t.w, (int)t.h);
+        t.reread_at.reset();
+    }
 }
 
 namespace {
@@ -626,15 +646,12 @@ bool ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now)
         break;
     }
 
-    // Its tooltip's pixels, to read and price (encoded off the game's thread).
-    std::vector<uint8_t> crop((size_t)cw * ch * 3);
-    for (int y = 0; y < ch; y++)
-        memcpy(&crop[(size_t)y * cw * 3], &frame_[((size_t)(cy + y) * frame_w_ + cx) * 3], (size_t)cw * 3);
-    char header[96];
-    snprintf(header, sizeof header, "%d %d %d %d %d %d", cw, ch, px - cx, py - cy, pw, ph);
-    t.request_job = std::async(std::launch::async, [crop = std::move(crop), header = std::string(header)]() {
-        return "SCANITEM\n" + header + "\n" + base64_encode(crop.data(), crop.size());
-    });
+    // Its tooltip's pixels, to read and price.
+    t.crop_dx = cx - px;
+    t.crop_dy = cy - py;
+    t.crop_w = cw;
+    t.crop_h = ch;
+    t.request_job = crop_request(cx, cy, cw, ch, px, py, pw, ph);
     t.client = std::make_unique<DaemonClient>();
     t.retry_at = now;
     if (!t.verify) poe_log("displays: plate at %d,%d (%dx%d)", px, py, pw, ph);
@@ -700,6 +717,18 @@ void ScreenScan::dedupe() {
     std::erase_if(remembered_, [&](const Remembered& r) {
         std::string k = identity(r.reply);
         return !k.empty() && std::any_of(tracked_.begin(), tracked_.end(), [&](const Tracked& t) { return known(t) == k; });
+    });
+}
+
+std::future<std::string> ScreenScan::crop_request(int cx, int cy, int cw, int ch, int px, int py, int pw,
+                                                   int ph) const {
+    std::vector<uint8_t> crop((size_t)cw * ch * 3);
+    for (int y = 0; y < ch; y++)
+        memcpy(&crop[(size_t)y * cw * 3], &frame_[((size_t)(cy + y) * frame_w_ + cx) * 3], (size_t)cw * 3);
+    char header[96];
+    snprintf(header, sizeof header, "%d %d %d %d %d %d", cw, ch, px - cx, py - cy, pw, ph);
+    return std::async(std::launch::async, [crop = std::move(crop), header = std::string(header)]() {
+        return "SCANITEM\n" + header + "\n" + base64_encode(crop.data(), crop.size());
     });
 }
 

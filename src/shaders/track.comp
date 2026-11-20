@@ -142,7 +142,13 @@ void main() {
         int fine = best_index(b1);
         vec2 at = found + vec2(fine % 5 - 2, fine / 5 - 2);
         float score = best_score(b1);
-        result[slot] = vec4(at - s.laid, score, b1 != 0u && score >= 0.7 ? 1.0 : 0.0);
+        // A clear match anywhere in the window; a weaker one (a dip: smoke,
+        // a covering label) only right where the CPU expects it, since two
+        // displays' plates can look nearly alike (two trinkets: 0.69) but
+        // aren't that close together. Else the label stays where the CPU
+        // put it.
+        bool found_it = b1 != 0u && (score >= 0.7 || (score >= 0.55 && length(at - s.laid) < 12.0));
+        result[slot] = vec4(at - s.laid, score, found_it ? 1.0 : 0.0);
         best[slot * 2] = 0u;
         best[slot * 2 + 1] = 0u;
     }

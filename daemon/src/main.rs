@@ -42,7 +42,9 @@
 //!             bits a channel), the plate's box within it: the item in that
 //!             tooltip, read and priced (poe.ninja, or a trade search for
 //!             what it hasn't: Facetor's Lens, rare trinkets)
-//!   response: status   ok | not_found | no_item | loading | error
+//!   response: status   ok | not_found | no_item | unreadable | loading | error
+//!              (unreadable: an item's name, but too little else to tell:
+//!              another tooltip covers it; no_item: not an item's tooltip)
 //!     title    <item name>
 //!     detail   <what else was read, e.g. "level 4, 23%, corrupted">
 //!     value    <chaos> <divine> <short text, "3.2 div"> <ninja|trade>
@@ -1077,7 +1079,13 @@ fn scan_item(state: &State, request: &str) -> String {
         Ok(read) => read,
         Err(e) => {
             eprintln!("scan: {e} ({}ms)", started.elapsed().as_millis());
-            let mut out = "status\tno_item\nmessage\tNo item recognised\n".to_string();
+            // A known name with the rest missing (another tooltip covers
+            // it): worth reading again later. Else not an item's tooltip.
+            let mut out = if scan::names_an_item(&lines, &vocabulary) {
+                "status\tunreadable\nmessage\tPartly hidden\n".to_string()
+            } else {
+                "status\tno_item\nmessage\tNo item recognised\n".to_string()
+            };
             for l in &lines {
                 let _ = writeln!(out, "line\t{}", clean(&l.text));
             }

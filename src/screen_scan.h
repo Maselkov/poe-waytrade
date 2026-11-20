@@ -23,6 +23,7 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -150,6 +151,11 @@ private:
         std::unique_ptr<DaemonClient> client;
         std::string request;  // SCANITEM, kept to ask again while the daemon loads
         std::future<std::string> request_job;  // making `request`
+        // Its crop, relative to the plate (to crop it again).
+        int crop_dx = 0, crop_dy = 0, crop_w = 0, crop_h = 0;
+        // Read as partly hidden (another tooltip over it): read again from a
+        // later frame, from this time.
+        std::optional<Clock::time_point> reread_at;
         Clock::time_point retry_at;
         // The reply is a remembered display's, by the look of its name: read
         // it anyway, and take what that says.
@@ -173,6 +179,9 @@ private:
     void poll_find(Clock::time_point now);
     // False if it wasn't added: a plate known not to be an item's.
     bool add_plate(const std::array<float, 8>& p, Clock::time_point now);
+    // SCANITEM for a crop of frame_ (its plate's box within it), made off
+    // the game's thread.
+    std::future<std::string> crop_request(int cx, int cy, int cw, int ch, int px, int py, int pw, int ph) const;
     void forget(Tracked& t);
     // One tag per display and per item (vault displays never repeat one).
     void dedupe();
