@@ -94,7 +94,8 @@ public:
         std::vector<float> v;
         float norm = 0;
     };
-    // The plate as first seen: tracked by, at quarter, half and full size.
+    // The plate and the name under it as first seen: tracked by, at
+    // quarter, half and full size.
     struct Plate {
         Template t4, t2, t1;
     };
@@ -111,6 +112,10 @@ private:
     struct Tracked {
         uint64_t id = 0;
         float x = 0, y = 0, w = 0, h = 0;  // the plate (full-size pixels)
+        // What it's tracked by: the plate and the item's name under it (the
+        // plates all read "Forbidden Reliquary": alone, they'd let a tag
+        // wander to the next display). Its height (full-size pixels).
+        float th = 0;
         std::shared_ptr<const Plate> plate;
         // The item's name under the plate (quarter size): how a display seen
         // again is told from the other displays, whose plates are alike.
@@ -140,6 +145,9 @@ private:
         // The reply is a remembered display's, by the look of its name: read
         // it anyway, and take what that says.
         bool verify = false;
+        // Another tracked display shows the same item (that one's tag is
+        // shown): kept, so SCANFIND doesn't add it again, but not shown.
+        bool duplicate = false;
         bool replied = false;
         PriceReply reply;
     };
@@ -156,6 +164,8 @@ private:
     void poll_find(Clock::time_point now);
     void add_plate(const std::array<float, 8>& p, Clock::time_point now);
     void forget(Tracked& t);
+    // One tag per display and per item (vault displays never repeat one).
+    void dedupe();
     void apply(const Match& m);
     // The tracking thread: matches regions off the game's thread.
     struct Worker;

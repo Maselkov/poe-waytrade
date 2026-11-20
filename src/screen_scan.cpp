@@ -33,8 +33,8 @@ constexpr int kHideAfter = 8;
 constexpr int kStopLooking = 3;
 // The daemon is still loading prices or names: ask again after this.
 constexpr auto kRetryLoading = std::chrono::seconds(2);
-// Tracking: how well the plate must match where it's looked for.
-constexpr float kTrackScore = 0.6f;
+// Tracking: how well the plate and name must match where they're looked for.
+constexpr float kTrackScore = 0.7f;
 // A display seen again within this long is recognised by its name's
 // pixels and shows its price at once; it's read again all the same, since
 // name bands look much alike (the frame around the name is the same on
@@ -323,6 +323,7 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
     for (Tracked& t : tracked_)
         if (t.lost > 0 && now - t.seen > kForget) forget(t);
     std::erase_if(tracked_, [&](const Tracked& t) { return t.lost > 0 && now - t.seen > kForget; });
+    dedupe();
     if (tracked_.size() != before) changed();
 }
 
@@ -478,16 +479,20 @@ void ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now)
         if (k == 1) t.w = w, t.h = h;
         make_template(small, t.w, t.h, &t.v, &t.norm);
     };
-    // The plate, to track it by.
-    std::vector<uint8_t> grey_plate = grey(px, py, pw, ph);
-    auto plate = std::make_shared<Plate>();
-    set(plate->t4, grey_plate, pw, ph, 4);
-    set(plate->t2, grey_plate, pw, ph, 2);
-    set(plate->t1, grey_plate, pw, ph, 1);
-    t.plate = plate;
-    // The name under it, to know it again.
+    // The plate and the name under it, to track it by (just the plate if the
+    // name is off the bottom of the screen).
     int nh = (int)(ph * kNameBand);
-    if (py + ph + nh <= frame_h_) set(t.name, grey(px, py + ph, pw, nh), pw, nh, 4);
+    bool name_fits = py + ph + nh <= frame_h_;
+    int th = name_fits ? ph + nh : ph;
+    std::vector<uint8_t> grey_plate = grey(px, py, pw, th);
+    auto plate = std::make_shared<Plate>();
+    set(plate->t4, grey_plate, pw, th, 4);
+    set(plate->t2, grey_plate, pw, th, 2);
+    set(plate->t1, grey_plate, pw, th, 1);
+    t.plate = plate;
+    t.th = (float)th;
+    // The name alone, to know it again.
+    if (name_fits) set(t.name, grey(px, py + ph, pw, nh), pw, nh, 4);
 
     auto same_name = [&](const Template& a) {
         if (t.name.v.empty() || a.w != t.name.w || a.h != t.name.h || a.norm < 1e-3f || t.name.norm < 1e-3f)
@@ -524,6 +529,66 @@ void ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now)
     changed();
 }
 
+namespace {
+
+// What a reply says the item is ("" while unknown): no two displays show the
+// same one.
+std::string identity(const PriceReply& r) {
+    if (r.status != "ok" && r.status != "not_found") return "";
+    return r.title + "\n" + r.detail;
+}
+
+}  // namespace
+
+void ScreenScan::dedupe() {
+    auto known = [](const Tracked& t) { return t.replied && !t.verify ? identity(t.reply) : std::string(); };
+    // Which of two to keep: one tracking now over a lost one, then one with
+    // its price, then the older.
+    auto better = [](const Tracked& a, const Tracked& b) {
+        if ((a.lost == 0) != (b.lost == 0)) return a.lost == 0;
+        if (a.replied != b.replied) return a.replied;
+        return a.id < b.id;
+    };
+    // Two trackers on one plate (both where they were just found): one goes.
+    std::vector<bool> drop(tracked_.size());
+    for (size_t i = 0; i < tracked_.size(); i++) {
+        for (size_t j = i + 1; j < tracked_.size() && !drop[i]; j++) {
+            Tracked& a = tracked_[i];
+            Tracked& b = tracked_[j];
+            if (drop[j] || a.lost != 0 || b.lost != 0 || std::abs(a.x - b.x) >= a.w / 2 || std::abs(a.y - b.y) >= a.h)
+                continue;
+            bool keep_a = better(a, b);
+            Tracked& keep = keep_a ? a : b;
+            Tracked& lose = keep_a ? b : a;
+            if (!keep.replied && lose.replied) {
+                keep.reply = lose.reply;
+                keep.replied = true;
+                keep.verify = lose.verify;
+            }
+            drop[keep_a ? j : i] = true;
+        }
+    }
+    size_t i = 0;
+    std::erase_if(tracked_, [&](const Tracked&) { return drop[i++]; });
+    // One item on two displays: only the better one's tag shows (decided
+    // afresh each frame, so the other takes over if this one is lost).
+    for (Tracked& t : tracked_) {
+        bool was = t.duplicate;
+        t.duplicate = false;
+        std::string k = known(t);
+        if (!k.empty())
+            for (const Tracked& o : tracked_)
+                if (&o != &t && known(o) == k && better(o, t)) t.duplicate = true;
+        if (t.duplicate && !was) poe_log("displays: %s twice: showing one", t.reply.title.c_str());
+        if (t.duplicate != was) changed();
+    }
+    // An item being tracked isn't also one remembered out of sight.
+    std::erase_if(remembered_, [&](const Remembered& r) {
+        std::string k = identity(r.reply);
+        return !k.empty() && std::any_of(tracked_.begin(), tracked_.end(), [&](const Tracked& t) { return known(t) == k; });
+    });
+}
+
 std::vector<ScreenScan::Region> ScreenScan::regions_wanted() const {
     std::vector<Region> out;
     if (!active_) return out;
@@ -545,8 +610,8 @@ std::vector<ScreenScan::Region> ScreenScan::regions_wanted() const {
         r.x = std::max(0, (int)ex - m);
         r.y = std::max(0, (int)ey - m);
         r.w = std::min(extent_w_, (int)(ex + t.w) + m) - r.x;
-        r.h = std::min(extent_h_, (int)(ey + t.h) + m) - r.y;
-        if (r.w >= t.w && r.h >= t.h) out.push_back(r);
+        r.h = std::min(extent_h_, (int)(ey + t.th) + m) - r.y;
+        if (r.w >= t.w && r.h >= t.th) out.push_back(r);
     }
     return out;
 }
@@ -617,13 +682,17 @@ void ScreenScan::apply(const Match& m) {
 std::vector<ScreenScan::Label> ScreenScan::labels() const {
     std::vector<Label> out;
     if (!active_) return out;
+    // The most valuable of everything seen in this area, in sight or not.
     double best = 0;
     for (const Tracked& t : tracked_)
-        if (t.lost < kHideAfter && t.replied && t.reply.status == "ok") best = std::max(best, t.reply.value_chaos);
+        if (t.replied && t.reply.status == "ok") best = std::max(best, t.reply.value_chaos);
+    for (const Remembered& r : remembered_)
+        if (r.reply.status == "ok") best = std::max(best, r.reply.value_chaos);
     for (const Tracked& t : tracked_) {
         if (t.lost >= kHideAfter) continue;
-        // Not an item (another kind of tooltip with a plate): no label.
-        if (t.replied && t.reply.status == "no_item") continue;
+        // Not an item (another kind of tooltip with a plate), or an item
+        // another display's tag shows already: no label.
+        if ((t.replied && t.reply.status == "no_item") || t.duplicate) continue;
         Label l;
         // Where it is by now: its last place, moved on at its speed.
         float dt = t.moving ? std::clamp(std::chrono::duration<float>(now_ - t.sampled).count(), 0.0f, kMaxPredict) : 0;

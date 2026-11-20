@@ -4,7 +4,7 @@
 // cross-correlation of the plate (grey, as the CPU first saw it) around
 // where the CPU expects it, in three dispatches:
 //   stage 0: every 4 pixels within the radius, the quarter-size plate;
-//   stage 1: every pixel within 3 of the best, the half-size plate;
+//   stage 1: every pixel within 2 of the best, the half-size plate;
 //   stage 2: the best, as the label's move.
 // Stages 0 and 1 run a workgroup per (label, position), so the whole GPU
 // shares the work; each keeps its best with an atomic max.
@@ -61,18 +61,20 @@ float best_score(uint b) { return float(b >> 12) / 1048575.0 * 2.0 - 1.0; }
 int best_index(uint b) { return int(b & 4095u); }
 
 // This workgroup's NCC of a template (step: its pixel in frame pixels) at
-// `at`; every invocation gets the result.
-float ncc(int offset, int tw, int th, float norm, int step_, vec2 at) {
+// `at`, on every `rows`-th row of it; every invocation gets the result.
+float ncc(int offset, int tw, int th, float norm, int step_, int rows, vec2 at) {
     uint lid = gl_LocalInvocationID.x;
     float sum = 0.0, sq = 0.0, d = 0.0;
-    for (int i = int(lid); i < tw * th; i += 64) {
+    int used = (th + rows - 1) / rows;
+    for (int k = int(lid); k < tw * used; k += 64) {
+        int i = (k / tw) * rows * tw + k % tw;  // template index
         vec2 p = at + vec2(i % tw, i / tw) * float(step_);
         float v;
-        if (step_ == 2) {
-            v = grey(p + 1.0);
-        } else {  // 4x4: four 2x2 samples
-            v = 0.25 * (grey(p + vec2(1, 1)) + grey(p + vec2(3, 1)) + grey(p + vec2(1, 3)) + grey(p + vec2(3, 3)));
-        }
+        // The 2x2 pixels at a half-size template pixel; at a quarter-size
+        // one, the middle 2x2 of its 4x4 (close enough for the coarse pass,
+        // and a quarter of the samples).
+        v = step_ == 2 ? grey(p + 1.0)
+                       : 0.25 * (grey(p + vec2(1, 1)) + grey(p + vec2(3, 1)) + grey(p + vec2(1, 3)) + grey(p + vec2(3, 3)));
         sum += v;
         sq += v * v;
         d += v * templ[offset + i];
@@ -89,10 +91,11 @@ float ncc(int offset, int tw, int th, float norm, int step_, vec2 at) {
         }
     }
     barrier();
-    float n = float(tw * th);
+    float n = float(tw * used);
     float var = s_sq[0] - s_sum[0] * s_sum[0] / n;
     if (var < 1.0 || norm < 1e-3) return -1.0;
-    return s_dot[0] / (sqrt(var) * norm);
+    // The template's norm is over all its rows: scale it to the rows used.
+    return s_dot[0] / (sqrt(var) * norm * sqrt(float(used) / float(th)));
 }
 
 void main() {
@@ -106,14 +109,15 @@ void main() {
     if (pc.stage == 0) {
         if (pos >= side0 * side0) return;
         vec2 at = base + vec2(pos % side0, pos / side0) * 4.0 - float(radius);
-        float score = ncc(s.offset4, s.tw4, s.th4, s.norm4, 4, at);
+        // Every other row: the coarse pass only has to land within 2 pixels.
+        float score = ncc(s.offset4, s.tw4, s.th4, s.norm4, 4, 2, at);
         if (gl_LocalInvocationID.x == 0) atomicMax(best[slot * 2], pack_best(score, pos));
     } else if (pc.stage == 1) {
-        if (pos >= 49) return;
+        if (pos >= 25) return;
         int coarse = best_index(best[slot * 2]);
         vec2 found = base + vec2(coarse % side0, coarse / side0) * 4.0 - float(radius);
-        vec2 at = found + vec2(pos % 7 - 3, pos / 7 - 3);
-        float score = ncc(s.offset2, s.tw2, s.th2, s.norm2, 2, at);
+        vec2 at = found + vec2(pos % 5 - 2, pos / 5 - 2);
+        float score = ncc(s.offset2, s.tw2, s.th2, s.norm2, 2, 1, at);
         if (gl_LocalInvocationID.x == 0) atomicMax(best[slot * 2 + 1], pack_best(score, pos));
     } else {
         if (gl_LocalInvocationID.x != 0 || pos != 0) return;
@@ -121,9 +125,9 @@ void main() {
         int coarse = best_index(b0);
         vec2 found = base + vec2(coarse % side0, coarse / side0) * 4.0 - float(radius);
         int fine = best_index(b1);
-        vec2 at = found + vec2(fine % 7 - 3, fine / 7 - 3);
+        vec2 at = found + vec2(fine % 5 - 2, fine / 5 - 2);
         float score = best_score(b1);
-        result[slot] = vec4(at - s.laid, score, b1 != 0u && score >= 0.6 ? 1.0 : 0.0);
+        result[slot] = vec4(at - s.laid, score, b1 != 0u && score >= 0.7 ? 1.0 : 0.0);
         best[slot * 2] = 0u;
         best[slot * 2 + 1] = 0u;
     }

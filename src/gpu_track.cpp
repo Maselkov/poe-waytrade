@@ -30,8 +30,8 @@ struct Header {
     int32_t pad[3];
 };
 static_assert(sizeof(Header) == 32);
-// Stage 1 tries 7x7 positions (track.comp).
-constexpr uint32_t kFinePositions = 49;
+// Stage 1 tries 5x5 positions (track.comp).
+constexpr uint32_t kFinePositions = 25;
 
 // Labels tracked at once, and the room for their plates (half-size grey
 // floats: a plate is ~200x32 of them at 1440p, ~300x48 at 4K).
@@ -289,7 +289,6 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
     auto* templ = (float*)img.templates.mapped;
     int count = 0;
     size_t used = 0;
-    int plate_h = 0;
     float spread = 0;  // the furthest a prediction ran from its measurement
     for (const GpuLabel& l : labels) {
         if (count == (int)kMaxLabels) break;
@@ -321,13 +320,14 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
         slot.offset4 = (int32_t)used;
         slot.norm4 = t4.norm;
         used += n4;
-        plate_h = std::max(plate_h, t2.h * 2);
     }
     if (count == 0) return VK_NULL_HANDLE;
     img.count = count;
-    // Half a plate's height each way (at least 24 pixels) beyond the span
-    // the prediction covers, up to 96; a multiple of the coarse step.
-    int radius = std::min(96, (std::max(24, plate_h / 2) + (int)std::ceil(spread) + 3) & ~3);
+    // A margin (48 pixels at 1440p: the UI scales with the height) beyond
+    // the span the prediction covers, up to 96; a multiple of the coarse
+    // step. Less misses sharp turns: the prediction overshoots past it.
+    int margin = std::max(24, (int)s->extent.height / 30);
+    int radius = std::min(96, (margin + (int)std::ceil(spread) + 3) & ~3);
     *header = {count, is_srgb(s->format), (int32_t)s->extent.width, (int32_t)s->extent.height, radius, {}};
     uint32_t coarse = (uint32_t)(radius / 2 + 1) * (uint32_t)(radius / 2 + 1);
 
