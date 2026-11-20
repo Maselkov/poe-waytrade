@@ -11,6 +11,9 @@ pub struct Item {
     pub name: Option<String>,
     pub base: String,
     pub corrupted: bool,
+    /// An "Unidentified" line. (It's also left among `mods`, where it
+    /// matches no trade stat, like "Corrupted".)
+    pub unidentified: bool,
     pub gem_level: Option<u32>,
     /// "Level: 20 (Max)": the gem can't level further.
     pub gem_max_level: bool,
@@ -390,6 +393,8 @@ pub fn parse(text: &str) -> Option<Item> {
     for line in properties.flatten() {
         if *line == "Corrupted" {
             item.corrupted = true;
+        } else if *line == "Unidentified" {
+            item.unidentified = true;
         } else if *line == "Fractured Item" {
             item.fractured_item = true;
         } else if *line == "Synthesised Item" {

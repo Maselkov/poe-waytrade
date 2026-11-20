@@ -28,6 +28,17 @@ constexpr auto kPinnedLeaveGrace = std::chrono::milliseconds(250);
 
 // Ctrl+D on a map opens the map check (is it safe to run?); logbooks are
 // mostly about what they're worth.
+// The item text with a name line, as the game copies an identified unique:
+// an unidentified one whose art matched is then checked (and searched) by
+// name.
+std::string with_name(const std::string& text, const std::string& name) {
+    size_t at = text.find("Rarity: ");
+    size_t eol = at == std::string::npos ? at : text.find('\n', at);
+    if (eol == std::string::npos) return text;
+    const char* end = eol > 0 && text[eol - 1] == '\r' ? "\r\n" : "\n";
+    return text.substr(0, eol + 1) + name + end + text.substr(eol + 1);
+}
+
 PriceCheck::Purpose default_purpose(const ParsedItem& item) {
     if (!is_map_like(item) || item.item_class == "Expedition Logbooks") return PriceCheck::Purpose::Price;
     return PriceCheck::Purpose::Map;
@@ -159,6 +170,24 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_he
         wake_at_ = now;
         wake_.ping();
     }
+    match_art();
+    if (art_client_.poll(&reply)) {
+        // Only for the check it was sent for, and only to narrow its list.
+        if (art_check_ == check_id_ && reply.status == "ok" && !reply.matched.empty() && reply_ &&
+            reply_->status == "ok") {
+            art_matched_ = reply.matched;
+            if (reply.matched.find(" / ") == std::string::npos && !daemon_.busy()) {
+                check_as(reply.matched);
+            } else {
+                // Uniques that look alike: their prices, still named.
+                reply_ = std::move(reply);
+                request_icons();
+            }
+            changed();
+        } else if (getenv("POE_WAYTRADE_DEBUG")) {
+            poe_log("art match: %s %s", reply.status.c_str(), reply.message.c_str());
+        }
+    }
     if (opener_.poll(&reply) && reply.status != "ok") poe_log("open trade site: %s", reply.message.c_str());
     if (sender_.poll(&reply) && reply.status != "ok") poe_log("daemon: %s", reply.message.c_str());
     if (!sender_.busy() && !outbox_.empty()) {
@@ -267,6 +296,67 @@ void PriceCheck::begin_wait(WaylandInput& input, Mode mode, Purpose purpose, Clo
     pending_mode_ = mode;
     pending_purpose_ = purpose;
     pending_anchor_ = input.game_pointer(&pending_x_, &pending_y_);
+    // The item's art, in case it's an unidentified unique: only now, while
+    // the game still shows it under the cursor.
+    capture_id_++;
+    capture_.reset();
+    capture_wanted_ = pending_anchor_;
+    capture_x_ = pending_x_;
+    capture_y_ = pending_y_;
+    art_sent_ = false;
+    art_matched_.clear();
+}
+
+bool PriceCheck::capture_wanted(uint64_t* id, float* x, float* y) const {
+    if (!capture_wanted_) return false;
+    *id = capture_id_;
+    *x = capture_x_;
+    *y = capture_y_;
+    return true;
+}
+
+void PriceCheck::capture_taken(uint64_t id, FrameCapture capture) {
+    if (id == capture_id_) capture_ = std::move(capture);
+}
+
+// Sends the pixels around the item, as big as the item can be (plus half a
+// cell), once both they and a price reply that asks for them are here.
+// Cells over 40 px are averaged down: the daemon compares at ~48 px.
+void PriceCheck::match_art() {
+    if (art_sent_ || !capture_ || !item_ || !reply_ || reply_->status != "ok" || reply_->art_width <= 0) return;
+    art_sent_ = true;
+    art_check_ = check_id_;
+    const FrameCapture& c = *capture_;
+    float half_w = (reply_->art_width + 0.5f) * c.cell, half_h = (reply_->art_height + 0.5f) * c.cell;
+    int x0 = std::max(0, (int)(c.cursor_x - half_w)), x1 = std::min(c.width, (int)(c.cursor_x + half_w) + 1);
+    int y0 = std::max(0, (int)(c.cursor_y - half_h)), y1 = std::min(c.height, (int)(c.cursor_y + half_h) + 1);
+    int k = std::max(1, (int)(c.cell / 40.0f));
+    int w = (x1 - x0) / k, h = (y1 - y0) / k;
+    if (w <= 0 || h <= 0) return;
+    std::vector<uint8_t> rgb((size_t)w * h * 3);
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            for (int ch = 0; ch < 3; ch++) {
+                int sum = 0;
+                for (int dy = 0; dy < k; dy++)
+                    for (int dx = 0; dx < k; dx++)
+                        sum += c.rgb[((size_t)(y0 + y * k + dy) * c.width + (x0 + x * k + dx)) * 3 + ch];
+                rgb[((size_t)y * w + x) * 3 + ch] = (uint8_t)(sum / (k * k));
+            }
+    char header[96];
+    snprintf(header, sizeof(header), "%d %d %.1f %.1f %.2f", w, h, (c.cursor_x - x0) / k, (c.cursor_y - y0) / k,
+             c.cell / k);
+    // POE_WAYTRADE_ART_DUMP=<file.ppm>: the pixels sent, for checking what
+    // the match sees (the header's cursor and cell size in a comment).
+    if (const char* path = getenv("POE_WAYTRADE_ART_DUMP")) {
+        if (FILE* f = fopen(path, "wb")) {
+            fprintf(f, "P6\n# %s\n%d %d\n255\n", header, w, h);
+            fwrite(rgb.data(), 1, rgb.size(), f);
+            fclose(f);
+            poe_log("art match pixels saved to %s (%s)", path, header);
+        }
+    }
+    art_client_.request_art_match(header, base64_encode(rgb.data(), rgb.size()), item_text_);
 }
 
 void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) {
@@ -521,6 +611,31 @@ void PriceCheck::toggle_six_link() {
     changed();
 }
 
+void PriceCheck::check_as(const std::string& name) {
+    // The trade search an identified one gets; the list stays meanwhile.
+    item_text_ = with_name(item_text_, name);
+    item_ = parse_item_text(item_text_);
+    other_reply_.reset();
+    daemon_.request(item_text_);
+    changed();
+}
+
+void PriceCheck::pick_unique(int index) {
+    if (!reply_ || reply_->status != "ok" || index < 0 || index >= (int)reply_->prices.size() || daemon_.busy())
+        return;
+    std::string name = reply_->prices[index].unique;
+    if (name.empty()) return;
+    lock();
+    check_as(name);
+}
+
+void PriceCheck::toggle_unidentified() {
+    if (!reply_ || reply_->status != "trade" || !reply_->unidentified_offered) return;
+    reply_->unidentified = !reply_->unidentified;
+    stale_ = reply_->searched;
+    changed();
+}
+
 void PriceCheck::search() {
     if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
     std::vector<TradeFilter> enabled;
@@ -528,7 +643,7 @@ void PriceCheck::search() {
         if (f.enabled) enabled.push_back(f);
     status_.clear();
     daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, reply_->preset, reply_->listing_status,
-                          reply_->six_link, item_text_);
+                          reply_->six_link, reply_->unidentified, item_text_);
     changed();
 }
 

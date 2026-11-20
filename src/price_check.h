@@ -16,8 +16,24 @@
 #include <set>
 #include <optional>
 #include <string>
+#include <vector>
 
 class WaylandInput;
+
+// An inventory cell's pitch as a fraction of the frame's height: PoE1's UI
+// scales with the height, and 1080p cells are 52.67 px apart. (Quad stash
+// tabs' cells are half that.)
+inline constexpr float kCellPerHeight = 52.67f / 1080.0f;
+
+// The game's frame around the cursor when an item was checked, copied by
+// overlay.cpp before the overlay draws: unidentified uniques show their own
+// art, so the daemon can tell which one an item is (daemon/src/art.rs).
+struct FrameCapture {
+    int width = 0, height = 0;
+    std::vector<uint8_t> rgb;  // rows top to bottom
+    float cursor_x = 0, cursor_y = 0;
+    float cell = 0;  // an inventory cell's pitch, in these pixels
+};
 
 class PriceCheck {
 public:
@@ -61,6 +77,13 @@ public:
     const std::string& daemon_state() const { return daemon_state_; }
     const std::string& daemon_error() const { return daemon_error_; }
 
+    // overlay.cpp: whether a check wants the frame around the cursor, and
+    // where (swapchain pixels). `id` goes back with capture_taken().
+    bool capture_wanted(uint64_t* id, float* x, float* y) const;
+    // The copy is on its way (it takes a frame or two), or can't be made.
+    void capture_started() { capture_wanted_ = false; }
+    void capture_taken(uint64_t id, FrameCapture capture);
+
     // The settings page (its own hotkey, or the gear on the panel).
     SettingsPage& settings() { return settings_; }
     const SettingsPage& settings() const { return settings_; }
@@ -84,6 +107,14 @@ public:
     void set_base_only(bool base_only);
     void toggle_corrupted();  // the item's own state <-> any
     void toggle_six_link();   // 6-linked only <-> any links
+    void toggle_unidentified();  // unidentified only <-> any (an unidentified item's)
+    // An unidentified unique's list of candidates: check the item as the
+    // unique of the price at this index (its trade search, like an
+    // identified one's). Locks the panel, since you're using it.
+    void pick_unique(int index);
+    // The unique(s) an unidentified item's art matched ("A / B" when they
+    // share it); empty if none.
+    const std::string& art_matched() const { return art_matched_; }
     // Switch between the normal filters and APT's "Base item" preset (the
     // item as a crafting base); fetches that preset's filters.
     void toggle_preset();
@@ -184,6 +215,21 @@ private:
     std::optional<Clock::time_point> left_panel_at_;
     std::optional<ParsedItem> item_;
     std::string status_;
+
+    // Telling an unidentified unique apart by its art: the frame around the
+    // cursor at this check, sent with MATCHART once the price reply says
+    // there's more than one art to tell apart.
+    uint64_t capture_id_ = 0;
+    bool capture_wanted_ = false;
+    float capture_x_ = 0, capture_y_ = 0;
+    std::optional<FrameCapture> capture_;  // capture_id_'s
+    DaemonClient art_client_;
+    bool art_sent_ = false;
+    uint64_t art_check_ = 0;  // the check_id_ it was sent for
+    std::string art_matched_;
+    void match_art();
+    // Checks the item again as the unique `name` (a name line added to its text).
+    void check_as(const std::string& name);
 
     SettingsPage settings_;
     KeyboardGrab grab_;

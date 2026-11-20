@@ -163,6 +163,7 @@ struct UiPriceRow {
     Rml::String note;  // in place of a price: "Search to price this item"
     Rml::String meta, tag;
     bool answer = false, rule = false, stale = false;
+    int pick = -1;  // an unidentified unique's candidate: its index, to click
 };
 struct UiFilter {
     int index = 0;
@@ -251,6 +252,7 @@ struct Model {
     Rml::String base_label, corrupted_label, corrupted_kind;  // kind: yes | no
     bool has_base = false, corrupted_on = false;
     bool six_link_offered = false, six_link_on = false;  // the 6-link chip
+    bool unid_offered = false, unid_on = false;          // the unidentified chip
     bool base_preset = false, preset_base = false;  // offered / active
     bool base_only = false, searched = false, stale = false;
     // The price card, and its source line when poe.ninja alone prices the item
@@ -525,6 +527,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("answer", &UiPriceRow::answer);
         h.RegisterMember("rule", &UiPriceRow::rule);
         h.RegisterMember("stale", &UiPriceRow::stale);
+        h.RegisterMember("pick", &UiPriceRow::pick);
     }
     if (auto h = c.RegisterStruct<UiFilter>()) {
         h.RegisterMember("index", &UiFilter::index);
@@ -641,6 +644,8 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("corrupted_on", &model.corrupted_on);
     c.Bind("six_link_offered", &model.six_link_offered);
     c.Bind("six_link_on", &model.six_link_on);
+    c.Bind("unid_offered", &model.unid_offered);
+    c.Bind("unid_on", &model.unid_on);
     c.Bind("corrupted_label", &model.corrupted_label);
     c.Bind("corrupted_kind", &model.corrupted_kind);
     c.Bind("base_only", &model.base_only);
@@ -707,6 +712,13 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("toggle_six_link", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->toggle_six_link();
+    });
+    c.BindEventCallback("toggle_unidentified", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->toggle_unidentified();
+    });
+    c.BindEventCallback("pick_unique", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        int index = args.empty() ? -1 : args[0].Get<int>();
+        if (price_check && index >= 0) price_check->pick_unique(index);
     });
     c.BindEventCallback("search", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->search();
@@ -928,6 +940,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             m.hint = "Taking the keyboard from the game…";
         else if (e)
             m.hint = "Type a number · Tab: min/max · Enter: apply · Esc: cancel";
+        else if (const auto& r = pc.reply(); r && r->status == "ok" && !r->prices.empty() && !r->prices[0].unique.empty())
+            m.hint = "Click a unique to search for it";
         break;
     }
     const auto& item = pc.item();
@@ -942,6 +956,12 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         bool redundant = item->rarity.empty() || item->item_class.find(item->rarity) != std::string::npos;
         m.subtitle = redundant ? item->item_class : item->rarity + " · " + item->item_class;
         if (!item->item_level.empty()) m.subtitle += " · ilvl " + item->item_level;
+        // An unidentified unique the daemon recognised by its art.
+        // (A unique picked from several that look alike has its own name.)
+        if (!pc.art_matched().empty()) {
+            if (m.name.empty()) m.name = pc.art_matched();
+            m.subtitle += " · matched by art";
+        }
     }
 
     if (!item || !reply) {
@@ -979,6 +999,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.corrupted_on = reply->corrupted != "any";
         m.six_link_offered = reply->six_link_offered;
         m.six_link_on = reply->six_link;
+        m.unid_offered = reply->unidentified_offered;
+        m.unid_on = reply->unidentified;
         m.corrupted_kind = reply->item_corrupted ? "yes" : "no";
         m.corrupted_label = reply->item_corrupted ? "Corrupted" : "Uncorrupted";
         // A unique's poe.ninja price, which doesn't know its rolls, above the
@@ -1152,6 +1174,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         for (const PriceLine& p : reply->prices) m.price_rows.push_back(ninja_row(p));
         for (size_t i = 0; i < m.price_rows.size(); i++) {
             UiPriceRow& r = m.price_rows[i];
+            if (!reply->prices[i].unique.empty()) r.pick = (int)i;
             r.answer = m.price_rows.size() == 1 || r.label.rfind("Stack of", 0) == 0;
             r.rule = r.answer && i > 0;
         }

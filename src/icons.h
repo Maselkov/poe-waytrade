@@ -17,3 +17,5 @@ inline constexpr const char* kSocketSprite = "sockets";
 
 // For the daemon's "png <base64>" replies.
 std::string base64_decode(const std::string& in);
+// For pixels sent to the daemon (MATCHART).
+std::string base64_encode(const unsigned char* data, size_t size);

@@ -51,7 +51,8 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "league") reply.league = f[1];
         else if (f[0] == "age") reply.age_minutes = atoi(f[1].c_str());
         else if (f[0] == "price" && f.size() >= 5)
-            reply.prices.push_back({f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4]});
+            reply.prices.push_back({f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4],
+                                    f.size() >= 6 ? f[5] : ""});
         else if (f[0] == "filter" && f.size() >= 4) {
             TradeFilter t{atoi(f[1].c_str()), f[2] == "1", f[3], f.size() >= 5 ? f[4] : ""};
             if (f.size() >= 10) {
@@ -80,6 +81,8 @@ PriceReply parse_reply(const std::string& body) {
             reply.summary->capped = f.size() >= 7 && f[6] == "1";
         }
         else if (f[0] == "png") reply.png = f[1];
+        else if (f[0] == "art" && f.size() >= 3) reply.art_width = atoi(f[1].c_str()), reply.art_height = atoi(f[2].c_str());
+        else if (f[0] == "matched") reply.matched = f[1];
         else if (f[0] == "subtitle") reply.subtitle = f[1];
         else if (f[0] == "stat" && f.size() >= 3) reply.map_stats.push_back({f[1], f[2]});
         else if (f[0] == "mod" && f.size() >= 4) reply.map_mods.push_back({f[1], f[2], f[3]});
@@ -94,6 +97,8 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "base_preset") reply.base_preset = f[2] == "1";
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "preset") reply.preset = f[2];
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "six_link") reply.six_link_offered = true, reply.six_link = f[2] == "1";
+        else if (f[0] == "option" && f.size() >= 3 && f[1] == "unidentified")
+            reply.unidentified_offered = true, reply.unidentified = f[2] == "1";
         else if (f[0] == "url") reply.url = f[1];
         else if (f[0] == "setting" && f.size() >= 3) reply.settings.push_back({f[1], f[2]});
         else if (f[0] == "setting") reply.settings.push_back({f[1], ""});
@@ -110,12 +115,13 @@ PriceReply parse_reply(const std::string& body) {
 
 void DaemonClient::request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                                  const std::string& corrupted, const std::string& preset,
-                                 const std::string& listing_status, bool six_link, const std::string& item_text) {
+                                 const std::string& listing_status, bool six_link, bool unidentified,
+                                 const std::string& item_text) {
     std::string indices;
     for (const TradeFilter& f : enabled)
         indices += (indices.empty() ? "" : ",") + std::to_string(f.index) + ":" + f.min + ":" + f.max;
     start("TRADE\n" + indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + preset + "\n" + listing_status +
-          "\n" + (six_link ? "6" : "any") + "\n" + item_text);
+          "\n" + (six_link ? "6" : "any") + "\n" + (unidentified ? "unid" : "any") + "\n" + item_text);
 }
 
 void DaemonClient::start(const std::string& body) {

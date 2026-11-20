@@ -29,6 +29,22 @@ std::string item_icon_id(const std::string& url) {
     return id;
 }
 
+std::string base64_encode(const unsigned char* data, size_t size) {
+    static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve((size + 2) / 3 * 4);
+    for (size_t i = 0; i < size; i += 3) {
+        unsigned n = unsigned(data[i]) << 16;
+        if (i + 1 < size) n |= unsigned(data[i + 1]) << 8;
+        if (i + 2 < size) n |= data[i + 2];
+        out.push_back(table[(n >> 18) & 63]);
+        out.push_back(table[(n >> 12) & 63]);
+        out.push_back(i + 1 < size ? table[(n >> 6) & 63] : '=');
+        out.push_back(i + 2 < size ? table[n & 63] : '=');
+    }
+    return out;
+}
+
 std::string base64_decode(const std::string& in) {
     auto value = [](char c) -> int {
         if (c >= 'A' && c <= 'Z') return c - 'A';

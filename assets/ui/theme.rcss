@@ -196,6 +196,10 @@ body {
 .price-row { display: flex; align-items: center; min-height: 20dp; padding: 2dp 0; }
 .price-row.rule { border-top: 1dp $panel-border; margin-top: 4dp; padding-top: 6dp; }
 .price-row.stale { opacity: 0.45; }
+/* An unidentified unique's candidates: click one to search for it. */
+.price-row.pick { cursor: pointer; border-radius: 6dp; margin: 0 -6dp; padding-left: 6dp; padding-right: 6dp; }
+.price-row.pick:hover { background-color: $chip; }
+.price-row.pick:hover .pr-label { color: $text-strong; }
 .pr-text { flex: 1; min-width: 0; margin-right: 10dp; }
 .pr-label { color: $text-muted; }
 .pr-value { display: flex; align-items: center; flex-shrink: 0; }
@@ -263,6 +267,11 @@ body {
 /* "6-link": a 6-link searches 6-linked items only; dim, any links. */
 .toggle-chip.links { width: 52dp; margin-right: 8dp; }
 .toggle-chip.links.on { background-color: #2a2546; border-color: $accent; color: $accent-text; }
+/* "Unidentified": an unidentified item searches unidentified ones only
+   (a gamble on the rolls, like a Watcher's Eye); dim, any. Red like the
+   game's "Unidentified" line. */
+.toggle-chip.unid { width: 86dp; margin-right: 8dp; }
+.toggle-chip.unid.on { background-color: $danger-bg; border-color: #6a2a26; color: $danger; }
 
 /* Trade results */
 .results { border-top: 1dp $divider; padding: 8dp 14dp 12dp; }
