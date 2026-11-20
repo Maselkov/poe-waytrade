@@ -280,10 +280,6 @@ body {
 .map-price-text { flex: 1; }
 .map-price-value { color: $price; }
 .toggle-chip.view { width: 86dp; margin-left: 8dp; }
-/* Which listings a search counts: instant buyout (the default, since
-   merchant prices can't be faked) or, in amber, in-person ones too (or offline sellers). */
-.actions .toggle-chip.status { width: 96dp; margin-left: 6dp; padding: 6dp 0; }
-.toggle-chip.status.available, .toggle-chip.status.any { border-color: #6a5426; color: $warn; }
 .view-row { display: flex; justify-content: center; padding: 0 14dp 10dp; }
 .view-row .toggle-chip.view { margin-left: 0; }
 .profiles { display: flex; align-items: center; justify-content: flex-end; padding: 2dp 14dp 4dp; font-size: 11dp; color: $text-muted; }

@@ -83,7 +83,6 @@ public:
     void set_bounds(int index, double min, double max);
     void set_base_only(bool base_only);
     void cycle_corrupted();  // any -> no -> yes
-    void cycle_status();     // instant -> available -> any
     // Switch between the normal filters and APT's "Base item" preset (the
     // item as a crafting base); fetches that preset's filters.
     void toggle_preset();

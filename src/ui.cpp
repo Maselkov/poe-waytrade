@@ -219,7 +219,7 @@ struct Model {
     Rml::String status, source, thin, total, hint;
     bool status_error = false, searching = false, has_url = false, closable = false;
     // Trade search options
-    Rml::String base_label, category_label, corrupted, corrupted_label, listing_status, listing_status_label;
+    Rml::String base_label, category_label, corrupted, corrupted_label;
     bool base_preset = false, preset_base = false;  // offered / active
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
@@ -548,8 +548,6 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("preset_base", &model.preset_base);
     c.Bind("corrupted", &model.corrupted);
     c.Bind("corrupted_label", &model.corrupted_label);
-    c.Bind("listing_status", &model.listing_status);
-    c.Bind("listing_status_label", &model.listing_status_label);
     c.Bind("base_only", &model.base_only);
     c.Bind("searched", &model.searched);
     c.Bind("stale", &model.stale);
@@ -610,9 +608,6 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("toggle_base", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check && price_check->reply()) price_check->set_base_only(!price_check->reply()->base_only);
-    });
-    c.BindEventCallback("cycle_status", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
-        if (price_check) price_check->cycle_status();
     });
     c.BindEventCallback("cycle_corrupted", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->cycle_corrupted();
@@ -884,10 +879,6 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         // Short, so the button keeps its size; its colour tells the state too.
         m.corrupted = reply->corrupted;
         m.corrupted_label = reply->corrupted == "no" ? "Uncorrupted" : reply->corrupted == "yes" ? "Corrupted" : "Any";
-        m.listing_status = reply->listing_status;
-        m.listing_status_label = reply->listing_status == "available" ? "+ In person"
-                                 : reply->listing_status == "any"  ? "Any seller"
-                                                                   : "Instant buyout";
         m.source = reply->league;
         // A unique's poe.ninja price, which doesn't know its rolls.
         fill_prices(*reply, m);
