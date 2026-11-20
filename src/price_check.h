@@ -88,11 +88,12 @@ public:
     void toggle_preset();
     void search();
     bool stale() const { return stale_; }
-    // Typing a filter's minimum and maximum. Clicking its value starts (or
-    // moves) the edit and takes the keyboard from the game (wl_grab.h);
-    // Tab switches between minimum and maximum, Enter applies, Esc or a
-    // click in the game cancels. Without layer-shell, status() says so.
-    void edit_bounds(int index);
+    // Typing a filter's minimum (field 0) or maximum (field 1). Clicking
+    // either half of its value starts (or moves) the edit and takes the
+    // keyboard from the game (wl_grab.h); clicking the other half or Tab
+    // switches between minimum and maximum, Enter applies, Esc or a click in
+    // the game cancels. Without layer-shell, status() says so.
+    void edit_bounds(int index, int field = 0);
     struct BoundsEdit {
         int index = -1;
         int field = 0;         // 0: minimum, 1: maximum

@@ -6,6 +6,7 @@
 #include <linux/input-event-codes.h>
 
 #include <algorithm>
+#include <cstring>
 #include <utility>
 #include <cstdio>
 #include <cstdlib>
@@ -138,10 +139,11 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_he
             // POE_WAYTRADE_DEMO_SEARCH=1: a demo item searches by itself, so
             // the searched state can be checked without clicking.
             if (demo_ && reply_->status == "trade" && !reply_->searched && getenv("POE_WAYTRADE_DEMO_SEARCH")) search();
-            // POE_WAYTRADE_DEMO_EDIT=<filter index>: a demo item starts typing
-            // into that filter's value, as if it were clicked.
+            // POE_WAYTRADE_DEMO_EDIT=<filter index>[:max]: a demo item starts
+            // typing into that filter's minimum (or maximum), as if it were
+            // clicked.
             if (const char* e = getenv("POE_WAYTRADE_DEMO_EDIT"); demo_ && e && reply_->status == "trade" && !reply_->searched)
-                edit_bounds(atoi(e));
+                edit_bounds(atoi(e), strstr(e, ":max") ? 1 : 0);
         }
         changed();
     }
@@ -348,12 +350,20 @@ void PriceCheck::set_bounds(int index, double min, double max) {
     changed();
 }
 
-void PriceCheck::edit_bounds(int index) {
+void PriceCheck::edit_bounds(int index, int field) {
     if (!reply_ || reply_->status != "trade") return;
     auto f = std::find_if(reply_->filters.begin(), reply_->filters.end(),
                           [&](const TradeFilter& f) { return f.index == index; });
     if (f == reply_->filters.end() || f->min.empty()) return;  // a yes/no filter
-    if (edit_ && edit_->index == index) return;
+    field = field == 1 ? 1 : 0;
+    if (edit_ && edit_->index == index) {  // the other half of the same filter
+        if (edit_->field != field) {
+            edit_->field = field;
+            edit_->fresh = true;
+            changed();
+        }
+        return;
+    }
     if (!grab_.supported()) {
         status_ = "Typing needs a compositor with layer-shell (KDE Plasma, Sway, Hyprland). Use the wheel or the slider.";
         changed();
@@ -361,7 +371,7 @@ void PriceCheck::edit_bounds(int index) {
     }
     if (edit_) end_edit(true);  // moving to another filter keeps what was typed
     lock();
-    edit_ = BoundsEdit{index, 0, f->min, f->max, true};
+    edit_ = BoundsEdit{index, field, f->min, f->max, true};
     grab_.take();
     status_.clear();
     changed();

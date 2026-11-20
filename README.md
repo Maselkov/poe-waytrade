@@ -349,8 +349,8 @@ change; `POE_WAYTRADE_DEMO_ITEM` opens the panel on start with that item text
 (as copied from the game; maps open the map check). `POE_WAYTRADE_UI_SCALE`
 scales the whole UI. `POE_WAYTRADE_SNAPSHOT=<file.ppm>` saves one of the app's own rendered frames
 (after 300 frames) and `POE_WAYTRADE_DEMO_SEARCH=1` makes a demo item search by
-itself, for checking the UI without screenshots. `POE_WAYTRADE_DEMO_EDIT=<filter index>` starts
-typing into that filter's value, as if it were clicked. `POE_WAYTRADE_DEMO_SETTINGS=<0-3>` opens the
+itself, for checking the UI without screenshots. `POE_WAYTRADE_DEMO_EDIT=<filter index>[:max]` starts
+typing into that filter's minimum (or maximum), as if it were clicked. `POE_WAYTRADE_DEMO_SETTINGS=<0-3>` opens the
 settings page on that tab. `POE_WAYTRADE_DEMO_PRESET=base` opens a demo item on
 the Base item preset. `POE_WAYTRADE_TEST_COPY=1`
 does a Ctrl+D two seconds in without sending keys; `tests/clipboard-kwin.sh

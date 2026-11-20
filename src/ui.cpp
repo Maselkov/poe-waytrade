@@ -157,8 +157,14 @@ struct UiFilter {
     int index = 0;
     bool enabled = false;
     Rml::String label, min;
-    Rml::String bounds;            // "185+" or "185–220"
-    bool editing = false;          // being typed into (see PriceCheck::edit_bounds)
+    Rml::String bounds;            // "≤ 220", for a filter with only a maximum
+    // A filter with a minimum shows its bounds as two halves, each clicked
+    // to type into (PriceCheck::edit_bounds) and scrolled to step: the
+    // minimum, and the maximum ("max" in faint text when there's none).
+    bool split = false;
+    Rml::String lo, hi;
+    bool hi_empty = false;
+    int edit_field = -1;  // the half being typed into; -1: none
     float min_pct = 0, max_pct = 100;  // handle positions on the slider
     float roll_pct = -1;               // the item's own value; < 0: none
     bool has_slider = false, max_roll = false;
@@ -343,14 +349,22 @@ struct OverlayUi::Impl {
             min = std::min(v, max_at);
         price_check->set_bounds(index, min, max);
     }
-    void bounds_scroll(int index, float delta) {
+    // field 0 steps the minimum, 1 the maximum. As on the slider, a maximum
+    // at the top of the range is none.
+    void bounds_scroll(int index, int field, float delta) {
         if (!price_check || !price_check->reply() || delta == 0) return;
         for (const TradeFilter& f : price_check->reply()->filters) {
             if (f.index != index || f.hi <= f.lo || f.min.empty()) continue;
             double step = f.step > 0 ? f.step : 1;
+            double by = delta < 0 ? step : -step;
+            double min = atof(f.min.c_str());
             double max = f.max.empty() ? -1 : atof(f.max.c_str());
-            double min = atof(f.min.c_str()) + (delta < 0 ? step : -step);
-            min = std::clamp(min, f.lo, max < 0 ? f.hi : max);
+            if (field == 1) {
+                max = std::clamp((max < 0 ? f.hi : max) + by, std::min(min, f.hi), f.hi);
+                if (max >= f.hi) max = -1;
+            } else {
+                min = std::clamp(min + by, f.lo, max < 0 ? f.hi : max);
+            }
             price_check->set_bounds(index, min, max);
         }
     }
@@ -451,7 +465,11 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("label", &UiFilter::label);
         h.RegisterMember("min", &UiFilter::min);
         h.RegisterMember("bounds", &UiFilter::bounds);
-        h.RegisterMember("editing", &UiFilter::editing);
+        h.RegisterMember("split", &UiFilter::split);
+        h.RegisterMember("lo", &UiFilter::lo);
+        h.RegisterMember("hi", &UiFilter::hi);
+        h.RegisterMember("hi_empty", &UiFilter::hi_empty);
+        h.RegisterMember("edit_field", &UiFilter::edit_field);
         h.RegisterMember("min_pct", &UiFilter::min_pct);
         h.RegisterMember("roll_pct", &UiFilter::roll_pct);
         h.RegisterMember("max_pct", &UiFilter::max_pct);
@@ -622,18 +640,20 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("range_drag", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
         if (!args.empty()) range_input(args[0].Get<int>(), ev, false);
     });
-    // The wheel over a filter's value moves its minimum one step (also
-    // where typing isn't available: see edit_bounds below).
+    // bounds_scroll(index, field): the wheel over either half of a filter's
+    // value moves that bound one step (also where typing isn't available:
+    // see edit_bounds below).
     c.BindEventCallback("bounds_scroll", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
-        if (args.empty()) return;
-        bounds_scroll(args[0].Get<int>(), ev.GetParameter<float>("wheel_delta_y", 0));
+        if (args.size() < 2) return;
+        bounds_scroll(args[0].Get<int>(), args[1].Get<int>(), ev.GetParameter<float>("wheel_delta_y", 0));
         ev.StopPropagation();
     });
-    // Clicking a filter's value types into it (where the compositor lets us
-    // take the keyboard); the click doesn't also toggle the filter.
+    // edit_bounds(index, field): clicking either half of a filter's value
+    // types into it (where the compositor lets us take the keyboard); the
+    // click doesn't also toggle the filter.
     c.BindEventCallback("edit_bounds", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
-        if (price_check && !args.empty() && ev.GetParameter<int>("button", 0) == 0)
-            price_check->edit_bounds(args[0].Get<int>());
+        if (price_check && args.size() >= 2 && ev.GetParameter<int>("button", 0) == 0)
+            price_check->edit_bounds(args[0].Get<int>(), args[1].Get<int>());
         ev.StopPropagation();
     });
     c.BindEventCallback("toggle_filter", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
@@ -826,8 +846,10 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     }
     case PriceCheck::Mode::Locked:
         if (map) m.hint = "Click a mod to mark it · right-click to go back";
-        else if (pc.bounds_edit()) m.hint = pc.keyboard_taken() ? "Type a number · Tab: maximum · Enter: apply · Esc: cancel"
-                                                                 : "Taking the keyboard from the game…";
+        else if (const auto& e = pc.bounds_edit(); e && !pc.keyboard_taken())
+            m.hint = "Taking the keyboard from the game…";
+        else if (e)
+            m.hint = "Type a number · Tab: min/max · Enter: apply · Esc: cancel";
         break;
     }
     const auto& item = pc.item();
@@ -908,15 +930,21 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
                 u.max_pct = f.max.empty() ? 100 : pct(atof(f.max.c_str()));
                 if (!f.roll.empty()) u.roll_pct = pct(atof(f.roll.c_str()));
             }
-            if (!f.min.empty() && f.max == f.min) u.bounds = f.min;  // exactly (a cluster's passive count)
-            else if (!f.min.empty()) u.bounds = f.min + (f.max.empty() ? "+" : "\u2013" + f.max);
-            else if (!f.max.empty()) u.bounds = "\u2264 " + f.max;
-            // Being typed into: what's typed so far, a caret in the field.
-            if (const auto& e = pc.bounds_edit(); e && e->index == f.index) {
-                u.editing = true;
-                u.bounds = e->field == 0 ? e->min + "|" + (e->max.empty() ? "+" : "\u2013" + e->max)
-                                         : e->min + "\u2013" + e->max + "|";
+            u.split = !f.min.empty();
+            if (u.split) {
+                u.lo = f.min;
+                u.hi = f.max;
+            } else if (!f.max.empty()) {
+                u.bounds = "\u2264 " + f.max;
             }
+            // Being typed into: what's typed so far, a caret in its half.
+            if (const auto& e = pc.bounds_edit(); e && e->index == f.index) {
+                u.edit_field = e->field;
+                u.lo = e->min + (e->field == 0 ? "|" : "");
+                u.hi = e->max + (e->field == 1 ? "|" : "");
+            }
+            u.hi_empty = u.hi.empty();
+            if (u.hi_empty) u.hi = "max";
             u.max_roll = f.max_roll;
             if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
             u.section = f.section;
