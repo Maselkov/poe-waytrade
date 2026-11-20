@@ -179,6 +179,7 @@ struct UiFilter {
     float min_pct = 0, max_pct = 100;  // handle positions on the slider
     float roll_pct = -1;               // the item's own value; < 0: none
     bool has_slider = false, max_roll = false;
+    bool has_max = false;  // a maximum is set: its handle shows; else the fill runs open to the end
     Rml::String tier;     // "T1"; empty: none
     Rml::String section;  // weapon | base | armour | total | enchant | implicit | exarch | eater | mod | fractured | crafted | map | shaper, elder, ... (influence)
 };
@@ -540,6 +541,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("roll_pct", &UiFilter::roll_pct);
         h.RegisterMember("max_pct", &UiFilter::max_pct);
         h.RegisterMember("has_slider", &UiFilter::has_slider);
+        h.RegisterMember("has_max", &UiFilter::has_max);
         h.RegisterMember("max_roll", &UiFilter::max_roll);
         h.RegisterMember("tier", &UiFilter::tier);
         h.RegisterMember("section", &UiFilter::section);
@@ -1001,11 +1003,12 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.filter_groups = {{top, {}}, {"Enchant", {}}, {"Implicit", {}}, {"Totals", {}}, {"Mods", {}}};
         for (const TradeFilter& f : reply->filters) {
             UiFilter u{f.index, f.enabled, f.label, f.min};
-            u.has_slider = f.hi > f.lo && !f.min.empty();
+            u.has_slider = f.draw_slider && f.hi > f.lo && !f.min.empty();
             if (u.has_slider) {
                 auto pct = [&](double v) { return (float)std::clamp((v - f.lo) / (f.hi - f.lo) * 100, 0.0, 100.0); };
                 u.min_pct = pct(atof(f.min.c_str()));
-                u.max_pct = f.max.empty() ? 100 : pct(atof(f.max.c_str()));
+                u.has_max = !f.max.empty();
+                u.max_pct = u.has_max ? pct(atof(f.max.c_str())) : 100;
                 if (!f.roll.empty()) u.roll_pct = pct(atof(f.roll.c_str()));
             }
             u.split = !f.min.empty();

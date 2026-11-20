@@ -157,10 +157,11 @@ body {
 .filter.off .star { color: #8a7a4c; }
 
 /* Min/max range slider: a slim strip under every filter with a range, so
-   ticking a row never moves the rows below. Unticked, it's a faint track
-   with a mark where the item's own value sits; ticked, it gets its fill and
-   handles. The handles centre on their value; the padding keeps both ends
-   reachable. A maximum at the right end means none. */
+   ticking a row never moves the rows below. A mark shows where the item's
+   own value sits. Unticked, it's a faint track; ticked, it gets its fill
+   and handles. With no maximum there's no right handle: the fill runs open
+   to the end (pressing near the end still drags out a maximum). The handles
+   centre on their value; the padding keeps both ends reachable. */
 .slider-row { padding: 0 0 3dp 0; margin-top: -2dp; }
 .range { height: 12dp; padding: 0 7dp; drag: drag; cursor: pointer; }
 .range-inner { position: relative; height: 12dp; }
@@ -170,6 +171,7 @@ body {
 .filter.off .range-fill, .filter.off .range-handle { display: none; }
 .range-fill { background-color: $accent; }
 .range-roll { position: absolute; top: 3dp; width: 2dp; height: 6dp; margin-left: -1dp; background-color: #4a4d5a; }
+.filter.on .range-roll { background-color: $accent-text; }
 .range-handle {
     position: absolute;
     top: 0dp;

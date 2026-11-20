@@ -86,9 +86,13 @@ pub struct Filter {
     /// Default minimum: the roll minus 10%, kept within its tier range, or
     /// exactly the roll when it's the best the tier allows.
     pub min: Option<f64>,
-    /// Range for the minimum's slider: the tier's roll range (summed for
-    /// totals) when advanced copy gave it, else around the value.
+    /// Range for the minimum's slider and wheel steps: the tier's roll range
+    /// (summed for totals) when advanced copy gave it, else around the value.
     pub slider: Option<(f64, f64)>,
+    /// The slider is drawn. Not for a mod or total without a roll range: a
+    /// range made up around the value says nothing about the roll (its
+    /// wheel still steps within it).
+    pub draw_slider: bool,
     pub step: f64,
     /// The roll is at the top of its tier's range.
     pub max_roll: bool,
@@ -121,6 +125,7 @@ impl Filter {
             target,
             min,
             slider,
+            draw_slider: true,
             step,
             max_roll,
             default_on: on,
@@ -132,14 +137,16 @@ impl Filter {
     }
 
     /// A unique's rolled mod, unticked. Like APT, the minimum is the roll
-    /// minus 10% of the mod's range (a perfect roll: exactly the roll).
+    /// minus 10% of the mod's range, kept within the range (a perfect roll:
+    /// exactly the roll).
     fn unique(label: String, target: Target, value: f64, (lo, hi): (f64, f64), section: Section) -> Filter {
         let mut f = Filter::new(label, target, value, Some((lo, hi)), false, section);
         if let (Some(_), false) = (f.min, f.max_roll) {
+            let floor = lo.min(value);
             let min =
                 ((round_down(value - (hi - lo) * (1.0 - min_fraction()), f.step)) / f.step).round() / (1.0 / f.step);
-            f.min = Some(min);
-            f.slider = Some((lo.min(min), hi));
+            f.min = Some(min.max(floor));
+            f.slider = Some((floor, hi));
         }
         f
     }
@@ -1075,11 +1082,13 @@ fn defaults(value: f64, bounds: Option<(f64, f64)>, fine: bool) -> (Option<f64>,
             if value >= hi - 1e-9 {
                 (Some(tidy(value)), Some((lo.min(value), hi)), step, true)
             } else {
-                // Roll - 10% like APT, even below the tier: a roll at the
-                // bottom of its tier still gets some slack, and the slider
-                // reaches down to it.
-                let min = tidy(round_down(value * min_fraction(), step));
-                (Some(min), Some((lo.min(min), hi)), step, false)
+                // Roll - 10%, raised to the tier's floor like APT: a roll at
+                // the bottom of its tier is searched at the floor. A roll
+                // below its tier (corrupted, or a total of odd parts) still
+                // finds the item itself, and the slider reaches down to it.
+                let floor = lo.min(value);
+                let min = tidy(round_down(value * min_fraction(), step)).max(floor);
+                (Some(min), Some((floor, hi)), step, false)
             }
         }
         // A fixed roll: nothing to slide.
@@ -1139,6 +1148,7 @@ fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
                 target: Target::Property("weapon_filters", "crit"),
                 min,
                 slider,
+                draw_slider: true,
                 step,
                 max_roll,
                 default_on: false,
@@ -1262,6 +1272,7 @@ fn map_filters(item: &Item) -> Vec<Filter> {
         target: Target::Flag("map_filters", key),
         min: None,
         slider: None,
+        draw_slider: true,
         step: 1.0,
         max_roll: false,
         default_on: true,
@@ -1286,6 +1297,7 @@ fn memory_strands_filter(item: &Item) -> Option<Filter> {
         target: Target::Property("misc_filters", "memory_level"),
         min: Some(strands),
         slider: Some((0.0, 100.0)),
+        draw_slider: true,
         step: 1.0,
         max_roll: false,
         default_on: strands >= 60.0,
@@ -1344,6 +1356,7 @@ fn option_filters(item: &Item, data: &TradeData) -> (Vec<Filter>, Vec<usize>) {
         target,
         min: None,
         slider: None,
+        draw_slider: true,
         step: 1.0,
         max_roll: false,
         default_on: true,
@@ -1402,6 +1415,7 @@ fn eldritch_filters(item: &Item, data: &TradeData, on: bool) -> Vec<Filter> {
             target,
             min,
             slider,
+            draw_slider: true,
             step: 1.0,
             max_roll: false,
             default_on: on,
@@ -1473,7 +1487,10 @@ fn mod_filter(m: &ModLine, data: &TradeData, local: Local, on: bool, section: Se
     let (stat_id, sign) = find_stat(data, m.kind, &template, local)?;
     let section = mod_section(m, section);
     let mut filter = match mod_value(&values, &m.ranges) {
-        Some((value, range)) => Filter::new(m.text.clone(), Target::Stat(stat_id), value * sign, range, on, section),
+        Some((value, range)) => Filter {
+            draw_slider: range.is_some(),
+            ..Filter::new(m.text.clone(), Target::Stat(stat_id), value * sign, range, on, section)
+        },
         // No number ("Warcries cannot Exert Travel Skills"): searched by
         // whether the item has it, with nothing to slide.
         None => Filter {
@@ -1481,6 +1498,7 @@ fn mod_filter(m: &ModLine, data: &TradeData, local: Local, on: bool, section: Se
             target: Target::Stat(stat_id),
             min: None,
             slider: None,
+            draw_slider: true,
             step: 1.0,
             max_roll: false,
             default_on: on,
@@ -1533,6 +1551,7 @@ fn gem_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         target: Target::Property("misc_filters", key),
         min: Some(value as f64),
         slider: Some((0.0f64.max(value as f64 - 10.0).min(1.0), hi.max(value as f64))),
+        draw_slider: true,
         step: 1.0,
         max_roll: false,
         default_on: on,
@@ -1561,6 +1580,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         target: Target::Flag("misc_filters", key),
         min: None,
         slider: None,
+        draw_slider: true,
         step: 1.0,
         max_roll: false,
         default_on: true,
@@ -1578,6 +1598,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             target: Target::Property("misc_filters", "ilvl"),
             min: Some(min),
             slider: Some((min.min(60.0), 86.0)),
+            draw_slider: true,
             step: 1.0,
             max_roll: false,
             default_on: crafting_value(item),
@@ -1643,6 +1664,7 @@ fn influence_filters(item: &Item, on: bool) -> Vec<Filter> {
                 target: Target::Flag("misc_filters", key),
                 min: None,
                 slider: None,
+                draw_slider: true,
                 step: 1.0,
                 max_roll: false,
                 default_on: on,
@@ -1756,7 +1778,11 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
         let Some(id) = data.stats.get(&("pseudo".to_string(), text.to_string())) else { return };
         let value = total.value.floor();
         let label = text.replacen('#', &value.to_string(), 1);
-        filters.push(Filter::new(label, Target::Stat(id.clone()), value, total.bounds(), on, Section::Total));
+        let bounds = total.bounds();
+        filters.push(Filter {
+            draw_slider: bounds.is_some(),
+            ..Filter::new(label, Target::Stat(id.clone()), value, bounds, on, Section::Total)
+        });
     };
     if life.seen {
         let mut total = life;
@@ -2627,7 +2653,8 @@ mod tests {
             got,
             vec![
                 ("Non-Vaal Strike Skills target 1 additional nearby Enemy", Some(1.0), Section::Exarch),
-                ("0.2% of Cold Damage Leeched as Life", Some(0.18), Section::Eater),
+                // 0.2 - 10% = 0.18, below the tier: raised to its floor
+                ("0.2% of Cold Damage Leeched as Life", Some(0.2), Section::Eater),
             ]
         );
         let strike = filters.iter().find(|f| f.label.starts_with("Non-Vaal")).unwrap();
@@ -2681,14 +2708,56 @@ mod tests {
             vec![
                 // max roll: searched at exactly the roll
                 ("+69 total maximum Life", Some(69.0), Some((55.0, 69.0)), true),
-                // 30 - 10% = 27, below the tier: the slider reaches down to it
-                ("+30% total Elemental Resistance", Some(27.0), Some((27.0, 35.0)), false),
+                // 30 - 10% = 27, below the tier: raised to its floor
+                ("+30% total Elemental Resistance", Some(30.0), Some((30.0, 35.0)), false),
                 ("12% increased Rarity of Items found", Some(10.0), Some((8.0, 14.0)), false),
             ]
         );
         // Totals sum several mods, so only listed mods carry a tier.
         let tiers: Vec<_> = filters.iter().map(|f| f.tier).collect();
         assert_eq!(tiers, vec![None, None, Some(2)]);
+    }
+
+    #[test]
+    fn default_minimum_stays_in_tier() {
+        let min_and_slider = |value, bounds| {
+            let (min, slider, _, _) = defaults(value, Some(bounds), false);
+            (min, slider)
+        };
+        // Mid-tier: roll - 10%, still inside the tier.
+        assert_eq!(min_and_slider(80.0, (70.0, 89.0)), (Some(72.0), Some((70.0, 89.0))));
+        // Bottom of the tier: the floor, not 9.
+        assert_eq!(min_and_slider(11.0, (11.0, 13.0)), (Some(11.0), Some((11.0, 13.0))));
+        // Below its own tier: the roll itself, so the item still matches.
+        assert_eq!(min_and_slider(25.0, (30.0, 35.0)), (Some(25.0), Some((25.0, 35.0))));
+    }
+
+    #[test]
+    fn sliders_only_for_real_ranges() {
+        // Plain Ctrl+C: no roll ranges. The armour property keeps its slider;
+        // the mod and the total don't (their wheel still steps).
+        let plain = "Item Class: Gloves\nRarity: Rare\nDoom Hold\nSorcerer Gloves\n--------\nEnergy Shield: 65\n--------\n\
+                     Item Level: 71\n--------\n+60 to maximum Life\n12% increased Rarity of Items found\n";
+        let item = crate::item::parse(plain).unwrap();
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> =
+            filters.iter().map(|f| (f.label.as_str(), f.slider.is_some(), f.draw_slider, f.section)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Energy shield 78 (at 20% quality)", true, true, Section::Armour),
+                ("+60 total maximum Life", true, false, Section::Total),
+                ("12% increased Rarity of Items found", true, false, Section::Mod),
+            ]
+        );
+        // Advanced copy: the tier ranges are real, so they're drawn.
+        let advanced = "Item Class: Gloves\nRarity: Rare\nDoom Hold\nSorcerer Gloves\n--------\nItem Level: 71\n--------\n\
+                        { Prefix Modifier \"Virile\" (Tier: 3) \u{2014} Life }\n+60(55-69) to maximum Life\n\
+                        { Suffix Modifier \"of Plenty\" (Tier: 2) }\n12(8-14)% increased Rarity of Items found\n";
+        let item = crate::item::parse(advanced).unwrap();
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let drawn: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.draw_slider)).collect();
+        assert_eq!(drawn, vec![("+60 total maximum Life", true), ("12% increased Rarity of Items found", true)]);
     }
 
     #[test]
@@ -3317,7 +3386,8 @@ mod tests {
 
         let plain = limb("Brute's Arm", "+22(20-29) to Strength");
         let f = &build_filters(&plain, &data, Preset::Normal)[0];
-        assert_eq!((f.min, f.max), (Some(19.0), Some(29.0)));
+        // 22 - 10% = 19, below the tier: raised to its floor.
+        assert_eq!((f.min, f.max), (Some(20.0), Some(29.0)));
         assert_eq!(query(&plain, &[], &[], options)["query"]["type"], "Brute's Arm");
 
         // Plain Ctrl+C: no range, so no maximum; the note isn't a stat.
