@@ -3,11 +3,12 @@
 //! us its frames to find them in (SCANFIND) and their pixels to read and
 //! price (SCANITEM).
 //!
-//! Finding: a display's tooltip has a title plate ("Forbidden Reliquary")
-//! between two stone pillars, opaque game art that looks the same on any
-//! background. We match the left pillar and its mirror image (the right
-//! one, give or take its lighting) in a grey, scaled-down frame, and pair
-//! them up row by row.
+//! Finding: a display's tooltip has a title plate, opaque game art that
+//! looks the same on any background. A vault reliquary's ("Forbidden
+//! Reliquary") sits between two stone pillars: we match the left pillar and
+//! its mirror image (the right one, give or take its lighting) in a grey,
+//! scaled-down frame, and pair them up row by row. A Heist curio display's
+//! is a small wooden plate that always reads "Curio Display": matched whole.
 //!
 //! Reading: the tooltip's lines are centred under the plate, so of what OCR
 //! finds in the crop we keep the centred lines below the plate, read the
@@ -40,6 +41,16 @@ const PLATE_WIDTHS: (f32, f32) = (4.0, 30.0);
 /// lines need).
 const CROP_WIDTH: f32 = 2.3;
 const CROP_HEIGHT: f32 = 11.0;
+/// The curio display plate, as the game draws it at 1080 pixels high (grey;
+/// the plate's inside, without its edges, averaged over the two in a Grand
+/// Heist screenshot so it isn't one plate's lighting). On half-size frames
+/// they score 0.7-0.8, anything else under 0.5.
+const CURIO_PNG: &[u8] = include_bytes!("../assets/curio-plate.png");
+const CURIO_HEIGHT_AT: f32 = 1080.0;
+const CURIO_SCORE: f32 = 0.6;
+/// A curio display's tooltip is about three times its plate's width, and
+/// tall (weapons list many lines): its crop, in frame heights.
+const CURIO_CROP: (f32, f32) = (0.75, 0.6);
 
 /// An 8-bit grey image.
 pub struct Gray {
@@ -99,6 +110,55 @@ fn decode_gray_png(bytes: &[u8]) -> Gray {
 fn pillar() -> &'static Gray {
     static PILLAR: OnceLock<Gray> = OnceLock::new();
     PILLAR.get_or_init(|| decode_gray_png(PILLAR_PNG))
+}
+
+fn curio() -> &'static Gray {
+    static CURIO: OnceLock<Gray> = OnceLock::new();
+    CURIO.get_or_init(|| decode_gray_png(CURIO_PNG))
+}
+
+/// Where `art` (sized for frames `art_at` high) is in the frame: coarse at
+/// half the frame's resolution everywhere, then each candidate's best spot
+/// nearby, best first, one per place. Returns the matches and the art's
+/// size in the frame.
+fn find_art(
+    frame: &Gray,
+    ii: &Integral,
+    half: &Gray,
+    half_ii: &Integral,
+    art: &Gray,
+    size: f32,
+    min_score: f32,
+) -> (Vec<(f32, usize, usize)>, usize, usize) {
+    let (tw, th) = ((art.width as f32 * size).round() as usize, (art.height as f32 * size).round() as usize);
+    let (hw, hh) = ((tw / 2).max(2), (th / 2).max(4));
+    if tw < 4 || th < 8 || tw >= frame.width || th >= frame.height || hw >= half.width || hh >= half.height {
+        return (Vec::new(), tw, th);
+    }
+    let full = Template::new(&art.resized(tw, th));
+    let coarse = Template::new(&art.resized(hw, hh));
+    let mut candidates: Vec<(f32, usize, usize)> = Vec::new();
+    for y in 0..=half.height - hh {
+        for x in 0..=half.width - hw {
+            let s = score(half, half_ii, &coarse, x, y);
+            if s >= COARSE_SCORE {
+                candidates.push((s, x * 2, y * 2));
+            }
+        }
+    }
+    candidates.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut found: Vec<(f32, usize, usize)> = Vec::new();
+    for (_, cx, cy) in candidates {
+        if found.iter().any(|&(_, x, y)| x.abs_diff(cx) < tw && y.abs_diff(cy) < th) {
+            continue;
+        }
+        if let Some(best) = best_near(frame, ii, &full, cx, cy, 2).filter(|b| b.0 >= min_score)
+            && !found.iter().any(|&(_, x, y)| x.abs_diff(best.1) < tw && y.abs_diff(best.2) < th)
+        {
+            found.push(best);
+        }
+    }
+    (found, tw, th)
 }
 
 /// A template, zero-mean, with its norm.
@@ -181,68 +241,74 @@ pub struct Plate {
     pub w: f32,
     pub h: f32,
     pub crop: (u32, u32, u32, u32),
+    pub kind: PlateKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlateKind {
+    /// A vault reliquary's, between stone pillars.
+    Vault,
+    /// A Heist curio display's.
+    Curio,
+}
+
+impl PlateKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PlateKind::Vault => "vault",
+            PlateKind::Curio => "curio",
+        }
+    }
 }
 
 /// Finds title plates in a grey frame that is `scale` times smaller than the
 /// game's (2: half resolution), whose full height is `full_height`.
 pub fn find_plates(frame: &Gray, full_width: u32, full_height: u32) -> Vec<Plate> {
     let scale = full_height as f32 / frame.height as f32;
-    // The pillar's size in this frame.
-    let size = full_height as f32 / PILLAR_HEIGHT_AT / scale;
-    let (tw, th) = ((pillar().width as f32 * size).round() as usize, (pillar().height as f32 * size).round() as usize);
-    if tw < 4 || th < 8 || tw >= frame.width || th >= frame.height {
-        return Vec::new();
-    }
-    let left = Template::new(&pillar().resized(tw, th));
-    let right = Template::new(&pillar().resized(tw, th).mirrored());
     let ii = Integral::new(frame);
-
-    // Coarse: the left pillar at half this resolution, everywhere.
     let half = frame.resized(frame.width / 2, frame.height / 2);
-    let (hw, hh) = ((tw / 2).max(2), (th / 2).max(4));
-    let half_left = Template::new(&pillar().resized(hw, hh));
     let half_ii = Integral::new(&half);
-    let mut candidates: Vec<(f32, usize, usize)> = Vec::new();
-    for y in 0..=half.height - hh {
-        for x in 0..=half.width - hw {
-            let s = score(&half, &half_ii, &half_left, x, y);
-            if s >= COARSE_SCORE {
-                candidates.push((s, x * 2, y * 2));
-            }
-        }
-    }
-    candidates.sort_by(|a, b| b.0.total_cmp(&a.0));
-
-    // Fine: each candidate's best spot nearby, best first, one per pillar.
-    let mut lefts: Vec<(f32, usize, usize)> = Vec::new();
-    for (_, cx, cy) in candidates {
-        if lefts.iter().any(|&(_, x, y)| x.abs_diff(cx) < tw && y.abs_diff(cy) < th) {
-            continue;
-        }
-        if let Some(best) = best_near(frame, &ii, &left, cx, cy, 2).filter(|b| b.0 >= LEFT_SCORE)
-            && !lefts.iter().any(|&(_, x, y)| x.abs_diff(best.1) < tw && y.abs_diff(best.2) < th)
-        {
-            lefts.push(best);
-        }
-    }
-
-    // The right pillar: in the same row, a plate's width away.
     let mut plates = Vec::new();
-    for (_, lx, ly) in lefts {
-        let from = lx + (PLATE_WIDTHS.0 * tw as f32) as usize;
-        let to = (lx + (PLATE_WIDTHS.1 * tw as f32) as usize).min(frame.width - tw);
-        let mut best: Option<(f32, usize, usize)> = None;
-        for y in ly.saturating_sub(2)..=(ly + 2).min(frame.height - th) {
-            for x in from..=to {
-                let s = score(frame, &ii, &right, x, y);
-                if s >= RIGHT_SCORE && best.is_none_or(|b| s > b.0) {
-                    best = Some((s, x, y));
+
+    // Vault plates: left pillars, then each one's right pillar in the same
+    // row, a plate's width away.
+    let size = full_height as f32 / PILLAR_HEIGHT_AT / scale;
+    let (lefts, tw, th) = find_art(frame, &ii, &half, &half_ii, pillar(), size, LEFT_SCORE);
+    if !lefts.is_empty() {
+        let right = Template::new(&pillar().resized(tw, th).mirrored());
+        for (_, lx, ly) in lefts {
+            let from = lx + (PLATE_WIDTHS.0 * tw as f32) as usize;
+            let to = (lx + (PLATE_WIDTHS.1 * tw as f32) as usize).min(frame.width - tw);
+            let mut best: Option<(f32, usize, usize)> = None;
+            for y in ly.saturating_sub(2)..=(ly + 2).min(frame.height - th) {
+                for x in from..=to {
+                    let s = score(frame, &ii, &right, x, y);
+                    if s >= RIGHT_SCORE && best.is_none_or(|b| s > b.0) {
+                        best = Some((s, x, y));
+                    }
                 }
             }
+            let Some((_, rx, _)) = best else { continue };
+            let (x, y, w, h) = (lx as f32 * scale, ly as f32 * scale, (rx + tw - lx) as f32 * scale, th as f32 * scale);
+            plates.push(Plate {
+                x,
+                y,
+                w,
+                h,
+                crop: crop_for(x, y, w, h, full_width, full_height),
+                kind: PlateKind::Vault,
+            });
         }
-        let Some((_, rx, _)) = best else { continue };
-        let (x, y, w, h) = (lx as f32 * scale, ly as f32 * scale, (rx + tw - lx) as f32 * scale, th as f32 * scale);
-        plates.push(Plate { x, y, w, h, crop: crop_for(x, y, w, h, full_width, full_height) });
+    }
+
+    // Curio display plates: whole.
+    let size = full_height as f32 / CURIO_HEIGHT_AT / scale;
+    let (curios, tw, th) = find_art(frame, &ii, &half, &half_ii, curio(), size, CURIO_SCORE);
+    for (_, cx, cy) in curios {
+        let (x, y, w, h) = (cx as f32 * scale, cy as f32 * scale, tw as f32 * scale, th as f32 * scale);
+        let fh = full_height as f32;
+        let crop = crop_sized(x + w / 2.0, y, CURIO_CROP.0 * fh, CURIO_CROP.1 * fh, full_width, full_height);
+        plates.push(Plate { x, y, w, h, crop, kind: PlateKind::Curio });
     }
     plates
 }
@@ -260,13 +326,17 @@ fn best_near(g: &Gray, ii: &Integral, t: &Template, cx: usize, cy: usize, r: usi
     best
 }
 
-/// The tooltip's crop: centred under the plate, from its top down.
+/// A vault tooltip's crop: centred under the plate, from its top down.
 fn crop_for(x: f32, y: f32, w: f32, h: f32, full_width: u32, full_height: u32) -> (u32, u32, u32, u32) {
-    let cx = x + w / 2.0;
-    let cw = (w * CROP_WIDTH).min(full_width as f32);
+    crop_sized(x + w / 2.0, y, w * CROP_WIDTH, h * CROP_HEIGHT, full_width, full_height)
+}
+
+/// A crop `cw` x `ch`, centred on `cx`, from `y` down, kept in the frame.
+fn crop_sized(cx: f32, y: f32, cw: f32, ch: f32, full_width: u32, full_height: u32) -> (u32, u32, u32, u32) {
+    let cw = cw.min(full_width as f32);
     let x0 = (cx - cw / 2.0).clamp(0.0, full_width as f32 - cw);
     let y0 = y.max(0.0);
-    let y1 = (y + h * CROP_HEIGHT).min(full_height as f32);
+    let y1 = (y + ch).min(full_height as f32);
     (x0 as u32, y0 as u32, cw as u32, (y1 - y0).max(1.0) as u32)
 }
 
@@ -506,7 +576,7 @@ pub fn read_item(
         {
             item.gem_max_level = up.contains("MAX");
             item.gem_level = number(v).map(|n| n as u32);
-        } else if item.rarity == "Rare"
+        } else if matches!(item.rarity.as_str(), "Rare" | "Magic" | "Normal")
             && let Some((kind, text)) = canonical(&line.text)
         {
             let mut m = crate::item::mod_line(&text);
@@ -575,6 +645,8 @@ mod tests {
             named(None, "Chaos Orb", "currency"),
             named(None, "Greater Multistrike Support", "gem"),
             named(None, "Multistrike Support", "gem"),
+            named(None, "Tenderizer", "weapon"),
+            named(None, "Primordial Staff", "weapon"),
         ]))
     }
 
@@ -723,6 +795,67 @@ mod tests {
         // Its crop holds the whole tooltip (x 520-1180, y 500-980).
         let (cx, cy, cw, ch) = embrace.crop;
         assert!(cx <= 530 && cx + cw >= 1170 && cy <= 540 && cy + ch >= 960, "{:?}", embrace.crop);
+    }
+
+    /// A Grand Heist screenshot (Records Office): two curio displays. It's a
+    /// crop of a 1080p frame: padded back to 1080 rows, so the UI's scale is
+    /// right, and halved like the layer's frames.
+    fn curio_frame() -> (Vec<u8>, usize, usize) {
+        let (rgb, w, h) = load_png("curio-records-office.png");
+        let mut padded = rgb;
+        padded.resize(w * 1080 * 3, 0);
+        (padded, w, 1080.max(h))
+    }
+
+    #[test]
+    fn finds_curio_plates() {
+        let (rgb, w, h) = curio_frame();
+        let grey: Vec<u8> =
+            rgb.chunks(3).map(|p| ((p[0] as u32 * 3 + p[1] as u32 * 6 + p[2] as u32) / 10) as u8).collect();
+        let full = Gray { width: w, height: h, pixels: grey };
+        let half = full.resized(w / 2, h / 2);
+        let plates = find_plates(&half, w as u32, h as u32);
+        let curios: Vec<&Plate> = plates.iter().filter(|p| p.kind == PlateKind::Curio).collect();
+        assert_eq!(curios.len(), 2, "{plates:?}");
+        let near = |x: f32, y: f32| curios.iter().any(|p| (p.x - x).abs() < 8.0 && (p.y - y).abs() < 8.0);
+        assert!(near(350.0, 447.0) && near(803.0, 36.0), "{curios:?}");
+        // The crop holds the whole tooltip (the lower one: x 170-720, y 430-890).
+        let lower = curios.iter().find(|p| p.y > 300.0).unwrap();
+        let (cx, cy, cw, ch) = lower.crop;
+        assert!(cx <= 175 && cx + cw >= 715 && cy <= 450 && cy + ch >= 880, "{:?}", lower.crop);
+    }
+
+    #[test]
+    fn reads_curio_tooltips() {
+        if !models_available() {
+            return;
+        }
+        let (rgb, w, h) = curio_frame();
+        let grey: Vec<u8> =
+            rgb.chunks(3).map(|p| ((p[0] as u32 * 3 + p[1] as u32 * 6 + p[2] as u32) / 10) as u8).collect();
+        let half = Gray { width: w, height: h, pixels: grey }.resized(w / 2, h / 2);
+        let v = vocabulary();
+        let mut names = Vec::new();
+        for p in find_plates(&half, w as u32, h as u32).into_iter().filter(|p| p.kind == PlateKind::Curio) {
+            let (cx, cy, cw, ch) = (p.crop.0 as usize, p.crop.1 as usize, p.crop.2 as usize, p.crop.3 as usize);
+            let mut crop = Vec::new();
+            for y in cy..cy + ch {
+                crop.extend_from_slice(&rgb[(y * w + cx) * 3..(y * w + cx + cw) * 3]);
+            }
+            let all = crate::ocr::read(&crop, cw, ch).unwrap();
+            let lines = tooltip_lines(&all, p.x - cx as f32 + p.w / 2.0, p.y - cy as f32 + p.h, cw as f32);
+            let read = read_item(&lines, &v, |_| None).unwrap();
+            assert_eq!(read.item.rarity, "Rare", "{:?}", read.lines);
+            names.push((read.item.name.clone().unwrap_or_default(), read.item.base.clone()));
+        }
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                ("Damnation Bane".to_string(), "Tenderizer".to_string()),
+                ("Rapture Cry".into(), "Primordial Staff".into())
+            ]
+        );
     }
 
     #[test]

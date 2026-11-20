@@ -9,6 +9,10 @@
 // auto_watch_areas (the daemon follows the game's Client.txt: AREA). Off
 // with the hotkey, on leaving the area, or (without a log to follow) after a
 // while without a display in sight.
+//
+// In Heist (long combat maps, displays only in the reward rooms) it starts
+// idle: a frame a second to look for displays, nothing tracked. A display
+// in view wakes it to full speed; 5 seconds without one, it idles again.
 #pragma once
 
 #include "daemon_client.h"
@@ -31,7 +35,9 @@ public:
 
     // Once per frame. `toggles`: presses of the hotkey since last time.
     void update(Clock::time_point now, int toggles);
+    // Scanning at all (idle or not), and at full speed (tracking, tags).
     bool active() const { return active_; }
+    bool tracking() const { return active_ && !idle_; }
 
     // overlay.cpp: a copy of the whole frame wanted (for SCANFIND)...
     bool frame_wanted(Clock::time_point now) const;
@@ -161,11 +167,12 @@ private:
         Clock::time_point at;
     };
 
-    void start(bool automatic, Clock::time_point now);
+    void start(bool automatic, bool idling, Clock::time_point now);
     void stop(const char* why);
     void poll_area(Clock::time_point now);
     void poll_find(Clock::time_point now);
-    void add_plate(const std::array<float, 8>& p, Clock::time_point now);
+    // False if it wasn't added: a plate known not to be an item's.
+    bool add_plate(const std::array<float, 8>& p, Clock::time_point now);
     void forget(Tracked& t);
     // One tag per display and per item (vault displays never repeat one).
     void dedupe();
@@ -177,6 +184,18 @@ private:
 
     bool active_ = false;
     bool automatic_ = false;
+    // A Heist session: idles when no display is in view (`idle_` now).
+    bool idling_ = false;
+    bool idle_ = false;
+    Clock::time_point last_tag_;  // a display's tag was last in view
+    // Name bands of plates read as no item (another kind of tooltip):
+    // seen again, they neither wake the scan nor get read again.
+    std::vector<Template> not_items_;
+    // POE_WAYTRADE_SCAN_SAVE: where the hotkey saves the next whole frame
+    // (for building templates from a display the scan doesn't find).
+    std::string save_dir_;
+    bool save_next_ = false;
+    Clock::time_point saved_at_;
     // Turned off by hand in an auto-watch area: stays off until a new area.
     bool suppressed_ = false;
     Clock::time_point started_, last_plate_;

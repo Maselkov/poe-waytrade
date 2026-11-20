@@ -15,8 +15,14 @@
 
 namespace {
 
-// Between SCANFINDs: often enough to catch displays coming into view.
+// Between SCANFINDs: often enough to catch displays coming into view...
 constexpr auto kFindGap = std::chrono::milliseconds(300);
+// ...and while idle in Heist, waiting for one; back to idle after this
+// long without a display's tag in view.
+constexpr auto kIdleFindGap = std::chrono::seconds(1);
+constexpr auto kIdleAfter = std::chrono::seconds(5);
+// POE_WAYTRADE_SCAN_SAVE: at most one frame saved this often.
+constexpr auto kSaveGap = std::chrono::seconds(5);
 // After the daemon couldn't take a frame (or none could be copied).
 constexpr auto kFindRetry = std::chrono::seconds(1);
 constexpr auto kAreaGap = std::chrono::seconds(1);
@@ -26,11 +32,12 @@ constexpr auto kIdleOff = std::chrono::minutes(3);
 // A tooltip not found for this long is forgotten (SCANFIND finds it again
 // if it comes back; its price is remembered, see kRemember).
 constexpr auto kForget = std::chrono::seconds(4);
-// Its label hides after this many copies without finding it...
+// Its label hides after this many copies without finding it, and it isn't
+// looked for each frame any more (a wide search is costly): SCANFIND finds
+// it again, a few times a second. (Stopping sooner would leave its tag
+// standing where it was last seen until it's forgotten.)
 constexpr int kHideAfter = 8;
-// ...and after this many it isn't looked for each frame any more (a wide
-// search is costly): SCANFIND finds it again, a few times a second.
-constexpr int kStopLooking = 3;
+constexpr int kStopLooking = kHideAfter;
 // The daemon is still loading prices or names: ask again after this.
 constexpr auto kRetryLoading = std::chrono::seconds(2);
 // Tracking: how well the plate and name must match where they're looked for.
@@ -264,18 +271,22 @@ struct ScreenScan::Worker {
     }
 };
 
-ScreenScan::ScreenScan() : worker_(std::make_unique<Worker>()), log_hint_(guess_log()) {}
+ScreenScan::ScreenScan() : worker_(std::make_unique<Worker>()), log_hint_(guess_log()) {
+    if (const char* dir = getenv("POE_WAYTRADE_SCAN_SAVE")) save_dir_ = dir;
+}
 
 ScreenScan::~ScreenScan() = default;
 
-void ScreenScan::start(bool automatic, Clock::time_point now) {
+void ScreenScan::start(bool automatic, bool idling, Clock::time_point now) {
     tracked_.clear();
     remembered_.clear();
+    not_items_.clear();
     active_ = true;
     automatic_ = automatic;
-    started_ = last_plate_ = now;
+    idling_ = idle_ = idling;
+    started_ = last_plate_ = last_tag_ = now;
     next_find_ = now;
-    poe_log("displays: on (%s)", automatic ? "auto-watch area" : "hotkey");
+    poe_log("displays: on (%s)", idling ? "Heist: idle until a display shows" : automatic ? "auto-watch area" : "hotkey");
     changed();
 }
 
@@ -292,6 +303,8 @@ void ScreenScan::stop(const char* why) {
     frame_pending_ = false;
     find_busy_ = false;
     find_.cancel();
+    not_items_.clear();
+    idle_ = idling_ = false;
     poe_log("displays: off (%s)", why);
     changed();
 }
@@ -305,12 +318,19 @@ void ScreenScan::forget(Tracked& t) {
 void ScreenScan::update(Clock::time_point now, int toggles) {
     now_ = now;
     for (int i = 0; i < toggles; i++) {
+        // POE_WAYTRADE_SCAN_SAVE: the hotkey saves the next frame instead
+        // (turning scanning on if need be).
+        if (!save_dir_.empty()) {
+            save_next_ = true;
+            if (!active_) start(false, false, now);
+            continue;
+        }
         if (active_) {
             stop("hotkey");
             suppressed_ = true;  // don't come straight back on in this area
         } else {
             suppressed_ = false;
-            start(false, now);
+            start(false, false, now);
         }
     }
     poll_area(now);
@@ -357,6 +377,7 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
                     reply.detail.c_str(), reply.value_text.c_str(), reply.message.empty() ? "" : ": ",
                     reply.message.c_str(), lines.c_str());
             reply.lines.clear();
+            if (reply.status == "no_item" && !t.name.v.empty()) not_items_.push_back(t.name);
             if (t.verify && reply.title != t.reply.title)
                 poe_log("displays: not %s after all, but %s", t.reply.title.c_str(), reply.title.c_str());
             t.reply = std::move(reply);
@@ -374,6 +395,20 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
     std::erase_if(tracked_, [&](const Tracked& t) { return t.lost > 0 && now - t.seen > kForget; });
     dedupe();
     if (tracked_.size() != before) changed();
+
+    // Heist: back to idle once no display's tag has been in view for a while.
+    if (idling_ && !idle_) {
+        for (const Tracked& t : tracked_)
+            if (t.lost < kHideAfter && !t.duplicate && !(t.replied && t.reply.status == "no_item")) last_tag_ = now;
+        if (now - last_tag_ > kIdleAfter) {
+            for (Tracked& t : tracked_) forget(t);
+            tracked_.clear();
+            idle_ = true;
+            next_find_ = now + kIdleFindGap;
+            poe_log("displays: no display in view: idle");
+            changed();
+        }
+    }
 }
 
 void ScreenScan::poll_area(Clock::time_point now) {
@@ -388,9 +423,10 @@ void ScreenScan::poll_area(Clock::time_point now) {
                 suppressed_ = false;
                 stop("left the area");
             }
-            if (reply.watch && !suppressed_ && !active_)
-                start(true, now);
-            else if (!reply.watch && active_ && automatic_)
+            bool watch = reply.watch == "1" || reply.watch == "idle";
+            if (watch && !suppressed_ && !active_)
+                start(true, reply.watch == "idle", now);
+            else if (!watch && active_ && automatic_)
                 stop("auto-watch is off");
         }
     }
@@ -414,10 +450,28 @@ void ScreenScan::frame_taken(int width, int height, const uint8_t* px, ToRgb to_
     job_h_ = height;
     job_at_ = at;
     // frame_pending_ stays set until the job is done (see update()).
-    frame_job_ = std::async(std::launch::async, [px, to_rgb, width, height]() {
+    // POE_WAYTRADE_SCAN_SAVE, after a hotkey press: this frame, as a PPM.
+    std::string save;
+    if (save_next_ && now_ - saved_at_ > kSaveGap) {
+        save_next_ = false;
+        saved_at_ = now_;
+        save = save_dir_ + "/frame-" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) +
+               ".ppm";
+    }
+    frame_job_ = std::async(std::launch::async, [px, to_rgb, width, height, save]() {
         FrameJob job;
         job.rgb.resize((size_t)width * height * 3);
         if (!to_rgb(px, (size_t)width * height, job.rgb.data())) return FrameJob{};
+        if (!save.empty()) {
+            if (FILE* f = fopen(save.c_str(), "wb")) {
+                fprintf(f, "P6\n%d %d\n255\n", width, height);
+                fwrite(job.rgb.data(), 1, job.rgb.size(), f);
+                fclose(f);
+                poe_log("displays: frame saved to %s", save.c_str());
+            } else {
+                poe_log("displays: can't save a frame to %s", save.c_str());
+            }
+        }
         // Half size, grey: what the daemon looks for plates in.
         int hw = width / 2, hh = height / 2;
         std::vector<uint8_t> half((size_t)hw * hh);
@@ -438,7 +492,7 @@ void ScreenScan::poll_find(Clock::time_point now) {
     PriceReply reply;
     if (!find_.poll(&reply)) return;
     find_busy_ = false;
-    next_find_ = now + (reply.status == "ok" ? kFindGap : kFindRetry);
+    next_find_ = now + (reply.status != "ok" ? kFindRetry : idle_ ? kIdleFindGap : kFindGap);
     if (reply.status != "ok") {
         poe_log("displays: SCANFIND: %s %s", reply.status.c_str(), reply.message.c_str());
         return;
@@ -469,7 +523,14 @@ void ScreenScan::poll_find(Clock::time_point now) {
             if (!match || dx + dy < nearest) match = &t, nearest = dx + dy;
         }
         if (!match) {
-            add_plate(p, now);
+            // A display (not a known non-item) wakes an idle scan.
+            if (add_plate(p, now) && idle_) {
+                idle_ = false;
+                last_tag_ = now;
+                next_find_ = now + kFindGap;
+                poe_log("displays: a display in view: full speed");
+                changed();
+            }
         } else if (match->lost > 0) {
             // Lost while tracking (moved too fast, or covered): found again.
             match->x = p[0];
@@ -503,11 +564,11 @@ void make_template(const std::vector<uint8_t>& g, int w, int h, std::vector<floa
 
 }  // namespace
 
-void ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now) {
+bool ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now) {
     int px = (int)p[0], py = (int)p[1], pw = (int)p[2], ph = (int)p[3];
     int cx = (int)p[4], cy = (int)p[5], cw = (int)p[6], ch = (int)p[7];
-    if (frame_.empty() || pw < 8 || ph < 8 || px < 0 || py < 0 || px + pw > frame_w_ || py + ph > frame_h_) return;
-    if (cx < 0 || cy < 0 || cw <= 0 || ch <= 0 || cx + cw > frame_w_ || cy + ch > frame_h_) return;
+    if (frame_.empty() || pw < 8 || ph < 8 || px < 0 || py < 0 || px + pw > frame_w_ || py + ph > frame_h_) return false;
+    if (cx < 0 || cy < 0 || cw <= 0 || ch <= 0 || cx + cw > frame_w_ || cy + ch > frame_h_) return false;
 
     Tracked t;
     t.id = next_id_++;
@@ -550,6 +611,9 @@ void ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now)
         for (size_t i = 0; i < a.v.size(); i++) dot += (double)a.v[i] * t.name.v[i];
         return dot / ((double)a.norm * t.name.norm) >= kSameName;
     };
+    // Read before as no item (another kind of tooltip with a plate): skip it.
+    for (const Template& n : not_items_)
+        if (same_name(n)) return false;
     // Seen in the last few minutes, by the look of it: its price at once,
     // until reading it says otherwise.
     for (auto it = remembered_.rbegin(); it != remembered_.rend(); ++it) {
@@ -576,6 +640,7 @@ void ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now)
     if (!t.verify) poe_log("displays: plate at %d,%d (%dx%d)", px, py, pw, ph);
     tracked_.push_back(std::move(t));
     changed();
+    return true;
 }
 
 namespace {
@@ -640,7 +705,7 @@ void ScreenScan::dedupe() {
 
 std::vector<ScreenScan::Region> ScreenScan::regions_wanted() const {
     std::vector<Region> out;
-    if (!active_) return out;
+    if (!tracking()) return out;
     for (const Tracked& t : tracked_) {
         // Room for the camera to move between looks (a frame or two), around
         // where it should be by now.
@@ -736,7 +801,7 @@ void ScreenScan::apply(const Match& m) {
 
 std::vector<ScreenScan::Label> ScreenScan::labels() const {
     std::vector<Label> out;
-    if (!active_) return out;
+    if (!tracking()) return out;
     // The most valuable of everything seen in this area, in sight or not.
     double best = 0;
     for (const Tracked& t : tracked_)

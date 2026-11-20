@@ -507,6 +507,31 @@ impl TradeData {
         data
     }
 
+    /// See Trade::canonical_mod.
+    fn canonical_mod(&self, line: &str) -> Option<(ModKind, String)> {
+        let (template, values) = templatize(line.trim());
+        let lower = template.to_lowercase();
+        for (group, kind) in
+            [("explicit", ModKind::Explicit), ("implicit", ModKind::Implicit), ("enchant", ModKind::Enchant)]
+        {
+            let Some(text) = self.lower_stats.get(&(group.to_string(), lower.clone())) else { continue };
+            let mut values = values.iter();
+            let line = text
+                .split('#')
+                .enumerate()
+                .map(|(i, part)| {
+                    if i == 0 {
+                        part.to_string()
+                    } else {
+                        format!("{}{part}", values.next().map_or("#".into(), |v| trim_number(*v)))
+                    }
+                })
+                .collect();
+            return Some((kind, line));
+        }
+        None
+    }
+
     /// Every id with a text in a group, the first listed first.
     fn stat_ids(&self, group: &str, text: &str) -> Option<Vec<String>> {
         let key = (group.to_string(), text.to_string());
@@ -578,29 +603,11 @@ impl Trade {
 
     /// A mod line read off the screen ("+23% TO COLD RESISTANCE"), as the
     /// game writes it ("+23% to Cold Resistance"), with its kind, if the
-    /// trade site has the stat as an explicit or implicit.
+    /// trade site has the stat as an explicit, implicit or enchant (Heist's
+    /// "#% increased Explicit Chaos Modifier magnitudes").
     pub fn canonical_mod(&mut self, line: &str) -> Option<(ModKind, String)> {
         self.ensure_data().ok()?;
-        let data = &self.data.as_ref().unwrap().0;
-        let (template, values) = templatize(line.trim());
-        let lower = template.to_lowercase();
-        for (group, kind) in [("explicit", ModKind::Explicit), ("implicit", ModKind::Implicit)] {
-            let Some(text) = data.lower_stats.get(&(group.to_string(), lower.clone())) else { continue };
-            let mut values = values.iter();
-            let line = text
-                .split('#')
-                .enumerate()
-                .map(|(i, part)| {
-                    if i == 0 {
-                        part.to_string()
-                    } else {
-                        format!("{}{part}", values.next().map_or("#".into(), |v| trim_number(*v)))
-                    }
-                })
-                .collect();
-            return Some((kind, line));
-        }
-        None
+        self.data.as_ref().unwrap().0.canonical_mod(line)
     }
 
     /// Searches one base type ("Facetor's Lens") for listings with at least
@@ -2731,6 +2738,32 @@ mod tests {
                         +30% to Fire Resistance\n+20 to Dexterity and Intelligence\n\
                         12% increased Rarity of Items found\n+12% to Cold Resistance (crafted)\n\
                         8% increased Rarity of Items found (crafted)\n";
+
+    #[test]
+    fn heist_enchant_read_off_screen() {
+        let mut data = test_data();
+        let text = "#% increased Explicit Chaos Modifier magnitudes";
+        data.stats.insert(("enchant".into(), text.into()), "enchant.stat_3196512240".into());
+        data.lower_stats.insert(("enchant".into(), text.to_lowercase()), text.into());
+        let (kind, line) = data.canonical_mod("8% INCREASED EXPLICIT CHAOS MODIFIER MAGNITUDES").unwrap();
+        assert_eq!(kind, ModKind::Enchant);
+        assert_eq!(line, "8% increased Explicit Chaos Modifier magnitudes");
+        // The Base item preset searches the type with the enchant ticked.
+        let mut m = crate::item::mod_line(&line);
+        m.kind = kind;
+        let item = Item {
+            rarity: "Rare".into(),
+            name: Some("Damnation Bane".into()),
+            base: "Tenderizer".into(),
+            mods: vec![m],
+            ..Default::default()
+        };
+        let filters = build_filters(&item, &data, Preset::Base);
+        let enchant = filters.iter().find(|f| f.target == Target::Stat("enchant.stat_3196512240".into()));
+        assert!(enchant.is_some_and(|f| f.default_on), "{:?}", filters.iter().map(|f| &f.label).collect::<Vec<_>>());
+        // Property lines aren't mods.
+        assert_eq!(data.canonical_mod("PHYSICAL DAMAGE: 112-157"), None);
+    }
 
     #[test]
     fn corruption_defaults() {

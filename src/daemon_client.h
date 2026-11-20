@@ -136,7 +136,9 @@ struct PriceReply {
     // AREA
     std::string area;
     long long entered = -1;  // a new number: a new area
-    bool watch = false;      // one of the areas to price displays in
+    // How to watch this area for displays: "1" (a vault: all the time),
+    // "idle" (Heist: slowly, at full speed while one's in view), "0" (not).
+    std::string watch = "0";
 };
 
 class DaemonClient {

@@ -188,6 +188,27 @@ tooltip as you move. The most valuable one in sight gets a gold border.
 `poe-waytrade-daemon scan <screenshot.png>` reads the displays in a
 screenshot without the game, which is handy if a display isn't recognised.
 
+### Item displays (Heist)
+
+Heist's Curio Displays (the reward rooms of contracts and Grand Heist wings)
+are priced the same way, but Heist maps are long and mostly combat, so there
+it starts **idle**: it looks for a display once a second and tracks
+nothing. As soon as one is in view it runs at full speed, and 5 seconds after
+the last one leaves the screen it's idle again. Displays seen in the last 10
+minutes get their price back at once.
+
+- It knows it's in Heist from the game's own id for the area (Client.txt's
+  "Generating level ... area" line), so the Laboratory and Mansion maps don't
+  count. Turn it off with "Price them in Heist" (Hotkeys tab).
+- How rares are priced: a Thief's Trinket by its mods; an experimented base
+  by its poe.ninja base price (by item level when the tooltip shows it); a
+  rare with a Heist enchant by its type and enchant (the Base item preset);
+  any other rare by its mods.
+- If a display isn't tagged, set `POE_WAYTRADE_SCAN_SAVE=<folder>` in the
+  launch options: then Ctrl+Alt+F saves the next frame there (instead of
+  turning the check off). A frame with the display on screen is what's needed
+  to teach it a new kind of display.
+
 ### Map check
 
 Maps, invitations, heist contracts and blueprints open the map check:

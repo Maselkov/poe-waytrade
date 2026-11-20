@@ -708,7 +708,7 @@ bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc,
     // The display labels, moved on the GPU to where their tooltips are in
     // this very frame (gpu_track.h); else where the CPU tracking puts them.
     VkDescriptorSet labels = VK_NULL_HANDLE;
-    if (ov.gpu && sc.can_sample && ov.scan.active() && ov.price_check.settings().values().gpu_tracking) {
+    if (ov.gpu && sc.can_sample && ov.scan.tracking() && ov.price_check.settings().values().gpu_tracking) {
         if (!ov.gpu->has_swapchain(&sc)) {
             std::vector<VkImageView> views;
             for (auto& i : sc.images) views.push_back(i.view);

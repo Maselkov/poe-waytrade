@@ -20,6 +20,82 @@ pub enum Outcome {
     Unsupported(String),
 }
 
+/// Heist's experimented base types (poedb's list of 40). Whatever their
+/// mods, they sell as their base: priced by poe.ninja's base price.
+pub const EXPERIMENTED_BASES: &[&str] = &[
+    "Astrolabe Amulet",
+    "Simplex Amulet",
+    "Cogwork Ring",
+    "Geodesic Ring",
+    "Micro-Distillery Belt",
+    "Accumulator Wand",
+    "Congregator Wand",
+    "Alternating Sceptre",
+    "Oscillating Sceptre",
+    "Stabilising Sceptre",
+    "Boom Mace",
+    "Crack Mace",
+    "Crushing Force Magnifier",
+    "Impact Force Propagator",
+    "Disapprobation Axe",
+    "Psychotic Axe",
+    "Apex Cleaver",
+    "Honed Cleaver",
+    "Anarchic Spiritblade",
+    "Capricious Spiritblade",
+    "Banishing Blade",
+    "Blasting Blade",
+    "Flashfire Blade",
+    "Infernal Blade",
+    "Pneumatic Dagger",
+    "Pressurised Dagger",
+    "Malign Fangs",
+    "Void Fangs",
+    "Battery Staff",
+    "Eventuality Rod",
+    "Potentiality Rod",
+    "Reciprocation Staff",
+    "Foundry Bow",
+    "Solarine Bow",
+    "Cold-attuned Buckler",
+    "Heat-attuned Tower Shield",
+    "Magmatic Tower Shield",
+    "Polar Buckler",
+    "Subsuming Spirit Shield",
+    "Transfer-attuned Spirit Shield",
+];
+
+/// An experimented base's poe.ninja price, by its item level and influences
+/// when known; without an item level, its line at item level 82 without
+/// influences (what a buyer would assume, and the cheapest).
+pub fn experimented_price(db: &PriceDb, item: &Item) -> Option<Price> {
+    if !EXPERIMENTED_BASES.contains(&item.base.as_str()) {
+        return None;
+    }
+    if item.item_level.is_some() {
+        let plain = Item { rarity: "Normal".into(), corrupted: false, ..clone_base(item) };
+        if let Some(p) = base_prices(db, &plain).into_iter().next() {
+            return Some(p);
+        }
+    }
+    let lines = db.bases.get(&item.base)?;
+    let line = lines.iter().filter(|l| l.variant.is_none()).min_by_key(|l| l.level_required.unwrap_or(99))?;
+    let mut price = line_price(db, line);
+    price.label = format!("ilvl {}", line.level_required.unwrap_or(82));
+    Some(price)
+}
+
+/// The fields base prices go by.
+fn clone_base(item: &Item) -> Item {
+    Item {
+        class: item.class.clone(),
+        base: item.base.clone(),
+        item_level: item.item_level,
+        influences: item.influences.clone(),
+        ..Default::default()
+    }
+}
+
 /// Most variants worth showing for one item (e.g. a unique's rolls).
 const MAX_PRICES: usize = 4;
 
@@ -317,6 +393,34 @@ mod tests {
             "Item Class: Body Armours\nRarity: Unique\nQueen of the Forest\nDestiny Leather\n--------\n\
              Evasion Rating: 1200\n--------\nSockets: {sockets}\n--------\nItem Level: 84\n"
         )
+    }
+
+    #[test]
+    fn experimented_bases() {
+        let db = fixture_db();
+        let amulet = |ilvl: Option<u32>| Item {
+            rarity: "Rare".into(),
+            name: Some("Gloom Pendant".into()),
+            base: "Simplex Amulet".into(),
+            item_level: ilvl,
+            ..Default::default()
+        };
+        // Without an item level: the plain base's lowest one poe.ninja lists.
+        let lowest = fixture_lines("BaseType", "Simplex Amulet")
+            .into_iter()
+            .filter(|l| l["variant"].is_null())
+            .min_by_key(|l| l["levelRequired"].as_u64().unwrap())
+            .unwrap();
+        let p = experimented_price(&db, &amulet(None)).unwrap();
+        assert_eq!(p.chaos, chaos(&lowest));
+        assert_eq!(p.label, format!("ilvl {}", lowest["levelRequired"]));
+        // With one: that item level's, whatever the item's rarity and mods.
+        let at85 = line("BaseType", "Simplex Amulet", |l| l["variant"].is_null() && l["levelRequired"] == 85);
+        assert_eq!(experimented_price(&db, &amulet(Some(85))).unwrap().chaos, chaos(&at85));
+        // Not an experimented base.
+        let regalia = Item { base: "Vaal Regalia".into(), ..amulet(None) };
+        assert!(experimented_price(&db, &regalia).is_none());
+        assert_eq!(EXPERIMENTED_BASES.len(), 40);
     }
 
     #[test]

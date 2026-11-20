@@ -121,7 +121,7 @@ PriceReply parse_reply(const std::string& body) {
         } else if (f[0] == "line") reply.lines.push_back(f[1]);
         else if (f[0] == "area") reply.area = f[1];
         else if (f[0] == "entered") reply.entered = atoll(f[1].c_str());
-        else if (f[0] == "watch") reply.watch = f[1] == "1";
+        else if (f[0] == "watch") reply.watch = f[1];
     }
     return reply;
 }

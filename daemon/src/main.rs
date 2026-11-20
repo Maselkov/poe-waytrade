@@ -33,9 +33,9 @@
 //!             bottom), scaled down from the game's full size: where item
 //!             displays' tooltips are (scan.rs)
 //!   response: status ok
-//!     plate    <x> <y> <w> <h> <crop x> <crop y> <crop w> <crop h>   (0+,
-//!              in full-size pixels: a tooltip's title plate, and the crop
-//!              to send to SCANITEM)
+//!     plate    <x> <y> <w> <h> <crop x> <crop y> <crop w> <crop h> <kind>
+//!              (0+, in full-size pixels: a tooltip's title plate, and the
+//!              crop to send to SCANITEM; kind: vault | curio)
 //!
 //!   request:  "SCANITEM\n" + "<width> <height> <plate x> <plate y> <plate
 //!             w> <plate h>" + "\n" + base64 of the crop's pixels (RGB, 8
@@ -55,7 +55,9 @@
 //!   response: status ok | none
 //!     area     <the area the player last entered>
 //!     entered  <how many area changes so far: a new number is a new area>
-//!     watch    <1|0>   (it's one of the settings' auto_watch_areas)
+//!     watch    <1|idle|0>   (1: one of the settings' auto_watch_areas;
+//!              idle: a Heist area, watched slowly until a display shows)
+//!     area_id  <the game's id for it, e.g. HeistMansion9>   (if logged)
 //!     message  <why there's no area>   (status none)
 //!
 //!   request:  "PING\n"   (sent by the layer at game start to wake us up)
@@ -993,7 +995,15 @@ fn scan_find(request: &str) -> String {
     let mut out = "status\tok\n".to_string();
     for p in scan::find_plates(&frame, n[2] as u32, n[3] as u32) {
         let (cx, cy, cw, ch) = p.crop;
-        let _ = writeln!(out, "plate\t{:.0}\t{:.0}\t{:.0}\t{:.0}\t{cx}\t{cy}\t{cw}\t{ch}", p.x, p.y, p.w, p.h);
+        let _ = writeln!(
+            out,
+            "plate\t{:.0}\t{:.0}\t{:.0}\t{:.0}\t{cx}\t{cy}\t{cw}\t{ch}\t{}",
+            p.x,
+            p.y,
+            p.w,
+            p.h,
+            p.kind.as_str()
+        );
     }
     out
 }
@@ -1170,10 +1180,29 @@ fn price_screen_item(state: &State, db: &ninja::PriceDb, read: &scan::ScreenItem
         );
         return from_trade(result);
     }
-    if item.rarity == "Rare" {
-        // A trinket: its base with all its mods.
+    let gear = matches!(item.rarity.as_str(), "Rare" | "Magic" | "Normal");
+    let trinket = item.base.contains("Trinket");
+    // An experimented base sells as its base, whatever its mods.
+    if gear
+        && !trinket
+        && let Some(p) = lookup::experimented_price(db, item)
+    {
+        return format!(
+            "status\tok\n{head}value\t{:.2}\t{:.4}\t{}\tninja\nmessage\texperimented base, {}\n",
+            p.chaos,
+            p.divine,
+            clean(&short_price(p.chaos, p.divine)),
+            clean(&p.label)
+        );
+    }
+    // An enchanted one (Heist's Enchanted Armaments) by its type and
+    // enchant: the Base item preset, whose enchant filters start ticked.
+    let enchanted = gear && !trinket && item.mods.iter().any(|m| m.kind == item::ModKind::Enchant);
+    if enchanted || (gear && item.rarity == "Rare") {
+        // Else a rare (a trinket, say): its base with all its mods.
+        let preset = if enchanted { trade::Preset::Base } else { trade::Preset::Normal };
         let mut trade = state.trade.lock().unwrap();
-        let prepared = match trade.prepare(item, trade::Preset::Normal) {
+        let prepared = match trade.prepare(item, preset) {
             Ok(p) => p,
             Err(e) => return format!("status\terror\n{head}message\t{}\n", clean(&e)),
         };
@@ -1181,7 +1210,7 @@ fn price_screen_item(state: &State, db: &ninja::PriceDb, read: &scan::ScreenItem
             .filters
             .iter()
             .enumerate()
-            .filter(|(_, f)| f.min.is_some())
+            .filter(|(_, f)| if enchanted { f.default_on } else { f.min.is_some() })
             .map(|(index, f)| trade::Choice { index, min: f.min, max: None })
             .collect();
         let options = trade::SearchOptions { base_only: true, ..prepared.defaults };
@@ -1224,9 +1253,9 @@ fn price_screen_item(state: &State, db: &ninja::PriceDb, read: &scan::ScreenItem
 
 /// AREA: see the top of this file.
 fn area_reply(state: &State, hint: &str) -> String {
-    let (setting, watch_areas, auto) = {
+    let (setting, watch_areas, auto, heist) = {
         let s = state.settings.lock().unwrap();
-        (s.client_log.clone(), s.auto_watch_areas.clone(), s.auto_watch)
+        (s.client_log.clone(), s.auto_watch_areas.clone(), s.auto_watch, s.heist_watch)
     };
     let Some(path) = area::find_log(&setting, hint) else {
         return "status\tnone\nmessage\tNo Client.txt found\n".to_string();
@@ -1237,8 +1266,20 @@ fn area_reply(state: &State, hint: &str) -> String {
         return format!("status\tnone\nmessage\t{}\n", clean(&e));
     }
     let Some(area) = f.area.clone() else { return "status\tnone\nmessage\tNo area in Client.txt yet\n".to_string() };
-    let watch = auto && watch_areas.contains(&area);
-    format!("status\tok\narea\t{}\nentered\t{}\nwatch\t{}\n", clean(&area), f.entered, watch as u8)
+    let area_id = f.area_id.clone().unwrap_or_default();
+    let watch = if auto && watch_areas.contains(&area) {
+        "1"
+    } else if heist && area::is_heist(&area_id) {
+        "idle"
+    } else {
+        "0"
+    };
+    format!(
+        "status\tok\narea\t{}\nentered\t{}\nwatch\t{watch}\narea_id\t{}\n",
+        clean(&area),
+        f.entered,
+        clean(&area_id)
+    )
 }
 
 /// `poe-waytrade-daemon scan <frame.png>`: finds the item displays in a

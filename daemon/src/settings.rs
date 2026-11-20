@@ -33,6 +33,7 @@ pub const KEYS: &[&str] = &[
     "auto_watch_areas",
     "client_log",
     "tracking",
+    "heist_watch",
 ];
 
 /// Areas where the display price check starts by itself: mob-free rooms of
@@ -65,6 +66,9 @@ pub struct Settings {
     /// How display labels follow their tooltips: "gpu" (found in each frame
     /// as it's drawn) or "cpu" (from copies a frame or two old, predicted).
     pub tracking: String,
+    /// In Heist, watch for item displays (curio displays) at a slow pace,
+    /// speeding up while one is in view.
+    pub heist_watch: bool,
 }
 
 /// Each a key combination as the layer matches it: modifiers and an evdev
@@ -96,6 +100,7 @@ impl Default for Settings {
             auto_watch_areas: DEFAULT_WATCH_AREAS.iter().map(|a| a.to_string()).collect(),
             client_log: String::new(),
             tracking: "gpu".to_string(),
+            heist_watch: true,
         }
     }
 }
@@ -205,6 +210,7 @@ impl Settings {
             "auto_watch_areas" => self.auto_watch_areas.join(";"),
             "client_log" => self.client_log.clone(),
             "tracking" => self.tracking.clone(),
+            "heist_watch" => if self.heist_watch { "on" } else { "off" }.to_string(),
             _ => String::new(),
         }
     }
@@ -263,6 +269,11 @@ impl Settings {
                 }
                 self.client_log = value.to_string();
             }
+            "heist_watch" => match value {
+                "on" => self.heist_watch = true,
+                "off" => self.heist_watch = false,
+                _ => return Err("Heist watch is on or off".to_string()),
+            },
             "tracking" => {
                 if !["gpu", "cpu"].contains(&value) {
                     return Err("Tracking is gpu or cpu".to_string());
@@ -352,6 +363,8 @@ mod tests {
         s.set("auto_watch_areas", " Zealot's Vault ;; Arkhon's Vault").unwrap();
         s.set("client_log", "/games/poe/logs/Client.txt").unwrap();
         s.set("tracking", "cpu").unwrap();
+        s.set("heist_watch", "off").unwrap();
+        assert!(!s.heist_watch);
         assert_eq!(s.get("tracking"), "cpu");
         assert_eq!(s.auto_watch_areas, ["Zealot's Vault", "Arkhon's Vault"]);
         assert_eq!(s.get("auto_watch_areas"), "Zealot's Vault;Arkhon's Vault");
@@ -376,6 +389,7 @@ mod tests {
             ("auto_watch", "yes"),
             ("client_log", "logs/Client.txt"),
             ("tracking", "fast"),
+            ("heist_watch", "maybe"),
             ("nonsense", "1"),
         ] {
             let before = s.clone();

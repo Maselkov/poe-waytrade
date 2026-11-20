@@ -36,6 +36,7 @@ public:
         bool desktop_cursor = false;  // over the panels; else the game's
         bool auto_watch = true;       // price displays on entering a vault
         bool gpu_tracking = true;     // display labels placed by the GPU (gpu_track.h)
+        bool heist_watch = true;      // watch for curio displays in Heist
         static std::array<KeyCombo, kActions> defaults();
     };
 
@@ -95,6 +96,7 @@ public:
     void set_desktop_cursor(bool on);
     void set_auto_watch(bool on);
     void set_gpu_tracking(bool on);
+    void set_heist_watch(bool on);
 
     // Price check
     void set_league(const std::string& league);

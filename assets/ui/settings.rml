@@ -62,6 +62,16 @@
         </div>
         <div class="setting-row ruled">
             <div class="setting-text">
+                <div class="setting-name">Price them in Heist</div>
+                <div class="setting-desc">Curio displays: watches slowly, at full speed while one is in view</div>
+            </div>
+            <div class="button-row toggle">
+                <div data-attr-class="s_heist_watch ? 'button on' : 'button'" data-event-click="heist_watch(1)">On</div>
+                <div data-attr-class="s_heist_watch ? 'button' : 'button on'" data-event-click="heist_watch(0)">Off</div>
+            </div>
+        </div>
+        <div class="setting-row ruled">
+            <div class="setting-text">
                 <div class="setting-name">Price tags follow by</div>
                 <div class="setting-desc">GPU: found in each frame as it's drawn. CPU: predicted, a frame or two behind</div>
             </div>
