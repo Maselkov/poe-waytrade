@@ -424,6 +424,19 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .filter.sec-crafted .range-fill { background-color: #7a7ad6; }
 .filter.sec-crafted .range-handle { border-color: #7a7ad6; background-color: #e2e2ff; }
 
+/* Eldritch implicits in their altar's colours: the Searing Exarch's ember
+   orange-red, the Eater of Worlds' deep blue. */
+.filter.sec-exarch .mod, .filter.sec-exarch .mod-full { color: #f2905e; }
+.filter.sec-exarch.on { border-left-color: #d0512a; background-color: #22130d; }
+.filter.sec-exarch.off .mod, .filter.sec-exarch.off .mod-full { color: #b5694a; }
+.filter.sec-exarch .range-fill { background-color: #d0512a; }
+.filter.sec-exarch .range-handle { border-color: #d0512a; background-color: #ffd9c2; }
+.filter.sec-eater .mod, .filter.sec-eater .mod-full { color: #6fb4ec; }
+.filter.sec-eater.on { border-left-color: #2f78c4; background-color: #0e1724; }
+.filter.sec-eater.off .mod, .filter.sec-eater.off .mod-full { color: #5384b0; }
+.filter.sec-eater .range-fill { background-color: #2f78c4; }
+.filter.sec-eater .range-handle { border-color: #2f78c4; background-color: #cfe5fb; }
+
 /* Influence flags in their influence's color, only when ticked; unticked
    they look like any other filter. */
 .filter.sec-shaper.on .mod, .filter.sec-shaper.on .mod-full { color: #8fb4ea; }

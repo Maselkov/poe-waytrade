@@ -90,6 +90,15 @@ impl ModKind {
     }
 }
 
+/// Which eldritch altar an implicit came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Eldritch {
+    /// The Searing Exarch.
+    Exarch,
+    /// The Eater of Worlds.
+    Eater,
+}
+
 #[derive(Debug, Clone)]
 pub struct ModLine {
     pub kind: ModKind,
@@ -102,6 +111,8 @@ pub struct ModLine {
     pub ranges: Vec<Option<(f64, f64)>>,
     /// The affix tier from its advanced-copy header ("(Tier: 3)"); 1 is best.
     pub tier: Option<u32>,
+    /// An eldritch implicit's altar, from its advanced-copy header.
+    pub eldritch: Option<Eldritch>,
 }
 
 /// `{ Prefix Modifier "Virile" (Tier: 3) — Life }` -> 3. Crafted mods have
@@ -111,25 +122,33 @@ fn header_tier(header: &str) -> Option<u32> {
     rest[..rest.find(')')?].trim().parse().ok()
 }
 
-/// `{ Searing Exarch Implicit Modifier (Grand) — … }` -> (searing, 3).
-fn eldritch_header(header: &str) -> Option<(bool, u32)> {
-    let searing = header.starts_with("{ Searing Exarch Implicit Modifier");
-    if !searing && !header.starts_with("{ Eater of Worlds Implicit Modifier") {
+/// `{ Searing Exarch Implicit Modifier (Grand) — … }` -> (Exarch, Some(3)).
+/// The tier is None if the header names one we don't know.
+fn eldritch_header(header: &str) -> Option<(Eldritch, Option<u32>)> {
+    let eldritch = if header.starts_with("{ Searing Exarch Implicit Modifier") {
+        Eldritch::Exarch
+    } else if header.starts_with("{ Eater of Worlds Implicit Modifier") {
+        Eldritch::Eater
+    } else {
         return None;
-    }
+    };
     let tiers = ["Lesser", "Greater", "Grand", "Exceptional", "Exquisite", "Perfect"];
-    let tier = tiers.iter().position(|t| header.contains(&format!("({t})")))? as u32 + 1;
-    Some((searing, tier))
+    let tier = tiers.iter().position(|t| header.contains(&format!("({t})"))).map(|t| t as u32 + 1);
+    Some((eldritch, tier))
 }
 
-/// Advanced copy marks fractured and crafted mods in their header only
-/// (`{ Fractured Prefix Modifier "Fecund" (Tier: 2) — Life }`), not with a
-/// "(fractured)" or "(crafted)" after the mod as plain Ctrl+C does.
+/// Advanced copy marks some mods' kind in their header only: fractured and
+/// crafted ones (`{ Fractured Prefix Modifier "Fecund" (Tier: 2) — Life }`),
+/// and implicits, eldritch ones included (`{ Searing Exarch Implicit
+/// Modifier (Lesser) }`), not with a "(fractured)", "(crafted)" or
+/// "(implicit)" after the mod as plain Ctrl+C does.
 fn kind_from_header(header: &str) -> Option<ModKind> {
     if header.starts_with("{ Fractured ") {
         Some(ModKind::Fractured)
     } else if header.starts_with("{ Master Crafted ") {
         Some(ModKind::Crafted)
+    } else if header.contains("Implicit Modifier") {
+        Some(ModKind::Implicit)
     } else {
         None
     }
@@ -144,10 +163,24 @@ fn mod_line(line: &str) -> ModLine {
     ];
     for (marker, kind) in MARKERS {
         if let Some(text) = line.strip_suffix(marker) {
-            return ModLine { kind: *kind, text: text.to_string(), headed: false, ranges: Vec::new(), tier: None };
+            return ModLine {
+                kind: *kind,
+                text: text.to_string(),
+                headed: false,
+                ranges: Vec::new(),
+                tier: None,
+                eldritch: None,
+            };
         }
     }
-    ModLine { kind: ModKind::Explicit, text: line.to_string(), headed: false, ranges: Vec::new(), tier: None }
+    ModLine {
+        kind: ModKind::Explicit,
+        text: line.to_string(),
+        headed: false,
+        ranges: Vec::new(),
+        tier: None,
+        eldritch: None,
+    }
 }
 
 /// Map properties shown in the map check, in this order.
@@ -290,6 +323,7 @@ pub fn parse(text: &str) -> Option<Item> {
             let mut headed = false;
             let mut tier = None;
             let mut header_kind = None;
+            let mut eldritch = None;
             for line in section {
                 // A property, wherever the game puts it.
                 if line.starts_with("Memory Strands: ")
@@ -303,9 +337,11 @@ pub fn parse(text: &str) -> Option<Item> {
                     headed = true;
                     tier = header_tier(line);
                     header_kind = kind_from_header(line);
-                    match eldritch_header(line) {
-                        Some((true, t)) => item.searing = Some(Some(t)),
-                        Some((false, t)) => item.tangled = Some(Some(t)),
+                    let header = eldritch_header(line);
+                    eldritch = header.map(|(e, _)| e);
+                    match header {
+                        Some((Eldritch::Exarch, t)) => item.searing = Some(t),
+                        Some((Eldritch::Eater, t)) => item.tangled = Some(t),
                         None => {}
                     }
                     if let Some(affix) = header_affix(line) {
@@ -319,8 +355,18 @@ pub fn parse(text: &str) -> Option<Item> {
                 }
                 // Advanced copy notes mods that quality doesn't scale.
                 let line = line.trim_end_matches(" — Unscalable Value");
-                let (text, ranges) = split_roll_ranges(line);
+                let (text, mut ranges) = split_roll_ranges(line);
                 let mut m = mod_line(&text);
+                // Under a header every number that rolls shows its range, so
+                // one without is fixed ("target 1 additional nearby Enemy").
+                if headed {
+                    let (_, values) = crate::trade::templatize(&text);
+                    if values.len() == ranges.len() {
+                        for (range, v) in ranges.iter_mut().zip(values) {
+                            range.get_or_insert((v, v));
+                        }
+                    }
+                }
                 if m.kind == ModKind::Explicit
                     && let Some(kind) = header_kind
                 {
@@ -329,6 +375,7 @@ pub fn parse(text: &str) -> Option<Item> {
                 m.headed = headed;
                 m.ranges = ranges;
                 m.tier = tier;
+                m.eldritch = eldritch;
                 item.mods.push(m);
             }
         } else if let Some(v) = section.iter().find_map(|l| l.strip_prefix("Item Level: ")) {

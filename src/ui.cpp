@@ -169,7 +169,7 @@ struct UiFilter {
     float roll_pct = -1;               // the item's own value; < 0: none
     bool has_slider = false, max_roll = false;
     Rml::String tier;     // "T1"; empty: none
-    Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | mod | fractured | crafted | map | shaper, elder, ... (influence)
+    Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | exarch | eater | mod | fractured | crafted | map | shaper, elder, ... (influence)
 };
 struct UiGroup {
     Rml::String label;
@@ -949,10 +949,16 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
             u.section = f.section;
             const std::string& sec = f.section;
-            size_t group = sec == "enchant" ? 1 : sec == "implicit" ? 2 : sec == "total" ? 3
+            size_t group = sec == "enchant"                                         ? 1
+                         : sec == "implicit" || sec == "exarch" || sec == "eater" ? 2
+                         : sec == "total"                                         ? 3
                          : sec == "mod" || sec == "fractured" || sec == "crafted" ? 4 : 0;
             m.filter_groups[group].filters.push_back(u);
         }
+        // Each eldritch implicit's tier row next to its mods: plain, Exarch, Eater.
+        auto rank = [](const UiFilter& f) { return f.section == "exarch" ? 1 : f.section == "eater" ? 2 : 0; };
+        std::stable_sort(m.filter_groups[2].filters.begin(), m.filter_groups[2].filters.end(),
+                         [&](const UiFilter& a, const UiFilter& b) { return rank(a) < rank(b); });
         m.filter_groups.erase(std::remove_if(m.filter_groups.begin(), m.filter_groups.end(),
                                              [](const UiGroup& g) { return g.filters.empty(); }),
                               m.filter_groups.end());
