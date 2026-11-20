@@ -239,6 +239,10 @@ struct UiHotkey {
 struct UiAbout {
     Rml::String label, value;
 };
+struct UiLeague {
+    Rml::String value, label, now;
+    bool on = false;
+};
 
 struct Model {
     Rml::String name, base, subtitle, rarity;
@@ -281,7 +285,8 @@ struct Model {
     Rml::Vector<UiHotkey> s_hotkeys;
     int s_warning = -1;  // the hotkey row with the "reaches the game" warning
     Rml::String s_warning_title, s_warning_text, s_warning_key;
-    Rml::String s_league, s_league_pinned, s_status, s_min, s_scale;
+    Rml::Vector<UiLeague> s_leagues;
+    Rml::String s_league_pinned, s_status, s_min, s_scale;
     bool s_scale_env = false;
     bool s_stash_scroll = true;
     int s_profile = 1;
@@ -626,6 +631,13 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("value", &UiAbout::value);
     }
     c.RegisterArray<Rml::Vector<UiAbout>>();
+    if (auto h = c.RegisterStruct<UiLeague>()) {
+        h.RegisterMember("value", &UiLeague::value);
+        h.RegisterMember("label", &UiLeague::label);
+        h.RegisterMember("now", &UiLeague::now);
+        h.RegisterMember("on", &UiLeague::on);
+    }
+    c.RegisterArray<Rml::Vector<UiLeague>>();
 
     c.Bind("name", &model.name);
     c.Bind("base", &model.base);
@@ -680,7 +692,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_warning_title", &model.s_warning_title);
     c.Bind("s_warning_text", &model.s_warning_text);
     c.Bind("s_warning_key", &model.s_warning_key);
-    c.Bind("s_league", &model.s_league);
+    c.Bind("s_leagues", &model.s_leagues);
     c.Bind("s_league_pinned", &model.s_league_pinned);
     c.Bind("s_status", &model.s_status);
     c.Bind("s_min", &model.s_min);
@@ -784,7 +796,9 @@ void OverlayUi::Impl::bind_model() {
     settings_event("warning_accept", [](SettingsPage& s, Args) { s.warning_accept(); });
     settings_event("warning_keep", [](SettingsPage& s, Args) { s.warning_keep(); });
     settings_event("stash_scroll", [arg](SettingsPage& s, Args a) { s.set_stash_scroll(arg(a) != 0); });
-    settings_event("league_step", [arg](SettingsPage& s, Args a) { s.step_league(arg(a)); });
+    settings_event("league_pick", [](SettingsPage& s, Args a) {
+        if (!a.empty()) s.set_league(a[0].Get<Rml::String>());
+    });
     settings_event("settings_status", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_status(a[0].Get<Rml::String>());
     });
@@ -1238,10 +1252,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
                            "the overlay.";
     }
 
-    if (v.league == "auto")
-        m.s_league = s.league_active().empty() ? "Current" : "Current (" + s.league_active() + ")";
-    else
-        m.s_league = v.league;
+    for (const auto& c : s.league_choices()) m.s_leagues.push_back({c.value, c.label, c.now, c.value == v.league});
     m.s_league_pinned = s.league_pinned();
     m.s_status = v.status;
     m.s_min = std::to_string(100 - v.min_percent) + "%";

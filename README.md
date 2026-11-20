@@ -255,7 +255,8 @@ Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
   another action uses swaps the two. Stash scroll is switched on and off
   here too.
 - **Price check:**
-  - The league. "Current" follows poe.ninja into each new league.
+  - The league. "Current" (or "Current hardcore") follows poe.ninja into
+    each new league.
   - Which listings a search starts with.
   - How far below your roll a ticked filter starts.
   - The panel size.

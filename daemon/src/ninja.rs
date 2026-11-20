@@ -205,13 +205,16 @@ pub fn leagues() -> Result<Vec<String>, String> {
     Ok(index.economy_leagues.into_iter().map(|l| l.name).collect())
 }
 
-/// The current softcore challenge league, falling back to Standard.
-pub fn pick_league(names: &[String]) -> String {
-    names
-        .iter()
-        .find(|n| !n.contains("Hardcore") && !n.contains("Ruthless") && *n != "Standard")
-        .cloned()
-        .unwrap_or_else(|| "Standard".to_string())
+/// The current challenge league, falling back to Standard; or with
+/// `hardcore`, its hardcore twin ("Hardcore Covens"), falling back to
+/// Hardcore.
+pub fn pick_league(names: &[String], hardcore: bool) -> String {
+    let (permanent, challenge): (&str, fn(&str) -> bool) = if hardcore {
+        ("Hardcore", |n| n.starts_with("Hardcore ") && !n.contains("Ruthless"))
+    } else {
+        ("Standard", |n| !n.contains("Hardcore") && !n.contains("Ruthless") && n != "Standard")
+    };
+    names.iter().find(|n| challenge(n)).cloned().unwrap_or_else(|| permanent.to_string())
 }
 
 pub fn fetch(league: &str) -> Result<PriceDb, String> {
@@ -299,13 +302,20 @@ pub(crate) mod tests {
     fn league_from_index_state() {
         let index: IndexState = serde_json::from_str(include_str!("../fixtures/ninja-index-state.json")).unwrap();
         let names: Vec<String> = index.economy_leagues.iter().map(|l| l.name.clone()).collect();
-        let league = pick_league(&names);
+        let league = pick_league(&names, false);
         assert!(names.contains(&league), "{league} isn't one of {names:?}");
         assert!(!league.contains("Hardcore") && league != "Standard", "picked {league} from {names:?}");
+        let hc = pick_league(&names, true);
+        assert!(names.contains(&hc), "{hc} isn't one of {names:?}");
+        assert!(hc.starts_with("Hardcore ") && hc.ends_with(&league), "picked {hc} from {names:?}");
 
         let only = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
-        assert_eq!(pick_league(&only(&["Hardcore Covens", "Ruthless Covens", "Standard", "Hardcore"])), "Standard");
-        assert_eq!(pick_league(&only(&["Hardcore Covens", "Covens", "Standard"])), "Covens");
+        let names = only(&["Hardcore Covens", "Ruthless Covens", "Standard", "Hardcore"]);
+        assert_eq!(pick_league(&names, false), "Standard");
+        assert_eq!(pick_league(&names, true), "Hardcore Covens");
+        let names = only(&["Covens", "Hardcore Ruthless Covens", "Standard", "Hardcore"]);
+        assert_eq!(pick_league(&names, false), "Covens");
+        assert_eq!(pick_league(&names, true), "Hardcore");
     }
 
     #[test]

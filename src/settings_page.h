@@ -54,7 +54,14 @@ public:
 
     const Values& values() const { return values_; }
     // From the daemon (empty until it answers).
-    const std::vector<std::string>& leagues() const { return leagues_; }
+    // The league picker's choices, in order: the two that follow poe.ninja,
+    // then its leagues (and the saved one, if poe.ninja no longer has it).
+    struct LeagueChoice {
+        std::string value;  // the setting: "auto", "auto-hardcore" or a name
+        std::string label;
+        std::string now;  // for the "auto" ones: what they pick now
+    };
+    std::vector<LeagueChoice> league_choices() const;
     const std::string& league_pinned() const { return league_pinned_; }
     const std::string& league_active() const { return league_active_; }
     const std::string& daemon_version() const { return daemon_version_; }
@@ -83,7 +90,7 @@ public:
     void set_stash_scroll(bool on);
 
     // Price check
-    void step_league(int delta);
+    void set_league(const std::string& league);
     void set_status(const std::string& status);
     void step_min(int delta);    // percent
     void step_scale(int delta);  // tenths
@@ -112,6 +119,7 @@ private:
     Values values_;
     bool loaded_ = false;
     std::vector<std::string> leagues_;
+    std::vector<std::pair<std::string, std::string>> league_current_;
     std::string league_pinned_, league_active_, daemon_version_, daemon_log_;
     int map_profile_ = 1;
     bool scale_from_env_ = false;

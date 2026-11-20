@@ -118,6 +118,8 @@ struct PriceReply {
     // SETTINGS / SET (see daemon/src/settings.rs): key, value
     std::vector<std::pair<std::string, std::string>> settings;
     std::vector<std::string> league_options;
+    // What "auto" / "auto-hardcore" pick now: setting, league
+    std::vector<std::pair<std::string, std::string>> league_current;
     std::string league_pinned;  // POE_LEAGUE overrides the setting
     std::string version;        // the daemon's
     std::string log;            // where the daemon logs

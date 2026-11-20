@@ -104,6 +104,8 @@
 //!   response: status ok
 //!     setting       <key> <value>   (one per settings::KEYS)
 //!     league_option <name>          (poe.ninja's leagues)
+//!     league_current <auto setting> <name>  (what "auto" and
+//!                                   "auto-hardcore" pick now)
 //!     league_pinned <name>          (POE_LEAGUE overrides the setting)
 //!     league        <name>          (prices are loaded for)
 //!     map_profile   <1-3>           (the map check's active profile)
@@ -334,25 +336,27 @@ fn refresh_loop(state: &State) {
 }
 
 /// POE_LEAGUE wins; then the league picked in the settings, while poe.ninja
-/// still has it; then the current challenge league.
+/// still has it; then the current challenge league ("auto", or its hardcore
+/// twin for "auto-hardcore").
 fn choose_league(state: &State, wanted: &str) -> Result<String, String> {
+    let current = settings::AUTO_LEAGUES.contains(&wanted);
     if let Ok(league) = std::env::var("POE_LEAGUE") {
         return Ok(league);
     }
     let names = match ninja::leagues() {
         Ok(names) => names,
         // poe.ninja's league list failed; a named league may still load.
-        Err(_) if wanted != "auto" => return Ok(wanted.to_string()),
+        Err(_) if !current => return Ok(wanted.to_string()),
         Err(e) => return Err(e),
     };
     *state.leagues.lock().unwrap() = names.clone();
-    if wanted != "auto" {
+    if !current {
         if names.iter().any(|n| n == wanted) {
             return Ok(wanted.to_string());
         }
         eprintln!("poe.ninja has no {wanted} league (any more); using the current one");
     }
-    Ok(ninja::pick_league(&names))
+    Ok(ninja::pick_league(&names, wanted == "auto-hardcore"))
 }
 
 fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
@@ -448,6 +452,8 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
 
 /// `setting` lines, then what the settings page shows besides:
 ///   league_option <name>   (poe.ninja's leagues, 0+)
+///   league_current <setting> <name>  (what each settings::AUTO_LEAGUES
+///                          picks now, once poe.ninja's list is in)
 ///   league_pinned <name>   (POE_LEAGUE is set: the setting is ignored)
 ///   league        <name>   (the league prices are loaded for)
 ///   map_profile   <1-3>    (the map check's active profile)
@@ -456,8 +462,15 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
 fn settings_reply(state: &State) -> String {
     let mut out = "status\tok\n".to_string();
     out += &state.settings.lock().unwrap().lines();
-    for name in state.leagues.lock().unwrap().iter() {
+    let leagues = state.leagues.lock().unwrap().clone();
+    for name in &leagues {
         let _ = writeln!(out, "league_option\t{}", clean(name));
+    }
+    if !leagues.is_empty() {
+        for auto in settings::AUTO_LEAGUES {
+            let picked = ninja::pick_league(&leagues, *auto == "auto-hardcore");
+            let _ = writeln!(out, "league_current\t{auto}\t{}", clean(&picked));
+        }
     }
     if let Ok(league) = std::env::var("POE_LEAGUE") {
         let _ = writeln!(out, "league_pinned\t{}", clean(&league));
