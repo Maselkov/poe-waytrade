@@ -5,13 +5,13 @@
 </head>
 <body data-model="ui">
 <div id="panel">
-    <div id="head">
+    <handle id="head" move_target="#document">
         <div id="close" data-if="closable" data-event-click="close">×</div>
         <div id="gear" data-event-click="open_settings"><img src="icon:gear"/></div>
         <div data-if="name != ''" data-attr-class="'title ' + rarity">{{name}}</div>
         <div data-attr-class="(name != '' ? 'base ' : 'title ') + rarity">{{base}}</div>
         <div class="subtitle" data-if="subtitle != ''">{{subtitle}}</div>
-    </div>
+    </handle>
 
     <div class="status" data-if="state == 'status'" data-class-error="status_error">{{status}}</div>
 

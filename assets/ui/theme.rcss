@@ -49,12 +49,14 @@ body {
     border-radius: 12dp;
 }
 
-/* Header: the item, PoE-tooltip style. */
+/* Header: the item, PoE-tooltip style. Dragging it moves the panel (and
+   locks it, like any click); a new check puts it back in its usual place. */
 #head {
     position: relative;
     padding: 12dp 28dp 10dp;
     text-align: center;
     border-bottom: 1dp $divider;
+    cursor: move;
 }
 #close {
     position: absolute;
@@ -70,6 +72,9 @@ body {
     cursor: pointer;
 }
 #close:hover { color: $text-strong; background-color: $chip; }
+/* Buttons in a draggable header: a drag from them would end in a click,
+   since they move along under the pointer. */
+#close, #gear { drag: block; }
 
 .title { font-family: Cinzel; font-size: 17dp; letter-spacing: 0.5dp; }
 .base { font-family: Cinzel; font-size: 13dp; }
