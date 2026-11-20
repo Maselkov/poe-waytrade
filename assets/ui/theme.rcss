@@ -412,6 +412,13 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .filter.sec-fractured .range-handle { border-color: #a88f52; background-color: #efe3c2; }
 .pv-line.fractured { color: #c6b07a; }
 
+/* Crafted mods in PoE's crafted blue, like the listings' crafted lines. */
+.filter.sec-crafted .mod, .filter.sec-crafted .mod-full { color: #b4b4ff; }
+.filter.sec-crafted.on { border-left-color: #7a7ad6; background-color: #15152a; }
+.filter.sec-crafted.off .mod, .filter.sec-crafted.off .mod-full { color: #8585c0; }
+.filter.sec-crafted .range-fill { background-color: #7a7ad6; }
+.filter.sec-crafted .range-handle { border-color: #7a7ad6; background-color: #e2e2ff; }
+
 /* Influence flags in their influence's color, only when ticked; unticked
    they look like any other filter. */
 .filter.sec-shaper.on .mod, .filter.sec-shaper.on .mod-full { color: #8fb4ea; }
