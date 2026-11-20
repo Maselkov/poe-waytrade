@@ -2,7 +2,7 @@
 //! headless browser (see cdp.rs for why).
 
 use crate::cdp::{self, Browser, HttpResponse};
-use crate::item::{Item, ModKind, ModLine};
+use crate::item::{Eldritch, Item, ModKind, ModLine};
 use crate::ninja::{self, PriceDb};
 use crate::settings::min_fraction;
 use serde_json::{Value, json};
@@ -39,6 +39,9 @@ pub enum Section {
     Total,
     Mod,
     Implicit,
+    /// Eldritch implicits, under the implicits: the layer colors them.
+    Exarch,
+    Eater,
     Enchant,
     /// A fractured mod, searched as fractured: always shown.
     Fractured,
@@ -65,6 +68,8 @@ impl Section {
             Section::Total => "total",
             Section::Mod => "mod",
             Section::Implicit => "implicit",
+            Section::Exarch => "exarch",
+            Section::Eater => "eater",
             Section::Enchant => "enchant",
             Section::Fractured => "fractured",
             Section::Crafted => "crafted",
@@ -1251,7 +1256,7 @@ fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             continue;
         }
         let Some((stat_id, sign)) = find_stat(data, m.kind, &template, local) else { continue };
-        let section = kind_section(m.kind, Section::Mod);
+        let section = mod_section(m, Section::Mod);
         let mut filter = Filter::unique(m.text.clone(), Target::Stat(stat_id), value * sign, (lo, hi), section);
         filter.tier = m.tier;
         filters.push(filter);
@@ -1319,9 +1324,9 @@ fn option_filters(item: &Item, data: &TradeData) -> (Vec<Filter>, Vec<usize>) {
 fn eldritch_filters(item: &Item, data: &TradeData, on: bool) -> Vec<Filter> {
     let mut filters = Vec::new();
     let tiers = ["Lesser", "Greater", "Grand", "Exceptional", "Exquisite", "Perfect"];
-    for (seen, name, pseudo, flag) in [
-        (item.searing, "Searing Exarch", "Searing Exarch Implicit Modifier (#)", "searing_item"),
-        (item.tangled, "Eater of Worlds", "Eater of Worlds Implicit Modifier (#)", "tangled_item"),
+    for (seen, name, pseudo, flag, section) in [
+        (item.searing, "Searing Exarch", "Searing Exarch Implicit Modifier (#)", "searing_item", Section::Exarch),
+        (item.tangled, "Eater of Worlds", "Eater of Worlds Implicit Modifier (#)", "tangled_item", Section::Eater),
     ] {
         let Some(tier) = seen else { continue };
         let stat = data.stats.get(&("pseudo".to_string(), pseudo.to_string()));
@@ -1342,7 +1347,7 @@ fn eldritch_filters(item: &Item, data: &TradeData, on: bool) -> Vec<Filter> {
             step: 1.0,
             max_roll: false,
             default_on: on,
-            section: Section::Implicit,
+            section,
             tier: None,
             max: None,
             roll: tier.map(|t| t as f64),
@@ -1377,11 +1382,20 @@ fn kind_section(kind: ModKind, section: Section) -> Section {
     }
 }
 
+/// A mod's section by its kind, an eldritch implicit's by its altar.
+fn mod_section(m: &ModLine, section: Section) -> Section {
+    match (kind_section(m.kind, section), m.eldritch) {
+        (Section::Implicit, Some(Eldritch::Exarch)) => Section::Exarch,
+        (Section::Implicit, Some(Eldritch::Eater)) => Section::Eater,
+        (section, _) => section,
+    }
+}
+
 /// A mod as a stat filter of its own kind (explicit, fractured, ...).
 fn mod_filter(m: &ModLine, data: &TradeData, local: bool, on: bool, section: Section) -> Option<Filter> {
     let (template, values) = templatize(&m.text);
     let (stat_id, sign) = find_stat(data, m.kind, &template, local)?;
-    let section = kind_section(m.kind, section);
+    let section = mod_section(m, section);
     let mut filter = match mod_value(&values, &m.ranges) {
         Some((value, range)) => Filter::new(m.text.clone(), Target::Stat(stat_id), value * sign, range, on, section),
         // No number ("Warcries cannot Exert Travel Skills"): searched by
@@ -2135,6 +2149,11 @@ mod tests {
         stats.insert(("fractured".into(), "+# to maximum Life".into()), "fractured.life".into());
         stats.insert(("crafted".into(), "Warcries cannot Exert Travel Skills".into()), "crafted.exert".into());
         stats.insert(("explicit".into(), "+# to maximum Energy Shield".into()), "explicit.es".into());
+        stats.insert(
+            ("implicit".into(), "Non-Vaal Strike Skills target # additional nearby Enemy".into()),
+            "implicit.strike".into(),
+        );
+        stats.insert(("implicit".into(), "#% of Cold Damage Leeched as Life".into()), "implicit.cold_leech".into());
         let mut transfigured = HashMap::new();
         transfigured.insert("Arc of Oscillating".to_string(), ("Arc".to_string(), "alt_y".to_string()));
         TradeData { stats, currencies: HashMap::new(), images: HashMap::new(), transfigured }
@@ -2359,6 +2378,38 @@ mod tests {
         let flag = filters.iter().find(|f| f.label == "Searing Exarch item").unwrap();
         assert_eq!(flag.target, Target::Flag("misc_filters", "searing_item"));
         assert!(flag.default_on);
+    }
+
+    /// Advanced copy heads eldritch implicits without an "(implicit)" after
+    /// the mod: they're implicits all the same, each in its altar's section.
+    /// A number without a range under a header is a fixed roll.
+    #[test]
+    fn eldritch_implicit_rows() {
+        let text = "Item Class: Gloves\nRarity: Rare\nDoom Hold\nSorcerer Gloves\n--------\nItem Level: 71\n--------\n\
+                    { Searing Exarch Implicit Modifier (Lesser) \u{2014} Attack }\n\
+                    Non-Vaal Strike Skills target 1 additional nearby Enemy\n\
+                    { Eater of Worlds Implicit Modifier (Lesser) \u{2014} Life, Physical, Attack, Cold }\n\
+                    0.2(0.2-0.3)% of Cold Damage Leeched as Life\n--------\n\
+                    { Prefix Modifier \"Virile\" (Tier: 3) \u{2014} Life }\n+60(55-69) to maximum Life\n--------\n\
+                    Searing Exarch Item\nEater of Worlds Item\n";
+        let item = crate::item::parse(text).unwrap();
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> = filters
+            .iter()
+            .filter(|f| matches!(f.section, Section::Exarch | Section::Eater))
+            .map(|f| (f.label.as_str(), f.min, f.section))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Searing Exarch item", None, Section::Exarch),
+                ("Eater of Worlds item", None, Section::Eater),
+                ("Non-Vaal Strike Skills target 1 additional nearby Enemy", Some(1.0), Section::Exarch),
+                ("0.2% of Cold Damage Leeched as Life", Some(0.18), Section::Eater),
+            ]
+        );
+        let strike = filters.iter().find(|f| f.label.starts_with("Non-Vaal")).unwrap();
+        assert_eq!(strike.target, Target::Stat("implicit.strike".into()));
     }
 
     #[test]
