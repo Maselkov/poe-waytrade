@@ -2,8 +2,9 @@
 
 ## Run the CI checks before you commit
 
-CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) has three jobs that
-run in parallel: `lint`, `test` and `package`. Run the `lint` and `test`
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `lint`, `test`
+and `layer` in parallel on every pull request and push to main, and `package`
+only on pushes to main. Run the `lint` and `test`
 commands before every commit that touches `daemon/`:
 
 ```bash
@@ -36,8 +37,8 @@ cargo build --locked --manifest-path daemon/Cargo.toml
 .github/scripts/test-launcher.sh daemon/target/debug/poe-waytrade-daemon
 ```
 
-When you touch the layer (`src/`, `CMakeLists.txt`, `assets/`). This needs
-GCC 15 for `#embed`:
+When you touch the layer (`src/`, `CMakeLists.txt`, `assets/`), run what the
+`layer` job runs. This needs GCC 15 for `#embed`:
 
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -45,8 +46,9 @@ cmake --build build
 .github/scripts/check-exports.sh build/libVkLayer_poe_waytrade.so
 ```
 
-The `package` job (`cd packaging/arch && makepkg`) takes about 6 minutes in
-CI. Run it locally only when you change `packaging/`.
+The `package` job (`cd packaging/arch && makepkg`) takes about 4 minutes in
+CI and doesn't run on pull requests, so a broken package shows up only after
+the merge. Run it locally when you change `packaging/`.
 
 ## Versions and releases
 
