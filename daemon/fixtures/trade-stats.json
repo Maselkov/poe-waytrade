@@ -157,8 +157,43 @@
      "type": "explicit"
     },
     {
+     "id": "explicit.stat_2448920197",
+     "text": "#% increased effect",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_2561836520",
+     "text": "Regenerate # Energy Shield per second",
+     "type": "explicit"
+    },
+    {
      "id": "explicit.stat_4079888060",
      "text": "# Added Passive Skills are Jewel Sockets",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_1004011302",
+     "text": "#% increased Cooldown Recovery Rate",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_3529940209",
+     "text": "#% increased effect",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_239144",
+     "text": "#% increased Cooldown Recovery Rate",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_2499808413",
+     "text": "Melee Weapon Damage Penetrates #% Elemental Resistances",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_1330109706",
+     "text": "Regenerate # Energy Shield per second",
      "type": "explicit"
     }
    ]
@@ -200,6 +235,11 @@
     {
      "id": "implicit.stat_1050105434",
      "text": "+# to maximum Mana",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_1004011302",
+     "text": "#% increased Cooldown Recovery Rate",
      "type": "implicit"
     }
    ]
@@ -249,6 +289,21 @@
      "type": "fractured"
     },
     {
+     "id": "fractured.stat_2561836520",
+     "text": "Regenerate # Energy Shield per second",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_1004011302",
+     "text": "#% increased Cooldown Recovery Rate",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_2448920197",
+     "text": "#% increased effect",
+     "type": "fractured"
+    },
+    {
      "id": "fractured.stat_4079888060",
      "text": "# Added Passive Skills are Jewel Sockets",
      "type": "fractured"
@@ -270,6 +325,11 @@
      "type": "enchant"
     },
     {
+     "id": "enchant.stat_2448920197",
+     "text": "#% increased effect",
+     "type": "enchant"
+    },
+    {
      "id": "enchant.stat_3948993189|10",
      "text": "Added Small Passive Skills grant: 10% increased Spell Damage",
      "type": "enchant"
@@ -282,6 +342,11 @@
     {
      "id": "enchant.stat_2954116742|6799",
      "text": "Allocates Charisma",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_1004011302",
+     "text": "#% increased Cooldown Recovery Rate",
      "type": "enchant"
     }
    ]
@@ -318,6 +383,11 @@
     {
      "id": "scourge.stat_328541901",
      "text": "+# to Intelligence",
+     "type": "scourge"
+    },
+    {
+     "id": "scourge.stat_1004011302",
+     "text": "#% increased Cooldown Recovery Rate",
      "type": "scourge"
     }
    ]
@@ -359,6 +429,11 @@
     {
      "id": "crafted.stat_2300185227",
      "text": "+# to Dexterity and Intelligence",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_1004011302",
+     "text": "#% increased Cooldown Recovery Rate",
      "type": "crafted"
     }
    ]

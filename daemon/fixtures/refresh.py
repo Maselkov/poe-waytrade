@@ -56,6 +56,12 @@ STAT_TEXTS = {
     "Allocates Charisma",
     "Searing Exarch Implicit Modifier (#)",
     "Eater of Worlds Implicit Modifier (#)",
+    # Texts with more than one stat: a tincture's and a flask's, and two
+    # alike stats searched as either.
+    "#% increased effect",
+    "#% increased Cooldown Recovery Rate",
+    "Regenerate # Energy Shield per second",
+    "Melee Weapon Damage Penetrates #% Elemental Resistances",
 }
 
 # Fields the daemon doesn't read and that only make the files big.
