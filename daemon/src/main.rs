@@ -31,6 +31,8 @@
 //!                                                  searched on its own)
 //!     option   base_only <1|0>
 //!     option   corrupted <any|no|yes>
+//!     option   item_corrupted <1|0>   (the item is corrupted: the panel's
+//!                                     corruption toggle is "yes" or "no" vs any)
 //!     option   status <instant|available|any>   (instant buyout, + in person, any)
 //!     option   base_preset <1|0>   (the "base item" preset is offered)
 //!     option   preset <normal|base>
@@ -609,6 +611,7 @@ fn trade_response(
     }
     let _ = writeln!(out, "option\tbase_only\t{}", options.base_only as u8);
     let _ = writeln!(out, "option\tcorrupted\t{}", options.corrupted.as_str());
+    let _ = writeln!(out, "option\titem_corrupted\t{}", item.corrupted as u8);
     let _ = writeln!(out, "option\tstatus\t{}", options.status.as_str());
     let _ = writeln!(out, "option\tbase_preset\t{}", prepared.base_preset as u8);
     let _ = writeln!(out, "option\tpreset\t{}", options.preset.as_str());

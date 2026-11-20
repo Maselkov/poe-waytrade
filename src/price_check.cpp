@@ -492,7 +492,8 @@ void PriceCheck::request_icons() {
 }
 
 void PriceCheck::set_base_only(bool base_only) {
-    if (!reply_ || reply_->status != "trade" || reply_->base_only == base_only) return;
+    // The base item preset always searches the exact base.
+    if (!reply_ || reply_->status != "trade" || reply_->preset == "base" || reply_->base_only == base_only) return;
     reply_->base_only = base_only;
     stale_ = reply_->searched;
     changed();
@@ -505,10 +506,10 @@ void PriceCheck::toggle_preset() {
     changed();
 }
 
-void PriceCheck::cycle_corrupted() {
+void PriceCheck::toggle_corrupted() {
     if (!reply_ || reply_->status != "trade") return;
     std::string& c = reply_->corrupted;
-    c = c == "any" ? "no" : c == "no" ? "yes" : "any";
+    c = c != "any" ? "any" : reply_->item_corrupted ? "yes" : "no";
     stale_ = reply_->searched;
     changed();
 }

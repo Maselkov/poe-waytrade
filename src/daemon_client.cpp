@@ -85,6 +85,7 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "option" && f.size() >= 4 && f[1] == "base") reply.base_type = f[2], reply.category_label = f[3];
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "base_only") reply.base_only = f[2] == "1";
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "corrupted") reply.corrupted = f[2];
+        else if (f[0] == "option" && f.size() >= 3 && f[1] == "item_corrupted") reply.item_corrupted = f[2] == "1";
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "status") reply.listing_status = f[2];
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "base_preset") reply.base_preset = f[2] == "1";
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "preset") reply.preset = f[2];

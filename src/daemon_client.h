@@ -87,6 +87,7 @@ struct PriceReply {
     std::string category_label;  // e.g. "Ring"; empty: no base/category choice
     bool base_only = false;
     std::string corrupted = "any";  // any | no | yes
+    bool item_corrupted = false;    // the panel toggles between its state and any
     // Which listings: instant (buyout, merchant tabs) | available (+ in person) | any
     std::string listing_status = "instant";
     bool base_preset = false;       // the "Base item" preset is offered
