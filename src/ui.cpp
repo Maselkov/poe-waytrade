@@ -289,6 +289,8 @@ struct Model {
     Rml::String s_league_pinned, s_status, s_min, s_scale;
     bool s_scale_env = false;
     bool s_stash_scroll = true;
+    bool s_desktop_cursor = false;
+    bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
     int s_profile = 1;
     bool s_reset_armed = false;
     Rml::Vector<UiAbout> s_about;
@@ -699,6 +701,8 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_scale", &model.s_scale);
     c.Bind("s_scale_env", &model.s_scale_env);
     c.Bind("s_stash_scroll", &model.s_stash_scroll);
+    c.Bind("s_desktop_cursor", &model.s_desktop_cursor);
+    c.Bind("s_scaled", &model.s_scaled);
     c.Bind("s_profile", &model.s_profile);
     c.Bind("s_reset_armed", &model.s_reset_armed);
     c.Bind("s_about", &model.s_about);
@@ -796,6 +800,7 @@ void OverlayUi::Impl::bind_model() {
     settings_event("warning_accept", [](SettingsPage& s, Args) { s.warning_accept(); });
     settings_event("warning_keep", [](SettingsPage& s, Args) { s.warning_keep(); });
     settings_event("stash_scroll", [arg](SettingsPage& s, Args a) { s.set_stash_scroll(arg(a) != 0); });
+    settings_event("desktop_cursor", [arg](SettingsPage& s, Args a) { s.set_desktop_cursor(arg(a) != 0); });
     settings_event("league_pick", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_league(a[0].Get<Rml::String>());
     });
@@ -846,6 +851,13 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
     d.context->SetDimensions(Rml::Vector2i((int)extent.width, (int)extent.height));
     if (!d.ui_scale_env) d.ui_scale = (float)pc.settings().values().ui_scale;
     d.context->SetDensityIndependentPixelRatio((input ? (float)input->scale() : 1.0f) * d.ui_scale);
+    // Wine draws its cursor for scale 1 over our surface, so at any other
+    // scale (fractional or not) it shows at the wrong size there.
+    bool scaled = input && std::abs(input->scale() - 1.0) > 0.01;
+    if (scaled != d.model.s_scaled) {
+        d.model.s_scaled = scaled;
+        d.handle.DirtyVariable("s_scaled");
+    }
 
     d.price_check = &pc;
     if (input) {
@@ -892,7 +904,7 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
     bool moved = d.keep_on_screen(d.shown_panel, extent);
     if (d.keep_on_screen(kSettingsDoc, extent) || moved) d.context->Update();
     d.mark_cut_mods();
-    if (input) input->set_cursor(d.system.cursor);
+    if (input) input->set_cursor(pc.settings().values().desktop_cursor, d.system.cursor);
 }
 
 void OverlayUi::render() {
@@ -918,6 +930,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
 
     Model m;
     m.debug_lines = std::move(model.debug_lines);
+    m.s_scaled = model.s_scaled;
     sync_settings(pc, m);
     const SettingsPage::Values& sv = pc.settings().values();
     // "ready" once prices are in; until then, or without the daemon, only running.
@@ -1259,6 +1272,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_scale = std::to_string((int)std::lround(v.ui_scale * 100)) + "%";
     m.s_scale_env = ui_scale_env;
     m.s_stash_scroll = v.stash_scroll;
+    m.s_desktop_cursor = v.desktop_cursor;
     m.s_profile = s.map_profile();
     m.s_reset_armed = s.reset_armed();
 

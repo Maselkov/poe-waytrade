@@ -32,7 +32,8 @@ public:
         int min_percent = 90;
         double ui_scale = 1.0;
         std::array<KeyCombo, kActions> hotkeys = defaults();
-        bool stash_scroll = true;  // Ctrl + wheel switches stash tabs
+        bool stash_scroll = true;     // Ctrl + wheel switches stash tabs
+        bool desktop_cursor = false;  // over the panels; else the game's
         static std::array<KeyCombo, kActions> defaults();
     };
 
@@ -88,6 +89,7 @@ public:
     void clear_hotkey(Action action);  // only MapAlias can be off
     static const char* action_label(Action action);
     void set_stash_scroll(bool on);
+    void set_desktop_cursor(bool on);
 
     // Price check
     void set_league(const std::string& league);
