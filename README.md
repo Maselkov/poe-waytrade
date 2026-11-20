@@ -31,6 +31,15 @@ MangoHud is:
 - **It's light.** It's a small library in the game plus a small Rust daemon
   for prices. A headless Chromium starts only for trade searches (the trade
   site requires a real browser) and stops when unused.
+- **It's safe.**
+  - It only hooks the game's Vulkan presentation, the way MangoHud does.
+    It doesn't read or change the game's memory or files.
+  - The only key it presses for you is the Ctrl+C that copies the item,
+    exactly as if you had copied it yourself.
+  - Every web request (poe.ninja, the trade site) comes from the separate
+    daemon, never from the game client.
+  - The daemon follows GGG's rate limits, so searches won't get your IP
+    timed out.
 
 The catch is that the game has to run on Proton's Wayland driver. If you play
 on X11 or XWayland, other price check overlays already work there, and
