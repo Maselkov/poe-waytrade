@@ -169,7 +169,7 @@ struct UiFilter {
     float roll_pct = -1;               // the item's own value; < 0: none
     bool has_slider = false, max_roll = false;
     Rml::String tier;     // "T1"; empty: none
-    Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | mod | fractured | map | shaper, elder, ... (influence)
+    Rml::String section;  // weapon | base | armour | sockets | total | enchant | implicit | mod | fractured | crafted | map | shaper, elder, ... (influence)
 };
 struct UiGroup {
     Rml::String label;
@@ -950,7 +950,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             u.section = f.section;
             const std::string& sec = f.section;
             size_t group = sec == "enchant" ? 1 : sec == "implicit" ? 2 : sec == "total" ? 3
-                         : sec == "mod" || sec == "fractured" ? 4 : 0;
+                         : sec == "mod" || sec == "fractured" || sec == "crafted" ? 4 : 0;
             m.filter_groups[group].filters.push_back(u);
         }
         m.filter_groups.erase(std::remove_if(m.filter_groups.begin(), m.filter_groups.end(),

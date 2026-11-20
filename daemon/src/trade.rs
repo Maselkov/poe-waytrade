@@ -42,6 +42,8 @@ pub enum Section {
     Enchant,
     /// A fractured mod, searched as fractured: always shown.
     Fractured,
+    /// A crafted mod, searched as crafted: the layer colors it.
+    Crafted,
     /// Base item properties: item level, fractured/synthesised.
     Base,
     /// An influence flag, by its trade key ("shaper"): the layer colors it.
@@ -65,6 +67,7 @@ impl Section {
             Section::Implicit => "implicit",
             Section::Enchant => "enchant",
             Section::Fractured => "fractured",
+            Section::Crafted => "crafted",
             Section::Base => "base",
             Section::Influence(influence) => influence,
             Section::Armour => "armour",
@@ -948,8 +951,8 @@ fn attribute_parts(template: &str) -> Option<[f64; 3]> {
 /// Filters in the spirit of Awakened PoE Trade's default ("pseudo") preset:
 /// life, mana, attributes and resistances from any mod (implicit and crafted
 /// included) become totals, and only total life and the resistance totals
-/// start ticked. Other mods are listed, unticked; crafted ones aren't (they
-/// can be redone, so only their contribution to the totals matters).
+/// start ticked. Other mods are listed, unticked, crafted ones too (like
+/// APT; they're searched as crafted).
 /// A mod's searchable value and its roll range: the number itself, or the
 /// average for "Adds # to # ...", which the trade site searches by.
 fn mod_value(values: &[f64], ranges: &[Option<(f64, f64)>]) -> Option<(f64, Option<(f64, f64)>)> {
@@ -1010,8 +1013,8 @@ fn defaults(value: f64, bounds: Option<(f64, f64)>, fine: bool) -> (Option<f64>,
 /// Filters in the spirit of Awakened PoE Trade's default ("pseudo") preset:
 /// life, mana, attributes and resistances from any mod (implicit and crafted
 /// included) become totals, and only total life and the resistance totals
-/// start ticked. Other mods are listed, unticked; crafted ones aren't (they
-/// can be redone, so only their contribution to the totals matters).
+/// start ticked. Other mods are listed, unticked, crafted ones too (like
+/// APT; they're searched as crafted).
 /// Weapons also get DPS filters, from their properties.
 /// Weapon DPS, from the properties the item shows. `ticked`: the main
 /// damage type starts ticked.
@@ -1249,7 +1252,7 @@ fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         }
         let Some((stat_id, sign)) = find_stat(data, m.kind, &template, local) else { continue };
         let section = kind_section(m.kind, Section::Mod);
-        let mut filter = Filter::unique(mod_label(m), Target::Stat(stat_id), value * sign, (lo, hi), section);
+        let mut filter = Filter::unique(m.text.clone(), Target::Stat(stat_id), value * sign, (lo, hi), section);
         filter.tier = m.tier;
         filters.push(filter);
     }
@@ -1364,18 +1367,12 @@ fn exact_cluster_counts(filters: &mut [Filter]) {
 }
 
 /// The panel groups implicits and enchants under their own headings and
-/// shows fractured mods in gold, so only crafted mods keep a suffix.
-fn mod_label(m: &ModLine) -> String {
-    match m.kind {
-        ModKind::Crafted => format!("{} (crafted)", m.text),
-        _ => m.text.clone(),
-    }
-}
-
+/// colors fractured and crafted mods, so labels are the mod's text alone.
 fn kind_section(kind: ModKind, section: Section) -> Section {
     match (kind, section) {
         (ModKind::Implicit, Section::Mod) => Section::Implicit,
         (ModKind::Enchant, Section::Mod) => Section::Enchant,
+        (ModKind::Crafted, Section::Mod) => Section::Crafted,
         _ => section,
     }
 }
@@ -1383,10 +1380,26 @@ fn kind_section(kind: ModKind, section: Section) -> Section {
 /// A mod as a stat filter of its own kind (explicit, fractured, ...).
 fn mod_filter(m: &ModLine, data: &TradeData, local: bool, on: bool, section: Section) -> Option<Filter> {
     let (template, values) = templatize(&m.text);
-    let (value, range) = mod_value(&values, &m.ranges)?;
     let (stat_id, sign) = find_stat(data, m.kind, &template, local)?;
     let section = kind_section(m.kind, section);
-    let mut filter = Filter::new(mod_label(m), Target::Stat(stat_id), value * sign, range, on, section);
+    let mut filter = match mod_value(&values, &m.ranges) {
+        Some((value, range)) => Filter::new(m.text.clone(), Target::Stat(stat_id), value * sign, range, on, section),
+        // No number ("Warcries cannot Exert Travel Skills"): searched by
+        // whether the item has it, with nothing to slide.
+        None => Filter {
+            label: m.text.clone(),
+            target: Target::Stat(stat_id),
+            min: None,
+            slider: None,
+            step: 1.0,
+            max_roll: false,
+            default_on: on,
+            section,
+            tier: None,
+            max: None,
+            roll: None,
+        },
+    };
     filter.tier = m.tier;
     Some(filter)
 }
@@ -1556,6 +1569,15 @@ fn influence_filters(item: &Item, on: bool) -> Vec<Filter> {
         .collect()
 }
 
+/// A rare's mod as an unticked row of its own. A crafted mod is listed only
+/// when the trade site has it as a crafted stat: one only searchable as a
+/// pseudo stat (item rarity) would repeat the explicit mod's row.
+fn listed_filter(m: &ModLine, data: &TradeData, local: bool) -> Option<Filter> {
+    let filter = mod_filter(m, data, local, false, Section::Mod)?;
+    let crafted_stat = matches!(&filter.target, Target::Stat(id) if id.starts_with("crafted."));
+    (m.kind != ModKind::Crafted || crafted_stat).then_some(filter)
+}
+
 fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     if item.class == "Maps" && item.rarity != "Unique" {
         return map_filters(item);
@@ -1589,7 +1611,13 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
             fractured.extend(mod_filter(m, data, local, false, Section::Fractured));
         }
         let (template, values) = templatize(&m.text);
-        let Some((value, range)) = mod_value(&values, &m.ranges) else { continue };
+        // A mod without a number can't add to a total.
+        let Some((value, range)) = mod_value(&values, &m.ranges) else {
+            if m.kind != ModKind::Fractured {
+                listed.extend(listed_filter(m, data, local));
+            }
+            continue;
+        };
         if let Some((elements, has_chaos)) = resist_parts(&template) {
             if elements > 0 {
                 elemental.add(value, range, elements as f64);
@@ -1618,10 +1646,10 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
             }
             _ => {}
         }
-        if matches!(m.kind, ModKind::Crafted | ModKind::Fractured) {
+        if m.kind == ModKind::Fractured {
             continue;
         }
-        listed.extend(mod_filter(m, data, local, false, Section::Mod));
+        listed.extend(listed_filter(m, data, local));
     }
 
     let mut filters = Vec::new();
@@ -2105,6 +2133,8 @@ mod tests {
             stats.insert(("explicit".to_string(), text.to_string()), id.to_string());
         }
         stats.insert(("fractured".into(), "+# to maximum Life".into()), "fractured.life".into());
+        stats.insert(("crafted".into(), "Warcries cannot Exert Travel Skills".into()), "crafted.exert".into());
+        stats.insert(("explicit".into(), "+# to maximum Energy Shield".into()), "explicit.es".into());
         let mut transfigured = HashMap::new();
         transfigured.insert("Arc of Oscillating".to_string(), ("Arc".to_string(), "alt_y".to_string()));
         TradeData { stats, currencies: HashMap::new(), images: HashMap::new(), transfigured }
@@ -2150,6 +2180,39 @@ mod tests {
                 ("12% increased Rarity of Items found", Some(10.0), false),
             ]
         );
+    }
+
+    /// A crafted mod without a number is listed, unticked, as a crafted stat
+    /// with nothing to slide.
+    #[test]
+    fn crafted_mod_without_value() {
+        let text = "Item Class: Belts\nRarity: Rare\nGloom Snare\nLeather Belt\n--------\nRequirements:\n\
+                    Level: 57\n--------\nItem Level: 77\n--------\n{ Implicit Modifier \u{2014} Life }\n\
+                    +30(25-40) to maximum Life\n--------\n\
+                    { Prefix Modifier \"Robust\" (Tier: 5) \u{2014} Life }\n+78(70-84) to maximum Life\n\
+                    { Prefix Modifier \"Shining\" (Tier: 12) \u{2014} Defences, Energy Shield }\n\
+                    +1(1-3) to maximum Energy Shield\n\
+                    { Suffix Modifier \"of the Ice\" (Tier: 2) \u{2014} Elemental, Cold, Resistance }\n\
+                    +43(42-45)% to Cold Resistance\n\
+                    { Suffix Modifier \"of the Magma\" (Tier: 2) \u{2014} Elemental, Fire, Resistance }\n\
+                    +45(42-45)% to Fire Resistance\n\
+                    { Master Crafted Suffix Modifier \"of Control\" }\n\
+                    Warcries cannot Exert Travel Skills \u{2014} Unscalable Value\n";
+        let item = crate::item::parse(text).unwrap();
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.default_on, f.section)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("+108 total maximum Life", true, Section::Total),
+                ("+88% total Elemental Resistance", true, Section::Total),
+                ("+1 to maximum Energy Shield", false, Section::Mod),
+                ("Warcries cannot Exert Travel Skills", false, Section::Crafted),
+            ]
+        );
+        let exert = &filters[3];
+        assert_eq!(exert.target, Target::Stat("crafted.exert".into()));
+        assert_eq!((exert.min, exert.slider, exert.roll), (None, None, None));
     }
 
     fn gem(name: &str, level: &str, quality: u32, corrupted: bool) -> Item {
