@@ -6,6 +6,7 @@
 #include "daemon_client.h"
 #include "settings_page.h"
 #include "item_text.h"
+#include "stash_scroll.h"
 #include "uinput_kbd.h"
 #include "wl_grab.h"
 
@@ -39,8 +40,8 @@ public:
     // Created with the game's device: wakes the daemon right away.
     PriceCheck();
 
-    // Once per frame.
-    void update(WaylandInput& input, Clock::time_point now);
+    // Once per frame. `frame_height`: the game's swapchain height.
+    void update(WaylandInput& input, Clock::time_point now, int frame_height);
 
     // State for the UI. revision() changes whenever anything below does.
     uint64_t revision() const { return revision_ + settings_.revision(); }
@@ -123,6 +124,7 @@ private:
     void changed() { revision_++; }
 
     UinputKeyboard keyboard_;
+    StashScroll stash_scroll_;
     bool release_pending_ = false;  // keys go down one frame, up the next
     bool we_pressed_ctrl_ = false;
     // Ctrl+D: the copy keystroke waits (briefly) until the user's clipboard

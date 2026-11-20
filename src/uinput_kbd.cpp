@@ -27,6 +27,8 @@ UinputKeyboard::UinputKeyboard() {
               ioctl(fd_, UI_SET_KEYBIT, KEY_LEFTCTRL) == 0 &&
               ioctl(fd_, UI_SET_KEYBIT, KEY_LEFTALT) == 0 &&
               ioctl(fd_, UI_SET_KEYBIT, KEY_C) == 0 &&
+              ioctl(fd_, UI_SET_KEYBIT, KEY_LEFT) == 0 &&
+              ioctl(fd_, UI_SET_KEYBIT, KEY_RIGHT) == 0 &&
               ioctl(fd_, UI_DEV_SETUP, &setup) == 0 &&
               ioctl(fd_, UI_DEV_CREATE) == 0;
     if (!ok) {

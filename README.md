@@ -53,6 +53,14 @@ Ctrl+Alt+D.
 The game keeps keyboard focus (the panel is part of its window), so the
 overlay never uses keys PoE does; in particular there's no Esc to close.
 
+**Stash scroll**: Ctrl + mouse wheel switches stash tabs with the cursor
+anywhere in the game, not just over the stash, like APT's: each notch down
+presses Right (the next tab), each notch up Left. Over the stash itself the
+game already does this, so the overlay leaves those notches alone. The game
+still sees the wheel, and since you're holding Ctrl it sees Ctrl+Right and
+Ctrl+Left. A touchpad's two-finger scrolling counts as a notch about every
+30 pixels. Turn it off on the settings page's Hotkeys tab.
+
 When the game starts, a small notice rises in under the login box saying the
 overlay is ready (or that prices are still loading, or that the price daemon
 isn't answering) and naming the price check and settings keys. It goes away
@@ -64,7 +72,8 @@ after six seconds, and clicks go through it.
   rebound (Alt+D can also be turned off); Ctrl+C stays the copy key. A key
   without Ctrl or Alt gets a warning first, since the game sees it too, and a
   combination another action has swaps the two. Holding the quick look
-  key's modifiers (Ctrl, by default) keeps a quick look open.
+  key's modifiers (Ctrl, by default) keeps a quick look open. Stash scroll
+  is switched on and off here too.
 - **Price check**: the league ("Current" follows poe.ninja into each new
   league), which listings a search starts with (instant buyout, + in person,
   any), how far below your roll a ticked filter starts (10% by default), and
@@ -190,7 +199,7 @@ mods with their tiers, like PoE's tooltip) beside the panel.
   It does the same with a `wl_data_device` for the clipboard, draining the
   transfer pipe a bit each frame so the present thread never blocks on Wine.
 - `src/uinput_kbd.cpp`: a virtual keyboard on `/dev/uinput` that sends
-  Ctrl+C. Wayland has no other way to inject keys into a window; the
+  Ctrl+C and, for stash scroll, the arrow keys. Wayland has no other way to inject keys into a window; the
   compositor treats the device as a normal keyboard. Needs write access to
   `/dev/uinput` (systemd's uaccess ACL usually grants it to the logged-in
   user; otherwise the `input` group).
@@ -214,6 +223,12 @@ mods with their tiers, like PoE's tooltip) beside the panel.
   the game's surface, sized to the visible panels, with an input region
   covering just them: clicks there reach the UI and never the game. With no
   panel visible it's unmapped.
+- `src/stash_scroll.cpp`: Ctrl + wheel. The layer's own `wl_pointer` on the
+  game's connection gets the game's wheel events too (whole notches from
+  `axis_discrete`, touchpad scrolling added up per `wl_pointer` frame).
+  Outside the stash, while the game has keyboard focus, each notch becomes
+  an arrow key on the uinput keyboard: pressed in one frame, released in
+  the next.
 - `src/wl_grab.cpp`: typing into a panel. The game keeps keyboard focus, so
   to type a number the layer briefly takes it: on a Wayland connection of
   its own, a 1x1 transparent layer-shell surface on the overlay layer with

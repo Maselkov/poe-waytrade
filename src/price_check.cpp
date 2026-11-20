@@ -65,7 +65,7 @@ bool PriceCheck::anchor(float* x, float* y) const {
     return true;
 }
 
-void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
+void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_height) {
     if (release_pending_) {
         keyboard_.key(KEY_C, false);
         if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, false);
@@ -110,6 +110,8 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     }
 
     if (copy_queued_ && (input.selection_saved() || now > copy_queued_until_)) send_copy_keys(input);
+    // Not while typing into a panel: the keyboard isn't the game's then.
+    stash_scroll_.update(input, keyboard_, frame_height, settings_.values().stash_scroll && !grab_.active());
     if (waiting_) wait_for_clipboard(input, now);
     int game_clicks = input.take_game_clicks();
     apply_closing_rules(input, game_clicks, now);
