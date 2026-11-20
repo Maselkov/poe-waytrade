@@ -260,8 +260,6 @@ Environment variables, which take precedence over the settings page:
 - Only one Vulkan device gets the overlay.
 - HDR (10-bit/PQ) swapchains wouldn't be colour-corrected. PoE1 has no HDR
   mode, so this would only matter for PoE2.
-- With a plain (non-advanced) copy, a magic item's exact base isn't known, so
-  it searches by category.
 - No socket colour filters in trade searches.
 - The item text still shows up in clipboard managers' history. They see the
   game's copy, and Klipper can't be told to forget a single entry.
