@@ -48,6 +48,18 @@
                 <div data-attr-class="s_stash_scroll ? 'button' : 'button on'" data-event-click="stash_scroll(0)">Off</div>
             </div>
         </div>
+
+        <div class="group-label spaced">Cursor</div>
+        <div class="setting-row">
+            <div class="setting-text">
+                <div class="setting-name">Over the panels</div>
+                <div class="setting-desc">Desktop keeps its size under fractional scaling</div>
+            </div>
+            <div class="button-row toggle">
+                <div data-attr-class="s_desktop_cursor ? 'button' : 'button on'" data-event-click="desktop_cursor(0)">Game</div>
+                <div data-attr-class="s_desktop_cursor ? 'button on' : 'button'" data-event-click="desktop_cursor(1)">Desktop</div>
+            </div>
+        </div>
     </div>
 
     <div class="settings-body" data-if="s_tab == 1">

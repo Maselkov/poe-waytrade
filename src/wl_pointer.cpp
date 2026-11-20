@@ -236,9 +236,12 @@ bool WaylandInput::ensure_buffer(int w, int h) {
     return true;
 }
 
-void WaylandInput::set_cursor(const std::string& name) {
+void WaylandInput::set_cursor(bool desktop, const std::string& name) {
+    desktop_cursor_ = desktop;
     cursor_ = name;
-    if (pointer_inside_ && cursor_ != applied_cursor_) apply_cursor();
+    // Turned off while inside, ours stays until the pointer leaves: there's
+    // no asking Wine to set its cursor again.
+    if (pointer_inside_ && desktop_cursor_ && cursor_ != applied_cursor_) apply_cursor();
 }
 
 void WaylandInput::apply_cursor() {
@@ -312,9 +315,11 @@ void WaylandInput::on_pointer_enter(uint32_t serial, wl_surface* surface, double
     }
     pointer_inside_ = true;
     buttons_held_ = 0;  // a release we never saw can't keep the rects frozen
-    // The game's cursor doesn't apply over our surface; set our own.
+    // Wine's wl_pointer gets this enter too and sets the game's cursor;
+    // replace it only if the desktop cursor is wanted.
     enter_serial_ = serial;
-    apply_cursor();
+    applied_cursor_.reset();
+    if (desktop_cursor_) apply_cursor();
     pointer_events_.push_back({PointerEvent::Motion, float((x + sub_x_) * scale_), float((y + sub_y_) * scale_)});
 }
 

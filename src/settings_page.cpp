@@ -120,6 +120,7 @@ void SettingsPage::apply_reply(const PriceReply& reply) {
         else if (key == "min_percent") v.min_percent = atoi(value.c_str());
         else if (key == "ui_scale") v.ui_scale = atof(value.c_str());
         else if (key == "stash_scroll") v.stash_scroll = value != "off";
+        else if (key == "cursor") v.desktop_cursor = value == "desktop";
         for (int i = 0; i < kActions; i++)
             if (key == kHotkeyKeys[i]) v.hotkeys[i] = parse_combo(value);
     }
@@ -250,6 +251,13 @@ void SettingsPage::set_stash_scroll(bool on) {
     if (on == values_.stash_scroll) return;
     values_.stash_scroll = on;
     set("stash_scroll", on ? "on" : "off");
+    set_note("");
+}
+
+void SettingsPage::set_desktop_cursor(bool on) {
+    if (on == values_.desktop_cursor) return;
+    values_.desktop_cursor = on;
+    set("cursor", on ? "desktop" : "game");
     set_note("");
 }
 

@@ -242,7 +242,8 @@ Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
 - **Hotkeys:** click a key, then press the new combination. A key without Ctrl
   or Alt gets a warning, since the game sees it too. Choosing a combination
   another action uses swaps the two. Stash scroll is switched on and off
-  here too.
+  here too, and so is the cursor over the panels: the game's or the
+  desktop's.
 - **Price check:**
   - The league. "Current" follows poe.ninja into each new league.
   - Which listings a search starts with.
@@ -288,6 +289,10 @@ Environment variables, which take precedence over the settings page:
 - HDR (10-bit/PQ) swapchains wouldn't be colour-corrected. PoE1 has no HDR
   mode, so this would only matter for PoE2.
 - No socket colour filters in trade searches.
+- With fractional scaling, the game's cursor grows over the panels. Wine
+  sizes its cursor for scale 1 on surfaces that aren't its own windows.
+  Setting the cursor to "Desktop" (Hotkeys tab) avoids it, at the cost of
+  your desktop cursor over the panels.
 - The item text still shows up in clipboard managers' history. They see the
   game's copy, and Klipper can't be told to forget a single entry.
 

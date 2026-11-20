@@ -23,6 +23,7 @@ pub const KEYS: &[&str] = &[
     "hotkey.map_alias",
     "hotkey.settings",
     "stash_scroll",
+    "cursor",
 ];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -39,6 +40,9 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     /// Ctrl + mouse wheel switches stash tabs (the layer sends arrow keys).
     pub stash_scroll: bool,
+    /// The cursor over the panels: "game" (Wine's) or "desktop" (the
+    /// cursor theme's, which keeps its size with fractional scaling).
+    pub cursor: String,
 }
 
 /// Each a key combination as the layer matches it: modifiers and an evdev
@@ -62,6 +66,7 @@ impl Default for Settings {
             ui_scale: 1.0,
             hotkeys: Hotkeys::default(),
             stash_scroll: true,
+            cursor: "game".to_string(),
         }
     }
 }
@@ -164,6 +169,7 @@ impl Settings {
             "hotkey.map_alias" => self.hotkeys.map_alias.clone(),
             "hotkey.settings" => self.hotkeys.settings.clone(),
             "stash_scroll" => if self.stash_scroll { "on" } else { "off" }.to_string(),
+            "cursor" => self.cursor.clone(),
             _ => String::new(),
         }
     }
@@ -209,6 +215,12 @@ impl Settings {
                 "off" => self.stash_scroll = false,
                 _ => return Err("Stash scroll is on or off".to_string()),
             },
+            "cursor" => {
+                if !["game", "desktop"].contains(&value) {
+                    return Err("The cursor is game or desktop".to_string());
+                }
+                self.cursor = value.to_string();
+            }
             _ => return Err(format!("Unknown setting {key}")),
         }
         Ok(())
@@ -273,7 +285,9 @@ mod tests {
         s.set("hotkey.map_alias", "").unwrap();
         s.set("league", "Standard").unwrap();
         s.set("stash_scroll", "off").unwrap();
+        s.set("cursor", "desktop").unwrap();
         assert_eq!(s.min_percent, 80);
+        assert_eq!(s.get("cursor"), "desktop");
         assert!(!s.stash_scroll);
         assert_eq!(s.get("stash_scroll"), "off");
         assert_eq!(s.get("ui_scale"), "1.25");
@@ -287,6 +301,7 @@ mod tests {
             ("hotkey.quick", ""),
             ("league", ""),
             ("stash_scroll", "yes"),
+            ("cursor", "theme"),
             ("nonsense", "1"),
         ] {
             let before = s.clone();
@@ -304,6 +319,7 @@ mod tests {
         assert_eq!(s.hotkeys.locked, Hotkeys::default().locked);
         assert_eq!(s.league, "auto");
         assert!(s.stash_scroll, "missing from older files: on");
+        assert_eq!(s.cursor, "game", "missing from older files: the game's");
 
         let s: Settings = serde_json::from_str(r#"{"stash_scroll": false}"#).unwrap();
         assert!(!s.validated().stash_scroll);
