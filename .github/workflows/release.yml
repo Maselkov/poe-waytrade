@@ -1,6 +1,8 @@
 name: Release
 
-# Push a tag matching the PKGBUILD's pkgver, e.g.  git tag v0.12.0 && git push origin v0.12.0
+# Push a version tag to release that commit:  git tag v22.0.0 && git push origin v22.0.0
+# The tag is the version: the PKGBUILD's pkgver is set from it for the build,
+# so no version bump is committed first.
 on:
   push:
     tags: ['v*']
@@ -14,20 +16,27 @@ jobs:
     container: archlinux:latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: .github/scripts/arch-setup.sh
 
-      - name: Tag matches the package version
+      # Before arch-setup.sh, which hands the checkout to the build user.
+      - name: Version from the tag
         run: |
-          pkgver=$(sed -n 's/^pkgver=//p' packaging/arch/PKGBUILD)
-          if [ "v$pkgver" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME doesn't match pkgver $pkgver in packaging/arch/PKGBUILD" >&2
+          version=${GITHUB_REF_NAME#v}
+          # pacman's pkgver can't have "-", so no "v1.0.0-rc1".
+          if ! printf '%s\n' "$version" | grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "Tag $GITHUB_REF_NAME isn't a version tag like v22.0.0" >&2
             exit 1
           fi
-          echo "VERSION=$pkgver" >> "$GITHUB_ENV"
+          sed -i -e "s/^pkgver=.*/pkgver=$version/" -e 's/^pkgrel=.*/pkgrel=1/' packaging/arch/PKGBUILD
+          grep -E '^pkg(ver|rel)=' packaging/arch/PKGBUILD
+          echo "VERSION=$version" >> "$GITHUB_ENV"
           # The checkout has no .git (git isn't installed yet), so give the
-          # build its version: the tag, which is pkgver.
-          echo "WAYTRADE_VERSION=$pkgver" >> "$GITHUB_ENV"
+          # binaries the version too. daemon/Cargo.toml is left alone: its
+          # version is only the fallback without git, and changing it would
+          # need Cargo.lock updated for --locked.
+          echo "WAYTRADE_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: .github/scripts/arch-setup.sh
 
       - name: Test
         working-directory: daemon

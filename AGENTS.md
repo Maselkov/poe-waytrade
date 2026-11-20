@@ -52,11 +52,15 @@ the merge. Run it locally when you change `packaging/`.
 
 ## Versions and releases
 
-`pkgver` in `packaging/arch/PKGBUILD` is the release version, and
-`daemon/Cargo.toml`'s `version` must equal it (the `lint` job checks). To bump,
-change both, run `cargo update -p poe-waytrade-daemon --offline` in `daemon/`,
-and commit. To release, tag that commit `v<pkgver>` and push the tag:
-`release.yml` builds it and makes the GitHub release.
+To release, tag a commit on `main` with its version and push the tag:
+`git tag v22.0.0 && git push origin v22.0.0`. `release.yml` sets the
+PKGBUILD's `pkgver` from the tag for its build, builds and makes the GitHub
+release. No version bump is committed. Tags are `vX.Y.Z` (pacman's `pkgver`
+can't have `-`).
+
+The committed `pkgver` and `daemon/Cargo.toml`'s `version` are only the
+fallback for builds without git; the `lint` job checks they're equal. They
+don't need to change for a release.
 
 The binaries report the exact build from `git describe` (`daemon/build.rs`,
 `cmake/version.cmake`): `0.21.0` on the tag, `0.21.0-5-gcf90910` after it,
