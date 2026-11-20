@@ -9,6 +9,9 @@ pub struct Price {
     pub chaos: f64,
     pub divine: f64,
     pub listings: Option<u32>,
+    /// The unique this price is for, on an unidentified unique's list of
+    /// candidates: the panel checks the item as that one when it's clicked.
+    pub unique: Option<String>,
 }
 
 pub enum Outcome {
@@ -35,7 +38,7 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
             Some(name) => db.items.get(name),
             None => db.uniques_by_base.get(&item.base), // unidentified
         };
-        return match lines.map(|l| unique_prices(db, l, item)) {
+        return match lines.map(|l| unique_prices(db, l, item.links, item.name.is_none())) {
             Some(prices) if !prices.is_empty() => found(title, prices),
             _ => Outcome::NotFound(format!("No poe.ninja price for {title}")),
         };
@@ -43,7 +46,8 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
 
     // Currency, fragments, essences, divination cards, omens, ...
     if let Some(&chaos) = db.exchange.get(&item.base) {
-        let mut prices = vec![Price { label: "each".to_string(), chaos, divine: db.to_divine(chaos), listings: None }];
+        let mut prices =
+            vec![Price { label: "each".to_string(), chaos, divine: db.to_divine(chaos), listings: None, unique: None }];
         if let Some(stack) = item.stack_size.filter(|&n| n > 1) {
             let total = chaos * stack as f64;
             prices.push(Price {
@@ -51,6 +55,7 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
                 chaos: total,
                 divine: db.to_divine(total),
                 listings: None,
+                unique: None,
             });
         }
         return found(title, prices);
@@ -149,6 +154,58 @@ fn cluster_bracket(ilvl: u32) -> u32 {
     [84, 75, 68, 50].into_iter().find(|&b| ilvl >= b).unwrap_or(1)
 }
 
+/// An unidentified unique once its art says which unique it is: only the
+/// lines of `names` (several when uniques share their art, like a
+/// Foulborn one and its original), named only if there are several.
+pub fn unique_prices_named(db: &PriceDb, item: &Item, names: &[String]) -> Outcome {
+    let lines: Vec<ItemLine> = db
+        .uniques_by_base
+        .get(&item.base)
+        .map(|lines| lines.iter().filter(|l| names.contains(&l.name)).cloned().collect())
+        .unwrap_or_default();
+    let prices = unique_prices(db, &lines, item.links, names.len() > 1);
+    if prices.is_empty() {
+        return Outcome::NotFound(format!("No poe.ninja price for {}", names.join(" / ")));
+    }
+    found(names.join(" / "), prices)
+}
+
+/// An unidentified unique's candidates by art: (art URL, names of the
+/// uniques with that art), in poe.ninja's order. Empty unless there's more
+/// than one art to tell apart.
+pub fn unique_arts(db: &PriceDb, item: &Item) -> Vec<(String, Vec<String>)> {
+    if item.rarity != "Unique" || item.name.is_some() {
+        return Vec::new();
+    }
+    let mut arts: Vec<(String, Vec<String>)> = Vec::new();
+    for line in db.uniques_by_base.get(&item.base).into_iter().flatten() {
+        let Some(icon) = &line.icon else { return Vec::new() }; // can't rule that one out
+        match arts.iter_mut().find(|(url, _)| url == icon) {
+            Some((_, names)) if names.contains(&line.name) => {}
+            Some((_, names)) => names.push(line.name.clone()),
+            None => arts.push((icon.clone(), vec![line.name.clone()])),
+        }
+    }
+    if arts.len() < 2 { Vec::new() } else { arts }
+}
+
+/// Every art an art match could need: those of the uniques on bases where
+/// uniques look different (see unique_arts), for fetching ahead of time.
+pub fn matchable_arts(db: &PriceDb) -> Vec<String> {
+    let mut out = Vec::new();
+    for lines in db.uniques_by_base.values() {
+        let mut arts: Vec<&String> = lines.iter().filter_map(|l| l.icon.as_ref()).collect();
+        arts.sort();
+        arts.dedup();
+        if arts.len() >= 2 {
+            out.extend(arts.into_iter().cloned());
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
 fn found(title: String, prices: Vec<Price>) -> Outcome {
     Outcome::Found { title, prices }
 }
@@ -163,13 +220,16 @@ fn line_price(db: &PriceDb, line: &ItemLine) -> Price {
         chaos: line.chaos_value,
         divine: line.divine_value.unwrap_or_else(|| db.to_divine(line.chaos_value)),
         listings: line.listing_count,
+        unique: None,
     }
 }
 
 /// poe.ninja lists 5L/6L uniques separately; anything below 5 links is the
 /// unlinked line. Variants (different rolls of one unique) are all shown.
-fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
-    let want = if item.links >= 5 { Some(item.links) } else { None };
+/// `named`: label each price with its unique's name (an unidentified item,
+/// which could be any of them).
+fn unique_prices(db: &PriceDb, lines: &[ItemLine], links: u32, named: bool) -> Vec<Price> {
+    let want = if links >= 5 { Some(links) } else { None };
     let mut matching: Vec<&ItemLine> = lines.iter().filter(|l| l.links.filter(|&n| n >= 5) == want).collect();
     if matching.is_empty() {
         matching = lines.iter().collect();
@@ -182,7 +242,8 @@ fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
         .map(|l| {
             let mut price = line_price(db, l);
             // Unidentified: several uniques share the base, so say which.
-            if item.name.is_none() {
+            if named {
+                price.unique = Some(l.name.clone());
                 price.label =
                     if price.label.is_empty() { l.name.clone() } else { format!("{} ({})", l.name, price.label) };
             }
@@ -267,6 +328,54 @@ mod tests {
             let sockets = if links == 5 { "G-G-G-G-G G" } else { "G-G-G-G-G-G" };
             assert_eq!(look(&queen(sockets)), vec![(format!("{links}L"), chaos(&linked))], "{links}L");
         }
+    }
+
+    #[test]
+    fn unidentified_unique_by_art() {
+        let item = parse(
+            "Item Class: Body Armours\nRarity: Unique\nSpidersilk Robe\n--------\nItem Level: 84\n--------\nUnidentified\n",
+        )
+        .unwrap();
+        let mut db = fixture_db();
+        // Without every unique's art, none can be ruled out.
+        assert!(unique_arts(&db, &item).is_empty());
+
+        // Foulborn uniques look like their originals.
+        for line in db.uniques_by_base.get_mut("Spidersilk Robe").unwrap() {
+            let art = line.name.trim_start_matches("Foulborn ").replace(' ', "");
+            line.icon = Some(format!("https://web.poecdn.com/{art}.png"));
+        }
+        let arts: Vec<(String, Vec<String>)> = unique_arts(&db, &item);
+        let names = |art: &str| arts.iter().find(|(url, _)| url.ends_with(&format!("/{art}.png"))).unwrap().1.clone();
+        assert_eq!(arts.len(), 3);
+        assert_eq!(names("SoulMantle"), ["Soul Mantle", "Foulborn Soul Mantle"]);
+        assert_eq!(names("ReplicaCovenant"), ["Replica Covenant"]);
+
+        // One unique: priced like an identified one.
+        let Outcome::Found { title, prices: got } = unique_prices_named(&db, &item, &names("ReplicaCovenant")) else {
+            panic!("not found")
+        };
+        assert_eq!(title, "Replica Covenant");
+        assert_eq!(got.iter().map(|p| (p.label.as_str(), p.chaos)).collect::<Vec<_>>(), [("", 20.0)]);
+        assert_eq!(got[0].unique, None); // nothing left to pick
+        // Several: still named.
+        let Outcome::Found { title, prices: got } = unique_prices_named(&db, &item, &names("SoulMantle")) else {
+            panic!("not found")
+        };
+        assert_eq!(title, "Soul Mantle / Foulborn Soul Mantle");
+        assert_eq!(
+            got.iter().map(|p| (p.label.as_str(), p.chaos)).collect::<Vec<_>>(),
+            [("Soul Mantle", 10.0), ("Foulborn Soul Mantle (Flamewood)", 1.0)]
+        );
+        // Each row says which unique it is, to be picked from the panel.
+        let picks: Vec<_> = got.iter().map(|p| p.unique.as_deref()).collect();
+        assert_eq!(picks, [Some("Soul Mantle"), Some("Foulborn Soul Mantle")]);
+
+        // Identified uniques have nothing to tell apart.
+        let named =
+            parse("Item Class: Body Armours\nRarity: Unique\nSoul Mantle\nSpidersilk Robe\n--------\nItem Level: 84\n")
+                .unwrap();
+        assert!(unique_arts(&db, &named).is_empty());
     }
 
     #[test]

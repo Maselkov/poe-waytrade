@@ -215,8 +215,15 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(VkDevice device, const VkSwapc
     // We render into the swapchain images, so they must be colour attachments.
     VkSwapchainCreateInfoKHR patched = *ci;
     patched.imageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    // POE_WAYTRADE_SNAPSHOT copies a frame out of the swapchain (overlay.cpp).
-    if (getenv("POE_WAYTRADE_SNAPSHOT")) patched.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    // We copy pixels out of them too: around the cursor at a price check, to
+    // tell unidentified uniques apart by their art, and POE_WAYTRADE_SNAPSHOT's
+    // whole frame (overlay.cpp). Only if the surface allows it.
+    VkSurfaceCapabilitiesKHR caps = {};
+    if (data->instance->GetPhysicalDeviceSurfaceCapabilitiesKHR &&
+        data->instance->GetPhysicalDeviceSurfaceCapabilitiesKHR(data->physical_device, ci->surface, &caps) ==
+            VK_SUCCESS &&
+        (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
+        patched.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     VkResult res = data->CreateSwapchainKHR(device, &patched, alloc, out);
     if (res == VK_SUCCESS) overlay_swapchain_created(data, *out, &patched);
     return res;

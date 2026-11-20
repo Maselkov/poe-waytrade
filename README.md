@@ -33,7 +33,10 @@ MangoHud is:
   site requires a real browser) and stops when unused.
 - **It's safe.**
   - It only hooks the game's Vulkan presentation, the way MangoHud does.
-    It doesn't read or change the game's memory or files.
+    It doesn't read or change the game's memory or files. When you check
+    an item, it looks at the pixels around the cursor in the frame the
+    game shows, the way a screenshot would, to recognise unidentified
+    uniques by their art.
   - The only keys it presses for you are the Ctrl+C that copies the item
     and, for stash scroll, Left/Right to switch stash tabs. These are the
     same keys you'd press yourself.
@@ -128,7 +131,10 @@ From poe.ninja:
 - Currency, fragments, essences, divination cards, omens, oils, fossils,
   tattoos and other Currency Exchange items. These prices come from the
   in-game Currency Exchange, where currency actually trades.
-- Uniques, including 5L/6L and unidentified ones.
+- Uniques, including 5L/6L and unidentified ones. An unidentified unique is
+  recognised by its art when several uniques share its base, so you get its
+  own price ("matched by art"). If no art matches clearly (on the ground,
+  where items show no art, say), you get every unique on that base.
 - Skill gems, by level, quality and corruption.
 - Maps, invitations and beasts.
 - Wickerman limbs (Viscera), matched by their implicits.
@@ -186,6 +192,11 @@ You can also pick "Any Ring" or the exact base, and whether corrupted items
 count. Uniques, gems and the Base item preset start on the item's own
 corruption state. Other items start on Any, since their price is in their
 mods.
+
+An unidentified item gets an **Unidentified** chip. It starts off (any
+listing); turned on, the search finds only unidentified ones, for uniques
+bought as a gamble on their rolls, like Watcher's Eye. An unidentified
+unique whose art was recognised is searched by name, like an identified one.
 
 Each filter's minimum starts 10% of the mod's range below your roll (you can
 change this in the settings). A roll at the top of its tier starts at exactly
@@ -245,7 +256,8 @@ Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
   here too, and so is the cursor over the panels: the game's or the
   desktop's.
 - **Price check:**
-  - The league. "Current" follows poe.ninja into each new league.
+  - The league. "Current" (or "Current hardcore") follows poe.ninja into
+    each new league.
   - Which listings a search starts with.
   - How far below your roll a ticked filter starts.
   - The panel size.

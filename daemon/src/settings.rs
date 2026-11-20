@@ -12,6 +12,10 @@ use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
 use crate::trade::Status;
 
+/// League settings that follow poe.ninja into each new league rather than
+/// name one: the current challenge league, and its hardcore twin.
+pub const AUTO_LEAGUES: &[&str] = &["auto", "auto-hardcore"];
+
 /// The keys the layer can set, in the order they're sent.
 pub const KEYS: &[&str] = &[
     "league",
@@ -29,7 +33,8 @@ pub const KEYS: &[&str] = &[
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Settings {
-    /// "auto" (the current challenge league, from poe.ninja) or a name.
+    /// "auto" (the current challenge league, from poe.ninja), "auto-hardcore"
+    /// (its hardcore twin) or a name.
     pub league: String,
     /// Which listings a search starts with: instant, available or any.
     pub status: String,
@@ -283,6 +288,8 @@ mod tests {
         s.set("status", "available").unwrap();
         s.set("hotkey.quick", "alt+shift+33").unwrap();
         s.set("hotkey.map_alias", "").unwrap();
+        s.set("league", "auto-hardcore").unwrap();
+        assert_eq!(s.get("league"), "auto-hardcore");
         s.set("league", "Standard").unwrap();
         s.set("stash_scroll", "off").unwrap();
         s.set("cursor", "desktop").unwrap();

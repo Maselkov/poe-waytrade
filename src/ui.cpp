@@ -163,6 +163,7 @@ struct UiPriceRow {
     Rml::String note;  // in place of a price: "Search to price this item"
     Rml::String meta, tag;
     bool answer = false, rule = false, stale = false;
+    int pick = -1;  // an unidentified unique's candidate: its index, to click
 };
 struct UiFilter {
     int index = 0;
@@ -238,6 +239,10 @@ struct UiHotkey {
 struct UiAbout {
     Rml::String label, value;
 };
+struct UiLeague {
+    Rml::String value, label, now;
+    bool on = false;
+};
 
 struct Model {
     Rml::String name, base, subtitle, rarity;
@@ -251,6 +256,7 @@ struct Model {
     Rml::String base_label, corrupted_label, corrupted_kind;  // kind: yes | no
     bool has_base = false, corrupted_on = false;
     bool six_link_offered = false, six_link_on = false;  // the 6-link chip
+    bool unid_offered = false, unid_on = false;          // the unidentified chip
     bool base_preset = false, preset_base = false;  // offered / active
     bool base_only = false, searched = false, stale = false;
     // The price card, and its source line when poe.ninja alone prices the item
@@ -279,7 +285,8 @@ struct Model {
     Rml::Vector<UiHotkey> s_hotkeys;
     int s_warning = -1;  // the hotkey row with the "reaches the game" warning
     Rml::String s_warning_title, s_warning_text, s_warning_key;
-    Rml::String s_league, s_league_pinned, s_status, s_min, s_scale;
+    Rml::Vector<UiLeague> s_leagues;
+    Rml::String s_league_pinned, s_status, s_min, s_scale;
     bool s_scale_env = false;
     bool s_stash_scroll = true;
     bool s_desktop_cursor = false;
@@ -527,6 +534,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("answer", &UiPriceRow::answer);
         h.RegisterMember("rule", &UiPriceRow::rule);
         h.RegisterMember("stale", &UiPriceRow::stale);
+        h.RegisterMember("pick", &UiPriceRow::pick);
     }
     if (auto h = c.RegisterStruct<UiFilter>()) {
         h.RegisterMember("index", &UiFilter::index);
@@ -625,6 +633,13 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("value", &UiAbout::value);
     }
     c.RegisterArray<Rml::Vector<UiAbout>>();
+    if (auto h = c.RegisterStruct<UiLeague>()) {
+        h.RegisterMember("value", &UiLeague::value);
+        h.RegisterMember("label", &UiLeague::label);
+        h.RegisterMember("now", &UiLeague::now);
+        h.RegisterMember("on", &UiLeague::on);
+    }
+    c.RegisterArray<Rml::Vector<UiLeague>>();
 
     c.Bind("name", &model.name);
     c.Bind("base", &model.base);
@@ -643,6 +658,8 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("corrupted_on", &model.corrupted_on);
     c.Bind("six_link_offered", &model.six_link_offered);
     c.Bind("six_link_on", &model.six_link_on);
+    c.Bind("unid_offered", &model.unid_offered);
+    c.Bind("unid_on", &model.unid_on);
     c.Bind("corrupted_label", &model.corrupted_label);
     c.Bind("corrupted_kind", &model.corrupted_kind);
     c.Bind("base_only", &model.base_only);
@@ -677,7 +694,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_warning_title", &model.s_warning_title);
     c.Bind("s_warning_text", &model.s_warning_text);
     c.Bind("s_warning_key", &model.s_warning_key);
-    c.Bind("s_league", &model.s_league);
+    c.Bind("s_leagues", &model.s_leagues);
     c.Bind("s_league_pinned", &model.s_league_pinned);
     c.Bind("s_status", &model.s_status);
     c.Bind("s_min", &model.s_min);
@@ -711,6 +728,13 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("toggle_six_link", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->toggle_six_link();
+    });
+    c.BindEventCallback("toggle_unidentified", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->toggle_unidentified();
+    });
+    c.BindEventCallback("pick_unique", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        int index = args.empty() ? -1 : args[0].Get<int>();
+        if (price_check && index >= 0) price_check->pick_unique(index);
     });
     c.BindEventCallback("search", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->search();
@@ -777,7 +801,9 @@ void OverlayUi::Impl::bind_model() {
     settings_event("warning_keep", [](SettingsPage& s, Args) { s.warning_keep(); });
     settings_event("stash_scroll", [arg](SettingsPage& s, Args a) { s.set_stash_scroll(arg(a) != 0); });
     settings_event("desktop_cursor", [arg](SettingsPage& s, Args a) { s.set_desktop_cursor(arg(a) != 0); });
-    settings_event("league_step", [arg](SettingsPage& s, Args a) { s.step_league(arg(a)); });
+    settings_event("league_pick", [](SettingsPage& s, Args a) {
+        if (!a.empty()) s.set_league(a[0].Get<Rml::String>());
+    });
     settings_event("settings_status", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_status(a[0].Get<Rml::String>());
     });
@@ -941,6 +967,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             m.hint = "Taking the keyboard from the game…";
         else if (e)
             m.hint = "Type a number · Tab: min/max · Enter: apply · Esc: cancel";
+        else if (const auto& r = pc.reply(); r && r->status == "ok" && !r->prices.empty() && !r->prices[0].unique.empty())
+            m.hint = "Click a unique to search for it";
         break;
     }
     const auto& item = pc.item();
@@ -955,6 +983,12 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         bool redundant = item->rarity.empty() || item->item_class.find(item->rarity) != std::string::npos;
         m.subtitle = redundant ? item->item_class : item->rarity + " · " + item->item_class;
         if (!item->item_level.empty()) m.subtitle += " · ilvl " + item->item_level;
+        // An unidentified unique the daemon recognised by its art.
+        // (A unique picked from several that look alike has its own name.)
+        if (!pc.art_matched().empty()) {
+            if (m.name.empty()) m.name = pc.art_matched();
+            m.subtitle += " · matched by art";
+        }
     }
 
     if (!item || !reply) {
@@ -992,6 +1026,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.corrupted_on = reply->corrupted != "any";
         m.six_link_offered = reply->six_link_offered;
         m.six_link_on = reply->six_link;
+        m.unid_offered = reply->unidentified_offered;
+        m.unid_on = reply->unidentified;
         m.corrupted_kind = reply->item_corrupted ? "yes" : "no";
         m.corrupted_label = reply->item_corrupted ? "Corrupted" : "Uncorrupted";
         // A unique's poe.ninja price, which doesn't know its rolls, above the
@@ -1165,6 +1201,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         for (const PriceLine& p : reply->prices) m.price_rows.push_back(ninja_row(p));
         for (size_t i = 0; i < m.price_rows.size(); i++) {
             UiPriceRow& r = m.price_rows[i];
+            if (!reply->prices[i].unique.empty()) r.pick = (int)i;
             r.answer = m.price_rows.size() == 1 || r.label.rfind("Stack of", 0) == 0;
             r.rule = r.answer && i > 0;
         }
@@ -1228,10 +1265,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
                            "the overlay.";
     }
 
-    if (v.league == "auto")
-        m.s_league = s.league_active().empty() ? "Current" : "Current (" + s.league_active() + ")";
-    else
-        m.s_league = v.league;
+    for (const auto& c : s.league_choices()) m.s_leagues.push_back({c.value, c.label, c.now, c.value == v.league});
     m.s_league_pinned = s.league_pinned();
     m.s_status = v.status;
     m.s_min = std::to_string(100 - v.min_percent) + "%";

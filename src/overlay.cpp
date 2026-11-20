@@ -5,6 +5,7 @@
 #include "ui.h"
 #include "wl_input.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -26,13 +27,31 @@ struct OverlaySwapchain {
     // Set up lazily on first present, once we know which queue presents it.
     bool ready = false;
     bool unsupported = false;
+    bool can_copy = false;  // created with TRANSFER_SRC (layer.cpp)
     VkRenderPass render_pass = VK_NULL_HANDLE;
     VkCommandPool pool = VK_NULL_HANDLE;
     std::vector<OverlayImage> images;
 };
 
+// The frame around the cursor at a price check (PriceCheck::capture_wanted),
+// copied into a host-visible buffer along with the overlay's own drawing and
+// read once that frame's fence signals.
+struct CaptureReadback {
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    void* mapped = nullptr;
+    // Pending while set: the swapchain image whose submission copies it.
+    OverlaySwapchain* swapchain = nullptr;
+    VkFence fence = VK_NULL_HANDLE;
+    uint64_t id = 0;
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    int x = 0, y = 0, width = 0, height = 0;
+    float cursor_x = 0, cursor_y = 0, cell = 0;
+};
+
 struct OverlayDevice {
     std::mutex lock;
+    CaptureReadback capture;
     std::vector<std::unique_ptr<OverlaySwapchain>> swapchains;
 
     // The UI is created on first present, once a queue and format are known.
@@ -229,6 +248,159 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     if (input) input->set_input_rects(ov.ui->input_rects(), (int)sc.extent.width, (int)sc.extent.height);
 }
 
+// 8-bit RGB from a swapchain format's pixels, or false for formats we don't
+// read (HDR float formats).
+bool to_rgb8(VkFormat format, const unsigned char* px, size_t count, unsigned char* out) {
+    bool bgr = format == VK_FORMAT_B8G8R8A8_SRGB || format == VK_FORMAT_B8G8R8A8_UNORM;
+    bool rgb = format == VK_FORMAT_R8G8B8A8_SRGB || format == VK_FORMAT_R8G8B8A8_UNORM;
+    bool rgb10 = format == VK_FORMAT_A2R10G10B10_UNORM_PACK32;  // 10 bits a channel
+    bool bgr10 = format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    if (!bgr && !rgb && !rgb10 && !bgr10) return false;
+    for (size_t i = 0; i < count; i++, px += 4, out += 3) {
+        if (rgb10 || bgr10) {
+            uint32_t v;
+            memcpy(&v, px, 4);
+            unsigned char hi = (unsigned char)((v >> 22) & 0xFF), mid = (unsigned char)((v >> 12) & 0xFF),
+                          lo = (unsigned char)((v >> 2) & 0xFF);
+            out[0] = rgb10 ? hi : lo;
+            out[1] = mid;
+            out[2] = rgb10 ? lo : hi;
+        } else {
+            out[0] = px[bgr ? 2 : 0];
+            out[1] = px[1];
+            out[2] = px[bgr ? 0 : 2];
+        }
+    }
+    return true;
+}
+
+// A host-visible buffer (cached, if there is such memory: we read it back).
+bool create_readback_buffer(DeviceData* dev, VkDeviceSize size, VkBuffer* buffer, VkDeviceMemory* memory) {
+    VkBufferCreateInfo bci = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    bci.size = size;
+    bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    if (dev->CreateBuffer(dev->device, &bci, nullptr, buffer) != VK_SUCCESS) return false;
+    VkMemoryRequirements req;
+    dev->GetBufferMemoryRequirements(dev->device, *buffer, &req);
+    VkPhysicalDeviceMemoryProperties props;
+    dev->instance->GetPhysicalDeviceMemoryProperties(dev->physical_device, &props);
+    VkMemoryAllocateInfo ai = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    ai.allocationSize = req.size;
+    ai.memoryTypeIndex = UINT32_MAX;
+    VkMemoryPropertyFlags visible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    for (VkMemoryPropertyFlags want : {visible | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, visible}) {
+        for (uint32_t i = 0; i < props.memoryTypeCount && ai.memoryTypeIndex == UINT32_MAX; i++) {
+            if ((req.memoryTypeBits & (1u << i)) && (props.memoryTypes[i].propertyFlags & want) == want)
+                ai.memoryTypeIndex = i;
+        }
+    }
+    if (ai.memoryTypeIndex == UINT32_MAX || dev->AllocateMemory(dev->device, &ai, nullptr, memory) != VK_SUCCESS) {
+        dev->DestroyBuffer(dev->device, *buffer, nullptr);
+        *buffer = VK_NULL_HANDLE;
+        return false;
+    }
+    dev->BindBufferMemory(dev->device, *buffer, *memory, 0);
+    return true;
+}
+
+void free_capture(DeviceData* dev, CaptureReadback& c) {
+    if (c.buffer) dev->DestroyBuffer(dev->device, c.buffer, nullptr);
+    if (c.memory) dev->FreeMemory(dev->device, c.memory, nullptr);  // unmaps it
+    c = CaptureReadback{};
+}
+
+// Records copying the cursor's surroundings out of `img` (in PRESENT_SRC,
+// as the game left it) before the overlay draws over it. Big enough for
+// any item under the cursor: 2x4 cells.
+void record_capture(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, OverlayImage& img) {
+    uint64_t id;
+    float cx, cy;
+    if (!ov.price_check.capture_wanted(&id, &cx, &cy)) return;
+    ov.price_check.capture_started();
+    CaptureReadback& c = ov.capture;
+    if (c.swapchain || !sc.can_copy) return;  // one at a time
+    free_capture(dev, c);
+    unsigned char probe[4] = {}, rgb[3];
+    if (!to_rgb8(sc.format, probe, 1, rgb)) return;
+    float cell = sc.extent.height * kCellPerHeight;
+    int x0 = std::max(0, (int)(cx - 2.5f * cell)), x1 = std::min((int)sc.extent.width, (int)(cx + 2.5f * cell) + 1);
+    int y0 = std::max(0, (int)(cy - 4.5f * cell)), y1 = std::min((int)sc.extent.height, (int)(cy + 4.5f * cell) + 1);
+    if (x1 <= x0 || y1 <= y0) return;
+    VkDeviceSize size = (VkDeviceSize)(x1 - x0) * (y1 - y0) * 4;
+    if (!create_readback_buffer(dev, size, &c.buffer, &c.memory) ||
+        dev->MapMemory(dev->device, c.memory, 0, VK_WHOLE_SIZE, 0, &c.mapped) != VK_SUCCESS) {
+        free_capture(dev, c);
+        return;
+    }
+
+    VkImageMemoryBarrier barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = img.image;
+    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    // From COLOR_ATTACHMENT_OUTPUT: the stage the game's semaphores are waited at.
+    dev->CmdPipelineBarrier(img.cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                            0, nullptr, 0, nullptr, 1, &barrier);
+    VkBufferImageCopy copy = {};
+    copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    copy.imageOffset = {x0, y0, 0};
+    copy.imageExtent = {(uint32_t)(x1 - x0), (uint32_t)(y1 - y0), 1};
+    dev->CmdCopyImageToBuffer(img.cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, c.buffer, 1, &copy);
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    VkBufferMemoryBarrier host = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+    host.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    host.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    host.srcQueueFamilyIndex = host.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    host.buffer = c.buffer;
+    host.size = VK_WHOLE_SIZE;
+    dev->CmdPipelineBarrier(img.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr,
+                            1, &host, 1, &barrier);
+
+    c.swapchain = &sc;
+    c.fence = img.fence;
+    c.id = id;
+    c.format = sc.format;
+    c.x = x0;
+    c.y = y0;
+    c.width = x1 - x0;
+    c.height = y1 - y0;
+    c.cursor_x = cx - x0;
+    c.cursor_y = cy - y0;
+    c.cell = cell;
+}
+
+// Hands a finished copy to the price check. `done`: its fence is known to
+// have signaled (else it's asked).
+void finish_capture(DeviceData* dev, OverlayDevice& ov, bool done = false) {
+    CaptureReadback& c = ov.capture;
+    if (!c.swapchain) return;
+    if (!done && dev->GetFenceStatus(dev->device, c.fence) != VK_SUCCESS) return;
+    FrameCapture f;
+    f.width = c.width;
+    f.height = c.height;
+    f.rgb.resize((size_t)c.width * c.height * 3);
+    f.cursor_x = c.cursor_x;
+    f.cursor_y = c.cursor_y;
+    f.cell = c.cell;
+    if (to_rgb8(c.format, (const unsigned char*)c.mapped, (size_t)c.width * c.height, f.rgb.data()))
+        ov.price_check.capture_taken(c.id, std::move(f));
+    free_capture(dev, c);
+}
+
+// Before a swapchain's fences go: its copy (if any) is done once they're waited for.
+void finish_capture_on(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc) {
+    if (ov.capture.swapchain != &sc) return;
+    if (sc.ready) dev->WaitForFences(dev->device, 1, &ov.capture.fence, VK_TRUE, UINT64_MAX);
+    finish_capture(dev, ov, true);
+}
+
 // Copies a presentable image (in PRESENT_SRC layout) to a PPM file.
 void save_snapshot(DeviceData* dev, OverlaySwapchain& sc, OverlayImage& img, VkQueue queue, const char* path) {
     VkDeviceSize size = (VkDeviceSize)sc.extent.width * sc.extent.height * 4;
@@ -292,29 +464,12 @@ void save_snapshot(DeviceData* dev, OverlaySwapchain& sc, OverlayImage& img, VkQ
 
     void* mapped = nullptr;
     dev->MapMemory(dev->device, memory, 0, VK_WHOLE_SIZE, 0, &mapped);
-    if (FILE* f = fopen(path, "wb")) {
+    std::vector<unsigned char> rgb((size_t)sc.extent.width * sc.extent.height * 3);
+    if (!to_rgb8(sc.format, (const unsigned char*)mapped, rgb.size() / 3, rgb.data())) {
+        poe_log("snapshot: can't read format %d", sc.format);
+    } else if (FILE* f = fopen(path, "wb")) {
         fprintf(f, "P6\n%u %u\n255\n", sc.extent.width, sc.extent.height);
-        bool bgr = sc.format == VK_FORMAT_B8G8R8A8_SRGB || sc.format == VK_FORMAT_B8G8R8A8_UNORM;
-        bool rgb10 = sc.format == VK_FORMAT_A2R10G10B10_UNORM_PACK32;  // 10 bits a channel
-        bool bgr10 = sc.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-        const unsigned char* px = (const unsigned char*)mapped;
-        for (VkDeviceSize i = 0; i < size; i += 4) {
-            unsigned char rgb[3];
-            if (rgb10 || bgr10) {
-                uint32_t v;
-                memcpy(&v, px + i, 4);
-                unsigned char hi = (unsigned char)((v >> 22) & 0xFF), mid = (unsigned char)((v >> 12) & 0xFF),
-                              lo = (unsigned char)((v >> 2) & 0xFF);
-                rgb[0] = rgb10 ? hi : lo;
-                rgb[1] = mid;
-                rgb[2] = rgb10 ? lo : hi;
-            } else {
-                rgb[0] = px[i + (bgr ? 2 : 0)];
-                rgb[1] = px[i + 1];
-                rgb[2] = px[i + (bgr ? 0 : 2)];
-            }
-            fwrite(rgb, 1, 3, f);
-        }
+        fwrite(rgb.data(), 1, rgb.size(), f);
         fclose(f);
         poe_log("snapshot saved to %s", path);
     }
@@ -326,12 +481,15 @@ bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc,
                        const VkSemaphore* waits, uint32_t wait_count) {
     OverlayImage& img = sc.images[index];
     VK_CHECK(dev->WaitForFences(dev->device, 1, &img.fence, VK_TRUE, UINT64_MAX));
+    if (ov.capture.fence == img.fence) finish_capture(dev, ov, true);  // before the fence is reused
     VK_CHECK(dev->ResetFences(dev->device, 1, &img.fence));
     VK_CHECK(dev->ResetCommandBuffer(img.cmd, 0));
 
     VkCommandBufferBeginInfo bi = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     VK_CHECK(dev->BeginCommandBuffer(img.cmd, &bi));
+    // Only the first swapchain presented gets it: capture_started() clears the request.
+    record_capture(dev, ov, sc, img);
 
     VkRenderPassBeginInfo rbi = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     rbi.renderPass = sc.render_pass;
@@ -399,6 +557,7 @@ void overlay_swapchain_created(DeviceData* dev, VkSwapchainKHR handle, const VkS
     sc->format = info->imageFormat;
     sc->extent = info->imageExtent;
     sc->min_images = info->minImageCount;
+    sc->can_copy = info->imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     dev->overlay->swapchains.push_back(std::move(sc));
 }
 
@@ -408,6 +567,7 @@ void overlay_swapchain_destroyed(DeviceData* dev, VkSwapchainKHR handle) {
     std::lock_guard lk(ov.lock);
     for (auto it = ov.swapchains.begin(); it != ov.swapchains.end(); ++it) {
         if ((*it)->handle != handle) continue;
+        finish_capture_on(dev, ov, **it);
         destroy_swapchain_resources(dev, **it);
         ov.swapchains.erase(it);
         return;
@@ -435,6 +595,7 @@ VkResult overlay_present(DeviceData* dev, VkQueue queue, const VkPresentInfoKHR*
         OverlaySwapchain* sc = find_swapchain(ov, info->pSwapchains[i]);
         if (!sc || sc->unsupported) continue;
         if (!sc->ready && !setup_swapchain(dev, *sc, family)) {
+            finish_capture_on(dev, ov, *sc);
             destroy_swapchain_resources(dev, *sc);
             sc->unsupported = true;
             continue;
@@ -445,6 +606,7 @@ VkResult overlay_present(DeviceData* dev, VkQueue queue, const VkPresentInfoKHR*
         return dev->QueuePresentKHR(queue, info);
 
     // Pass 2: build one UI frame, draw it into each image, chain semaphores.
+    finish_capture(dev, ov);
     build_ui(dev, ov, *targets[0].first);
 
     std::vector<VkSemaphore> signals;
@@ -469,7 +631,11 @@ void overlay_device_destroyed(DeviceData* dev) {
     OverlayDevice& ov = *dev->overlay;
     {
         std::lock_guard lk(ov.lock);
-        for (auto& sc : ov.swapchains) destroy_swapchain_resources(dev, *sc);
+        for (auto& sc : ov.swapchains) {
+            finish_capture_on(dev, ov, *sc);
+            destroy_swapchain_resources(dev, *sc);
+        }
+        free_capture(dev, ov.capture);
         ov.swapchains.clear();
         shutdown_ui(dev, ov);
     }

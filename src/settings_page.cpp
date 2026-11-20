@@ -128,6 +128,7 @@ void SettingsPage::apply_reply(const PriceReply& reply) {
     if (v.hotkeys != values_.hotkeys) bindings_dirty_ = true;
     values_ = v;
     leagues_ = reply.league_options;
+    league_current_ = reply.league_current;
     league_pinned_ = reply.league_pinned;
     league_active_ = reply.league;
     daemon_version_ = reply.version;
@@ -263,15 +264,21 @@ void SettingsPage::set_desktop_cursor(bool on) {
 
 // ---- price check -------------------------------------------------------------
 
-void SettingsPage::step_league(int delta) {
-    if (!league_pinned_.empty()) return;
-    std::vector<std::string> options = {"auto"};
-    options.insert(options.end(), leagues_.begin(), leagues_.end());
-    auto it = std::find(options.begin(), options.end(), values_.league);
-    int at = it == options.end() ? 0 : (int)(it - options.begin());
-    int n = (int)options.size();
-    values_.league = options[((at + delta) % n + n) % n];
-    set("league", values_.league);
+std::vector<SettingsPage::LeagueChoice> SettingsPage::league_choices() const {
+    std::vector<LeagueChoice> out = {{"auto", "Current", ""}, {"auto-hardcore", "Current hardcore", ""}};
+    for (auto& c : out)
+        for (const auto& [setting, league] : league_current_)
+            if (setting == c.value) c.now = league;
+    for (const auto& name : leagues_) out.push_back({name, name, ""});
+    auto saved = [&](const LeagueChoice& c) { return c.value == values_.league; };
+    if (std::none_of(out.begin(), out.end(), saved)) out.push_back({values_.league, values_.league, ""});
+    return out;
+}
+
+void SettingsPage::set_league(const std::string& league) {
+    if (!league_pinned_.empty() || league == values_.league) return;
+    values_.league = league;
+    set("league", league);
     set_note("");
 }
 
