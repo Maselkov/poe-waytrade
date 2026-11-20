@@ -118,8 +118,8 @@ minimum 10% below your roll. Pick "Any Ring" or the exact base, and whether
 corrupted items count (uncorrupted items exclude them by default). Searches
 count **instant buyout** listings only by default (merchant tabs, which
 can't be price-fixed: the seller can't list low and refuse to sell); the
-button next to Search switches to instant buyout plus in-person sellers, or
-any listing. Nothing is
+settings can switch this to instant buyout plus in-person sellers, or any
+listing. Nothing is
 searched until you press **Search**, since every search counts against GGG's
 rate limit; changing anything afterwards marks the listings as out of date
 until you search again.

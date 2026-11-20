@@ -503,14 +503,6 @@ void PriceCheck::cycle_corrupted() {
     changed();
 }
 
-void PriceCheck::cycle_status() {
-    if (!reply_ || reply_->status != "trade") return;
-    std::string& s = reply_->listing_status;
-    s = s == "instant" ? "available" : s == "available" ? "any" : "instant";
-    stale_ = reply_->searched;
-    changed();
-}
-
 void PriceCheck::search() {
     if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
     std::vector<TradeFilter> enabled;
