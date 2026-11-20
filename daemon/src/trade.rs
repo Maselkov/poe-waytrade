@@ -1356,6 +1356,24 @@ fn eldritch_filters(item: &Item, data: &TradeData, on: bool) -> Vec<Filter> {
     filters
 }
 
+/// An eldritch implicit's own row already implies its altar, so the altar's
+/// tier/flag filter goes when one is listed. It stays when there's nothing
+/// else to search the altar by: plain copy (no headers), or implicits only
+/// counted in totals (resistances, life).
+fn drop_covered_eldritch(filters: &mut Vec<Filter>) {
+    let altar_only = |f: &Filter| match &f.target {
+        Target::Flag(..) => true,
+        Target::Stat(id) => id.starts_with("pseudo."),
+        _ => false,
+    };
+    let covered: Vec<Section> = filters
+        .iter()
+        .filter(|f| matches!(f.section, Section::Exarch | Section::Eater) && !altar_only(f))
+        .map(|f| f.section)
+        .collect();
+    filters.retain(|f| !(covered.contains(&f.section) && altar_only(f)));
+}
+
 /// A cluster jewel's passive count and jewel sockets, searched as they are.
 fn exact_cluster_counts(filters: &mut [Filter]) {
     for f in filters {
@@ -1546,6 +1564,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         filters.extend(mod_filter(m, data, local, on, section));
     }
     filters.extend(armour_filters(item));
+    drop_covered_eldritch(&mut filters);
     exact_cluster_counts(&mut filters);
     filters
 }
@@ -1709,6 +1728,7 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
 
     filters.extend(fractured);
     filters.extend(listed);
+    drop_covered_eldritch(&mut filters);
     exact_cluster_counts(&mut filters);
     filters
 }
@@ -2382,7 +2402,8 @@ mod tests {
 
     /// Advanced copy heads eldritch implicits without an "(implicit)" after
     /// the mod: they're implicits all the same, each in its altar's section.
-    /// A number without a range under a header is a fixed roll.
+    /// A number without a range under a header is a fixed roll. The rows
+    /// imply their altars, so the altars' own filters go.
     #[test]
     fn eldritch_implicit_rows() {
         let text = "Item Class: Gloves\nRarity: Rare\nDoom Hold\nSorcerer Gloves\n--------\nItem Level: 71\n--------\n\
@@ -2402,8 +2423,6 @@ mod tests {
         assert_eq!(
             got,
             vec![
-                ("Searing Exarch item", None, Section::Exarch),
-                ("Eater of Worlds item", None, Section::Eater),
                 ("Non-Vaal Strike Skills target 1 additional nearby Enemy", Some(1.0), Section::Exarch),
                 ("0.2% of Cold Damage Leeched as Life", Some(0.18), Section::Eater),
             ]
