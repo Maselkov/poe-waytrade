@@ -317,8 +317,9 @@ The daemon's log is in `~/.local/state/poe-waytrade/daemon.log`; add
 
 The same by hand: `ENABLE_POE_WAYTRADE=1 PROTON_ENABLE_WAYLAND=1 %command%`,
 with the daemon from systemd. With `PROTON_ENABLE_WAYLAND=0` the game runs
-on XWayland: the panel still draws, but hotkeys and the clipboard are not
-implemented for X11 yet.
+on XWayland: the panel still draws, but there are no hotkeys or clipboard, so
+it can't price anything. X11 support isn't planned, since other price check
+overlays already work on X11 and XWayland.
 
 `POE_WAYTRADE_DEBUG=1` adds a debug window (focus, last key, clipboard state).
 
@@ -353,7 +354,8 @@ testing a new daemon next to the installed one.
 - Mouse input under fractional scaling assumes the app renders at full
   resolution if it runs under Wine, at logical size otherwise;
   `POE_WAYTRADE_SCALE` overrides the pixel-per-logical-unit ratio.
-- No X11 input path (would be `XQueryKeymap` polling like MangoHud).
+- No X11 (or XWayland) input, and none planned: other price check overlays
+  already cover X11.
 - Only one device gets the overlay (RmlUi is a process-wide singleton).
 - HDR (10-bit/PQ) swapchains wouldn't be colour-corrected (sRGB ones are).
   PoE1 has no HDR mode, so this only matters for PoE2.
