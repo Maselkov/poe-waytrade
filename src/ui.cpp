@@ -248,6 +248,7 @@ struct Model {
     Rml::String s_warning_title, s_warning_text, s_warning_key;
     Rml::String s_league, s_league_pinned, s_status, s_min, s_scale;
     bool s_scale_env = false;
+    bool s_stash_scroll = true;
     int s_profile = 1;
     bool s_reset_armed = false;
     Rml::Vector<UiAbout> s_about;
@@ -589,6 +590,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_min", &model.s_min);
     c.Bind("s_scale", &model.s_scale);
     c.Bind("s_scale_env", &model.s_scale_env);
+    c.Bind("s_stash_scroll", &model.s_stash_scroll);
     c.Bind("s_profile", &model.s_profile);
     c.Bind("s_reset_armed", &model.s_reset_armed);
     c.Bind("s_about", &model.s_about);
@@ -676,6 +678,7 @@ void OverlayUi::Impl::bind_model() {
     settings_event("warning_retry", [](SettingsPage& s, Args) { s.warning_retry(); });
     settings_event("warning_accept", [](SettingsPage& s, Args) { s.warning_accept(); });
     settings_event("warning_keep", [](SettingsPage& s, Args) { s.warning_keep(); });
+    settings_event("stash_scroll", [arg](SettingsPage& s, Args a) { s.set_stash_scroll(arg(a) != 0); });
     settings_event("league_step", [arg](SettingsPage& s, Args a) { s.step_league(arg(a)); });
     settings_event("settings_status", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_status(a[0].Get<Rml::String>());
@@ -1028,6 +1031,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_min = std::to_string(100 - v.min_percent) + "%";
     m.s_scale = std::to_string((int)std::lround(v.ui_scale * 100)) + "%";
     m.s_scale_env = ui_scale_env;
+    m.s_stash_scroll = v.stash_scroll;
     m.s_profile = s.map_profile();
     m.s_reset_armed = s.reset_armed();
 

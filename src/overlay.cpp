@@ -222,7 +222,7 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     WaylandInput* input = dev->instance->input.get();
     if (input) {
         input->poll();
-        ov.price_check.update(*input, std::chrono::steady_clock::now());
+        ov.price_check.update(*input, std::chrono::steady_clock::now(), (int)sc.extent.height);
     }
     ov.renderer->begin_frame();
     ov.ui->update(ov.price_check, input, sc.extent);

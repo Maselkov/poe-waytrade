@@ -1,4 +1,5 @@
-// Minimal virtual keyboard on /dev/uinput, used to send Ctrl+C to the game.
+// Minimal virtual keyboard on /dev/uinput, used to send Ctrl+C (the price
+// check) and the arrow keys (stash scroll) to the game.
 //
 // Wayland gives clients no way to inject input into other windows, but a
 // uinput device is just another keyboard to the compositor, so its keys go

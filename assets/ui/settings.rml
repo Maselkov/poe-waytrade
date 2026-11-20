@@ -36,6 +36,18 @@
             </div>
         </div>
         <div class="setting-foot">The game sees these keys too. A key another action uses swaps the two.</div>
+
+        <div class="group-label spaced">Stash</div>
+        <div class="setting-row">
+            <div class="setting-text">
+                <div class="setting-name">Ctrl + mouse wheel</div>
+                <div class="setting-desc">Switches stash tabs wherever the cursor is</div>
+            </div>
+            <div class="button-row toggle">
+                <div data-attr-class="s_stash_scroll ? 'button on' : 'button'" data-event-click="stash_scroll(1)">On</div>
+                <div data-attr-class="s_stash_scroll ? 'button' : 'button on'" data-event-click="stash_scroll(0)">Off</div>
+            </div>
+        </div>
     </div>
 
     <div class="settings-body" data-if="s_tab == 1">

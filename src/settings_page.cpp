@@ -119,6 +119,7 @@ void SettingsPage::apply_reply(const PriceReply& reply) {
         else if (key == "status") v.status = value;
         else if (key == "min_percent") v.min_percent = atoi(value.c_str());
         else if (key == "ui_scale") v.ui_scale = atof(value.c_str());
+        else if (key == "stash_scroll") v.stash_scroll = value != "off";
         for (int i = 0; i < kActions; i++)
             if (key == kHotkeyKeys[i]) v.hotkeys[i] = parse_combo(value);
     }
@@ -242,6 +243,13 @@ void SettingsPage::clear_hotkey(Action action) {
     values_.hotkeys[index(action)] = {};
     bindings_dirty_ = true;
     set(kHotkeyKeys[index(action)], "");
+    set_note("");
+}
+
+void SettingsPage::set_stash_scroll(bool on) {
+    if (on == values_.stash_scroll) return;
+    values_.stash_scroll = on;
+    set("stash_scroll", on ? "on" : "off");
     set_note("");
 }
 

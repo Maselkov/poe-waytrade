@@ -32,6 +32,7 @@ public:
         int min_percent = 90;
         double ui_scale = 1.0;
         std::array<KeyCombo, kActions> hotkeys = defaults();
+        bool stash_scroll = true;  // Ctrl + wheel switches stash tabs
         static std::array<KeyCombo, kActions> defaults();
     };
 
@@ -79,6 +80,7 @@ public:
     void warning_keep();    // keep the old one
     void clear_hotkey(Action action);  // only MapAlias can be off
     static const char* action_label(Action action);
+    void set_stash_scroll(bool on);
 
     // Price check
     void step_league(int delta);

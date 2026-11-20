@@ -90,6 +90,7 @@ add_library(VkLayer_poe_waytrade SHARED
   src/item_text.cpp
   src/price_check.cpp
   src/settings_page.cpp
+  src/stash_scroll.cpp
   src/hotkeys.cpp
   src/daemon_client.cpp
   ${PROTOCOL_SOURCES}

@@ -490,6 +490,10 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
     cursor: pointer;
 }
 #settings .setting-row .button { flex: 0 0 auto; width: 130dp; margin: 0; }
+/* On / Off, as wide as a hotkey's button above it. */
+#settings .button-row.toggle { flex-shrink: 0; width: 118dp; }
+#settings .setting-row .toggle .button { flex: 1 1 0; width: auto; margin: 0 0 0 4dp; }
+#settings .setting-row .toggle .button:first-child { margin-left: 0; }
 #settings .button:hover { background-color: $chip; color: $text-strong; }
 #settings .button.on { background-color: #2a2546; border-color: $accent; color: $accent-text; }
 #settings .button.primary { background-color: $accent; border-color: $accent; color: $text-strong; }
