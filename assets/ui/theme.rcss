@@ -130,6 +130,8 @@ body {
 .filter.off .mod-full { color: $text-muted; }
 .filter.off .mod { color: $text-muted; }
 .filter-main .tier { width: 22dp; flex-shrink: 0; text-align: right; font-size: 11dp; color: $text-faint; margin-left: 6dp; }
+/* A value being typed into (PriceCheck::edit_bounds). */
+.min.editing { border-color: $accent; background-color: #1d1a33; color: $accent-text; }
 .min { flex-shrink: 0; min-width: 40dp; text-align: center; background-color: $chip; border: 1dp transparent; border-radius: 6dp; padding: 1dp 6dp; color: $text-strong; margin-left: 8dp; }
 .filter.off .min { background-color: transparent; color: $text-faint; }
 .star { color: $price; }
@@ -405,3 +407,150 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .filter.sec-hunter.on { border-left-color: #6a9f4f; background-color: #141c11; }
 .filter.sec-warlord.on .mod, .filter.sec-warlord.on .mod-full { color: #e59a7a; }
 .filter.sec-warlord.on { border-left-color: #c0603e; background-color: #1f1411; }
+
+/* Settings page (settings.rml): the price panel's look, a bit wider, with
+   tabs. Dragged by its header. */
+#settings { left: 30%; top: 12%; width: 440dp; }
+#settings-head {
+    position: relative;
+    padding: 12dp 20dp 0;
+    text-align: center;
+    border-bottom: 1dp $divider;
+    cursor: move;
+}
+#settings-head .subtitle { margin-bottom: 8dp; }
+#settings .tabs { display: flex; justify-content: center; }
+#settings .tab {
+    padding: 6dp 12dp 8dp;
+    color: $text-muted;
+    border-bottom: 2dp transparent;
+    cursor: pointer;
+}
+#settings .tab:hover { color: $text-strong; }
+#settings .tab.on { color: $text-strong; border-bottom-color: $accent; }
+.settings-body { padding: 10dp 20dp 12dp; }
+.group-label { font-size: 10dp; color: $text-muted; letter-spacing: 0.6dp; margin-bottom: 6dp; }
+.group-label.spaced { margin-top: 14dp; }
+.setting-row { display: flex; align-items: center; padding: 7dp 0; }
+.setting-row.ruled { border-top: 1dp #1a1d23; }
+.setting-text { flex: 1 1 0; min-width: 0; }
+.setting-name { color: $text-strong; }
+.setting-desc { font-size: 11dp; color: $text-muted; margin-top: 2dp; }
+.setting-foot { font-size: 11dp; color: $text-muted; margin-top: 8dp; }
+
+/* A hotkey's button; "capturing" waits for the new keys. */
+.key {
+    width: 118dp;
+    flex-shrink: 0;
+    padding: 5dp 0;
+    text-align: center;
+    border: 1dp $off;
+    border-radius: 8dp;
+    background-color: $chip;
+    color: $text-strong;
+    cursor: pointer;
+}
+.key:hover { border-color: $accent; }
+.key.capturing { background-color: #2a2546; border-color: $accent; color: $accent-text; }
+.key.warned { background-color: $warn-bg; border-color: #6a5426; color: $warn; }
+.key.off { color: $text-faint; }
+.key-off { margin-right: 8dp; color: $text-faint; cursor: pointer; }
+.key-off:hover { color: $text-strong; }
+.key-warning {
+    margin: 0 0 8dp;
+    padding: 8dp 10dp;
+    border-radius: 8dp;
+    background-color: $warn-bg;
+    border: 1dp #6a5426;
+}
+.key-warning-title { color: $warn; font-weight: 500; }
+.key-warning-text { font-size: 11dp; margin: 3dp 0 8dp; }
+
+#settings .button-row { display: flex; }
+#settings .button {
+    flex: 1 1 0;
+    margin: 0 3dp;
+    padding: 5dp 0;
+    text-align: center;
+    white-space: nowrap;
+    border-radius: 8dp;
+    border: 1dp $off;
+    background-color: transparent;
+    color: $text;
+    font-weight: normal;
+    cursor: pointer;
+}
+#settings .setting-row .button { flex: 0 0 auto; width: 130dp; margin: 0; }
+#settings .button:hover { background-color: $chip; color: $text-strong; }
+#settings .button.on { background-color: #2a2546; border-color: $accent; color: $accent-text; }
+#settings .button.primary { background-color: $accent; border-color: $accent; color: $text-strong; }
+#settings .button.warn { border-color: #6a5426; color: $warn; }
+
+.stepper { display: flex; align-items: center; flex-shrink: 0; }
+.stepper.wide { width: 100%; }
+.step {
+    width: 26dp;
+    height: 26dp;
+    line-height: 24dp;
+    text-align: center;
+    border: 1dp $off;
+    border-radius: 8dp;
+    color: $text;
+    cursor: pointer;
+}
+.step:hover { background-color: $chip; color: $text-strong; }
+.step-value {
+    width: 58dp;
+    margin: 0 6dp;
+    padding: 4dp 0;
+    text-align: center;
+    border-radius: 6dp;
+    background-color: $chip;
+    color: $text-strong;
+    font-weight: 500;
+}
+.stepper.wide .step-value { flex: 1 1 0; }
+.step-value.fixed { width: auto; margin: 0; }
+
+.about-row { display: flex; padding: 5dp 0; border-bottom: 1dp #1a1d23; }
+.about-label { width: 110dp; flex-shrink: 0; color: $text-muted; }
+.about-value { flex: 1 1 0; min-width: 0; color: $text-strong; word-break: break-all; }
+
+.settings-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8dp 20dp;
+    border-top: 1dp $divider;
+    font-size: 11dp;
+}
+.settings-foot .note { color: $text-muted; }
+.settings-foot .note.error { color: $error; }
+.settings-foot .link { color: $mod; cursor: pointer; }
+.settings-foot .link:hover { color: $text-strong; }
+
+/* The price and map panels' way into the settings. */
+#gear {
+    position: absolute;
+    left: 8dp;
+    top: 6dp;
+    width: 20dp;
+    height: 20dp;
+    border-radius: 6dp;
+    cursor: pointer;
+}
+#gear img { width: 14dp; height: 14dp; margin: 3dp; image-color: $text-faint; }
+#gear:hover { background-color: $chip; }
+#gear:hover img { image-color: $text-strong; }
+
+/* Start-up notice (toast.rml): a few seconds under PoE's login box when the
+   game starts, like APT's; animated in ui.cpp. Clicks go through to the
+   game. */
+#toast { left: 0; top: 0; width: auto; max-width: 520dp; }
+#toast { transform-origin: 50% 100%; }
+#toast #panel { padding: 9dp 18dp; text-align: center; border-color: #2f2a4a; }
+.toast-title { font-family: Cinzel; font-size: 15dp; }
+.toast-state { font-family: Inter; font-size: 12dp; color: $good; margin-left: 6dp; }
+.toast-state.busy { color: $text-muted; }
+.toast-line { font-size: 11dp; color: $text-muted; margin-top: 3dp; }
+.toast-line.warn { color: $warn; }

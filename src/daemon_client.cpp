@@ -87,6 +87,13 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "base_preset") reply.base_preset = f[2] == "1";
         else if (f[0] == "option" && f.size() >= 3 && f[1] == "preset") reply.preset = f[2];
         else if (f[0] == "url") reply.url = f[1];
+        else if (f[0] == "setting" && f.size() >= 3) reply.settings.push_back({f[1], f[2]});
+        else if (f[0] == "setting") reply.settings.push_back({f[1], ""});
+        else if (f[0] == "league_option") reply.league_options.push_back(f[1]);
+        else if (f[0] == "league_pinned") reply.league_pinned = f[1];
+        else if (f[0] == "map_profile") reply.profile = atoi(f[1].c_str());
+        else if (f[0] == "version") reply.version = f[1];
+        else if (f[0] == "log") reply.log = f[1];
     }
     return reply;
 }

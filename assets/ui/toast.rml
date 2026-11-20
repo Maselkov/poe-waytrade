@@ -1,0 +1,13 @@
+<rml>
+<head>
+    <title>Ready</title>
+    <link type="text/rcss" href="theme.rcss"/>
+</head>
+<body id="toast" data-model="ui">
+<div id="panel">
+    <div class="toast-title"><span class="currency">Waytrade</span> <span data-attr-class="t_busy ? 'toast-state busy' : 'toast-state'">{{t_state}}</span></div>
+    <div class="toast-line">{{t_hint}}</div>
+    <div class="toast-line warn" data-if="t_warn != ''">{{t_warn}}</div>
+</div>
+</body>
+</rml>

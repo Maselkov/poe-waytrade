@@ -7,6 +7,7 @@
 <div id="panel">
     <div id="head">
         <div id="close" data-if="closable" data-event-click="close">×</div>
+        <div id="gear" data-event-click="open_settings"><img src="icon:gear"/></div>
         <div data-if="name != ''" data-attr-class="'title ' + rarity">{{name}}</div>
         <div data-attr-class="(name != '' ? 'base ' : 'title ') + rarity">{{base}}</div>
         <div class="subtitle" data-if="subtitle != ''">{{subtitle}}</div>
@@ -71,7 +72,7 @@
                             <div class="mod-full">{{f.label}}</div>
                         </div>
                         <div data-attr-class="'tier ' + f.tier">{{f.tier}}</div>
-                        <div class="min" data-event-mousescroll="bounds_scroll(f.index)">{{f.bounds}}<span class="star" data-if="f.max_roll"> ★</span></div>
+                        <div class="min" data-class-editing="f.editing" data-event-click="edit_bounds(f.index)" data-event-mousescroll="bounds_scroll(f.index)">{{f.bounds}}<span class="star" data-if="f.max_roll"> ★</span></div>
                     </div>
                     <div class="slider-row" data-if="f.has_slider">
                         <div class="range" data-event-mousedown="range_press(f.index)" data-event-drag="range_drag(f.index)">

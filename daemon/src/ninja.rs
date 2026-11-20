@@ -195,17 +195,19 @@ fn get<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
     resp.into_json().map_err(|e| format!("{url}: bad JSON: {e}"))
 }
 
-/// The current softcore challenge league, falling back to Standard.
-pub fn current_league() -> Result<String, String> {
-    Ok(pick_league(get(&format!("{BASE}/data/index-state"))?))
+/// The leagues poe.ninja has prices for, as it orders them (challenge
+/// leagues first).
+pub fn leagues() -> Result<Vec<String>, String> {
+    let index: IndexState = get(&format!("{BASE}/data/index-state"))?;
+    Ok(index.economy_leagues.into_iter().map(|l| l.name).collect())
 }
 
-fn pick_league(index: IndexState) -> String {
-    index
-        .economy_leagues
-        .into_iter()
-        .map(|l| l.name)
-        .find(|n| !n.contains("Hardcore") && !n.contains("Ruthless") && n != "Standard")
+/// The current softcore challenge league, falling back to Standard.
+pub fn pick_league(names: &[String]) -> String {
+    names
+        .iter()
+        .find(|n| !n.contains("Hardcore") && !n.contains("Ruthless") && *n != "Standard")
+        .cloned()
         .unwrap_or_else(|| "Standard".to_string())
 }
 
@@ -294,15 +296,13 @@ pub(crate) mod tests {
     fn league_from_index_state() {
         let index: IndexState = serde_json::from_str(include_str!("../fixtures/ninja-index-state.json")).unwrap();
         let names: Vec<String> = index.economy_leagues.iter().map(|l| l.name.clone()).collect();
-        let league = pick_league(index);
+        let league = pick_league(&names);
         assert!(names.contains(&league), "{league} isn't one of {names:?}");
         assert!(!league.contains("Hardcore") && league != "Standard", "picked {league} from {names:?}");
 
-        let only = |names: &[&str]| IndexState {
-            economy_leagues: names.iter().map(|n| League { name: n.to_string() }).collect(),
-        };
-        assert_eq!(pick_league(only(&["Hardcore Covens", "Ruthless Covens", "Standard", "Hardcore"])), "Standard");
-        assert_eq!(pick_league(only(&["Hardcore Covens", "Covens", "Standard"])), "Covens");
+        let only = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        assert_eq!(pick_league(&only(&["Hardcore Covens", "Ruthless Covens", "Standard", "Hardcore"])), "Standard");
+        assert_eq!(pick_league(&only(&["Hardcore Covens", "Covens", "Standard"])), "Covens");
     }
 
     #[test]

@@ -68,7 +68,6 @@ bool PriceCheck::anchor(float* x, float* y) const {
 void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     if (release_pending_) {
         keyboard_.key(KEY_C, false);
-        if (we_pressed_alt_) keyboard_.key(KEY_LEFTALT, false);
         if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, false);
         keyboard_.sync();
         release_pending_ = false;
@@ -93,6 +92,12 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
             // Alt+D: the old map check key, now the same as Ctrl+Alt+D.
             request_copy(input, Mode::Locked, Purpose::Price);
             break;
+        case Hotkey::Settings:
+            if (settings_.visible())
+                settings_.close();
+            else
+                open_settings();
+            break;
         case Hotkey::CopySeen:
             // The user's own Ctrl+C on an item, or the echo of ours (then
             // we're already waiting and keep the hotkey's mode).
@@ -106,7 +111,17 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
 
     if (copy_queued_ && (input.selection_saved() || now > copy_queued_until_)) send_copy_keys(input);
     if (waiting_) wait_for_clipboard(input, now);
-    apply_closing_rules(input, now);
+    int game_clicks = input.take_game_clicks();
+    apply_closing_rules(input, game_clicks, now);
+    settings_.update(input, game_clicks);
+    grab_.poll();
+    if (grab_.focused() != grab_focused_) {
+        grab_focused_ = grab_.focused();
+        changed();  // the hint says whether keys reach us yet
+    }
+    handle_edit_keys();
+    // Typing ends with the panel, or with a click in the game.
+    if (edit_ && !visible_) end_edit(false);
 
     PriceReply reply;
     if (daemon_.poll(&reply)) {
@@ -114,16 +129,32 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
         if (reply.status == "error" && reply_ && reply_->status == "trade") {
             status_ = reply.message;
         } else {
+            if (edit_) end_edit(false);
             reply_ = std::move(reply);
             stale_ = false;
             request_icons();
             // POE_WAYTRADE_DEMO_SEARCH=1: a demo item searches by itself, so
             // the searched state can be checked without clicking.
             if (demo_ && reply_->status == "trade" && !reply_->searched && getenv("POE_WAYTRADE_DEMO_SEARCH")) search();
+            // POE_WAYTRADE_DEMO_EDIT=<filter index>: a demo item starts typing
+            // into that filter's value, as if it were clicked.
+            if (const char* e = getenv("POE_WAYTRADE_DEMO_EDIT"); demo_ && e && reply_->status == "trade" && !reply_->searched)
+                edit_bounds(atoi(e));
         }
         changed();
     }
-    if (wake_.poll(&reply) && reply.status == "error") poe_log("daemon wake-up: %s", reply.message.c_str());
+    if (wake_.poll(&reply)) {
+        daemon_state_ = reply.status == "ready" || reply.status == "loading" ? reply.status : "error";
+        daemon_error_ = reply.message;
+        if (daemon_state_ == "error") poe_log("daemon wake-up: %s", reply.message.c_str());
+        changed();
+    }
+    // While prices load (the start-up notice says so), ask again now and
+    // then, so it can say when they're in.
+    if (daemon_state_ == "loading" && !wake_.busy() && now - wake_at_ > std::chrono::seconds(1)) {
+        wake_at_ = now;
+        wake_.ping();
+    }
     if (opener_.poll(&reply) && reply.status != "ok") poe_log("open trade site: %s", reply.message.c_str());
     if (sender_.poll(&reply) && reply.status != "ok") poe_log("daemon: %s", reply.message.c_str());
     if (!sender_.busy() && !outbox_.empty()) {
@@ -144,8 +175,13 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now) {
     }
 }
 
-void PriceCheck::apply_closing_rules(WaylandInput& input, Clock::time_point now) {
-    int game_clicks = input.take_game_clicks();
+void PriceCheck::open_settings() {
+    if (edit_) end_edit(false);
+    set_visible(false);
+    settings_.open();
+}
+
+void PriceCheck::apply_closing_rules(WaylandInput& input, int game_clicks, Clock::time_point now) {
     if (!visible_ || demo_) return;
     switch (mode_) {
     case Mode::Quick: {
@@ -156,7 +192,7 @@ void PriceCheck::apply_closing_rules(WaylandInput& input, Clock::time_point now)
             break;
         }
         float x, y;
-        if (!input.ctrl_held() && has_anchor_ && input.game_pointer(&x, &y)) {
+        if (!input.mods_held(hold_mods()) && has_anchor_ && input.game_pointer(&x, &y)) {
             float limit = kQuickCloseDistance * (float)input.scale();
             float dx = x - anchor_x_, dy = y - anchor_y_;
             if (dx * dx + dy * dy > limit * limit) set_visible(false);
@@ -165,7 +201,7 @@ void PriceCheck::apply_closing_rules(WaylandInput& input, Clock::time_point now)
     }
     case Mode::Pinned:
         // Holding Ctrl keeps it open wherever the pointer goes.
-        if (input.pointer_inside() || input.ctrl_held()) {
+        if (input.pointer_inside() || input.mods_held(hold_mods())) {
             left_panel_at_.reset();
         } else if (!left_panel_at_) {
             left_panel_at_ = now;
@@ -203,18 +239,16 @@ void PriceCheck::send_copy_keys(WaylandInput& input) {
     restore_clipboard_ = true;
     Mode mode = pending_mode_;
     Purpose purpose = pending_purpose_;
-    // Ctrl+Alt+C: PoE's advanced copy, which adds each mod's roll range (for
-    // the trade filters' sliders) and marks which lines are mods. The user is
-    // still holding some modifiers from the hotkey; only add the others.
+    // Ctrl+C: PoE copies the advanced description (mod headers with tiers,
+    // affix names and roll ranges), the same as Ctrl+Alt+C. The user may
+    // still be holding Ctrl from the hotkey; only press it if not.
     if (test_copy_) {
-        poe_log("test copy: would press Ctrl+Alt+C now");
+        poe_log("test copy: would press Ctrl+C now");
         begin_wait(input, mode, purpose, Clock::now() + std::chrono::seconds(5));
         return;
     }
     we_pressed_ctrl_ = !input.ctrl_held();
-    we_pressed_alt_ = !input.alt_held();
     if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, true);
-    if (we_pressed_alt_) keyboard_.key(KEY_LEFTALT, true);
     keyboard_.key(KEY_C, true);
     keyboard_.sync();
     release_pending_ = true;
@@ -255,6 +289,8 @@ void PriceCheck::wait_for_clipboard(WaylandInput& input, Clock::time_point now) 
 // Shows the panel for a new check, in the mode and at the place the hotkey
 // asked for.
 void PriceCheck::open() {
+    if (edit_) end_edit(false);
+    settings_.close();
     demo_ = demo_ && check_id_ == 0;  // a real check ends the demo
     mode_ = pending_mode_;
     purpose_ = pending_purpose_;
@@ -307,6 +343,103 @@ void PriceCheck::set_bounds(int index, double min, double max) {
     }
     stale_ = reply_->searched;
     changed();
+}
+
+void PriceCheck::edit_bounds(int index) {
+    if (!reply_ || reply_->status != "trade") return;
+    auto f = std::find_if(reply_->filters.begin(), reply_->filters.end(),
+                          [&](const TradeFilter& f) { return f.index == index; });
+    if (f == reply_->filters.end() || f->min.empty()) return;  // a yes/no filter
+    if (edit_ && edit_->index == index) return;
+    if (!grab_.supported()) {
+        status_ = "Typing needs a compositor with layer-shell (KDE Plasma, Sway, Hyprland). Use the wheel or the slider.";
+        changed();
+        return;
+    }
+    if (edit_) end_edit(true);  // moving to another filter keeps what was typed
+    lock();
+    edit_ = BoundsEdit{index, 0, f->min, f->max, true};
+    grab_.take();
+    status_.clear();
+    changed();
+}
+
+// Number keys only, so the keyboard layout doesn't matter: the top row
+// (shifted or not, for AZERTY) and the keypad.
+static char key_char(uint32_t code) {
+    switch (code) {
+    case KEY_1: case KEY_KP1: return '1';
+    case KEY_2: case KEY_KP2: return '2';
+    case KEY_3: case KEY_KP3: return '3';
+    case KEY_4: case KEY_KP4: return '4';
+    case KEY_5: case KEY_KP5: return '5';
+    case KEY_6: case KEY_KP6: return '6';
+    case KEY_7: case KEY_KP7: return '7';
+    case KEY_8: case KEY_KP8: return '8';
+    case KEY_9: case KEY_KP9: return '9';
+    case KEY_0: case KEY_KP0: return '0';
+    case KEY_DOT: case KEY_COMMA: case KEY_KPDOT: case KEY_KPCOMMA: return '.';
+    default: return 0;
+    }
+}
+
+void PriceCheck::handle_edit_keys() {
+    std::vector<KeyboardGrab::Key> keys = grab_.take_keys();
+    if (!edit_ || keys.empty()) return;
+    for (const KeyboardGrab::Key& k : keys) {
+        std::string& text = edit_->field == 0 ? edit_->min : edit_->max;
+        if (char c = key_char(k.code)) {
+            if (edit_->fresh) text.clear();
+            edit_->fresh = false;
+            bool ok = c != '.' || text.find('.') == std::string::npos;
+            if (ok && text.size() < 9) text += c;
+        } else if (k.code == KEY_BACKSPACE) {
+            if (edit_->fresh) text.clear();
+            else if (!text.empty()) text.pop_back();
+            edit_->fresh = false;
+        } else if (k.code == KEY_DELETE) {
+            text.clear();
+            edit_->fresh = false;
+        } else if (k.code == KEY_TAB) {
+            edit_->field = 1 - edit_->field;
+            edit_->fresh = true;
+        } else if (k.code == KEY_ENTER || k.code == KEY_KPENTER) {
+            end_edit(true);
+            return;
+        } else if (k.code == KEY_ESC) {
+            end_edit(false);
+            return;
+        }
+    }
+    changed();
+}
+
+// Applying ticks the filter: typing a minimum means searching with it. An
+// empty maximum is none; an empty minimum keeps the one there was (the
+// daemon fills in its default for an empty one).
+void PriceCheck::end_edit(bool apply) {
+    std::optional<BoundsEdit> edit = std::exchange(edit_, std::nullopt);
+    grab_.release();
+    changed();
+    if (edit) poe_log("bounds edit: filter %d %s, typed \"%s\" / \"%s\"", edit->index, apply ? "applied" : "cancelled",
+                      edit->min.c_str(), edit->max.c_str());
+    if (!apply || !edit || !reply_ || reply_->status != "trade") return;
+    for (TradeFilter& f : reply_->filters) {
+        if (f.index != edit->index) continue;
+        auto number = [](const std::string& s, double fallback) {
+            char* end = nullptr;
+            double v = strtod(s.c_str(), &end);
+            return (s.empty() || end == s.c_str()) ? fallback : v;
+        };
+        double min = number(edit->min, atof(f.min.c_str()));
+        double max = number(edit->max, -1);
+        if (max >= 0 && max < min) std::swap(min, max);
+        if (!f.enabled) {
+            f.enabled = true;
+            stale_ = reply_->searched;
+        }
+        set_bounds(edit->index, min, max);
+    }
 }
 
 bool PriceCheck::can_switch_view() const {

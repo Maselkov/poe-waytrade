@@ -126,6 +126,12 @@ void WaylandInput::update_pointer(bool has_pointer) {
 
 void WaylandInput::set_input_rects(const std::vector<InputRect>& rects, int width, int height) {
     if (rects == rects_) return;
+    // Not while a button is held (dragging a panel by its header): moving
+    // the subsurface takes effect with the game's next frame, so motion in
+    // between would be offset by the old position, and the panel would
+    // chase the error. While a button is held, events keep coming to this
+    // surface even past its edges; it catches up on release.
+    if (buttons_held_ > 0) return;
 
     if (rects.empty()) {
         rects_.clear();
@@ -301,6 +307,7 @@ void WaylandInput::on_pointer_enter(uint32_t serial, wl_surface* surface, double
         return;
     }
     pointer_inside_ = true;
+    buttons_held_ = 0;  // a release we never saw can't keep the rects frozen
     // The game's cursor doesn't apply over our surface; set our own.
     enter_serial_ = serial;
     apply_cursor();
@@ -312,6 +319,7 @@ void WaylandInput::on_pointer_leave(wl_surface* surface) {
         pointer_on_game_ = false;
         return;
     }
+    buttons_held_ = 0;
     if (!pointer_inside_) return;
     pointer_inside_ = false;
     pointer_events_.push_back({PointerEvent::Leave});
@@ -332,6 +340,7 @@ void WaylandInput::on_pointer_button(uint32_t button, uint32_t state) {
         if (pointer_on_game_ && pressed) game_clicks_++;
         return;
     }
+    buttons_held_ = std::max(0, buttons_held_ + (pressed ? 1 : -1));
     int index = button == BTN_LEFT ? 0 : button == BTN_RIGHT ? 1 : button == BTN_MIDDLE ? 2 : -1;
     if (index < 0) return;
     PointerEvent ev{PointerEvent::Button};

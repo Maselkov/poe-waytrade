@@ -4,6 +4,7 @@
 use crate::cdp::{self, Browser, HttpResponse};
 use crate::item::{Item, ModKind, ModLine};
 use crate::ninja::{self, PriceDb};
+use crate::settings::min_fraction;
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 use std::io::Read;
@@ -14,9 +15,6 @@ use std::time::{Duration, Instant, SystemTime};
 const DATA_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
 /// The browser is closed after this long without a search.
 pub const BROWSER_IDLE: Duration = Duration::from_secs(10 * 60);
-/// Default filter minimum, as a fraction of the item's own roll (APT's
-/// default range is 10%).
-const MIN_FRACTION: f64 = 0.9;
 /// Listings fetched per search (one fetch request allows up to 10).
 const LISTINGS: usize = 10;
 
@@ -134,7 +132,7 @@ impl Filter {
         let mut f = Filter::new(label, target, value, Some((lo, hi)), false, section);
         if let (Some(_), false) = (f.min, f.max_roll) {
             let min =
-                ((round_down(value - (hi - lo) * (1.0 - MIN_FRACTION), f.step)) / f.step).round() / (1.0 / f.step);
+                ((round_down(value - (hi - lo) * (1.0 - min_fraction()), f.step)) / f.step).round() / (1.0 / f.step);
             f.min = Some(min);
             f.slider = Some((lo.min(min), hi));
         }
@@ -482,7 +480,7 @@ impl Trade {
             filters,
             category_label,
             base_preset: base_preset_available(item),
-            defaults: SearchOptions { base_only, corrupted, preset, status: Status::default() },
+            defaults: SearchOptions { base_only, corrupted, preset, status: crate::settings::default_status() },
         })
     }
 
@@ -978,7 +976,7 @@ fn defaults(value: f64, bounds: Option<(f64, f64)>, fine: bool) -> (Option<f64>,
                 // Roll - 10% like APT, even below the tier: a roll at the
                 // bottom of its tier still gets some slack, and the slider
                 // reaches down to it.
-                let min = tidy(round_down(value * MIN_FRACTION, step));
+                let min = tidy(round_down(value * min_fraction(), step));
                 (Some(min), Some((lo.min(min), hi)), step, false)
             }
         }
@@ -987,7 +985,7 @@ fn defaults(value: f64, bounds: Option<(f64, f64)>, fine: bool) -> (Option<f64>,
         None => {
             let lo = round_down(value * 0.5, step);
             let hi = ((value * 1.25) / step).ceil() * step;
-            (Some(tidy(round_down(value * MIN_FRACTION, step))), Some((lo, hi)), step, false)
+            (Some(tidy(round_down(value * min_fraction(), step))), Some((lo, hi)), step, false)
         }
     }
 }

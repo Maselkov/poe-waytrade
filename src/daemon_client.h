@@ -6,6 +6,7 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct PriceLine {
@@ -94,7 +95,13 @@ struct PriceReply {
     std::string subtitle;
     std::vector<MapStat> map_stats;
     std::vector<MapMod> map_mods;
-    int profile = 1;
+    int profile = 1;  // also SETTINGS' map_profile
+    // SETTINGS / SET (see daemon/src/settings.rs): key, value
+    std::vector<std::pair<std::string, std::string>> settings;
+    std::vector<std::string> league_options;
+    std::string league_pinned;  // POE_LEAGUE overrides the setting
+    std::string version;        // the daemon's
+    std::string log;            // where the daemon logs
 };
 
 class DaemonClient {

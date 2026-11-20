@@ -71,6 +71,22 @@
 //!              a rare map's is its base's, labelled "white map")
 //!   request:  "MAPMARK\n" + profile + "\n" + d|w|g|- + "\n" + key
 //!   request:  "MAPPROFILE\n" + profile        (both answer "status ok")
+//!   request:  "MAPRESET\n" + profile: that profile's marks back to the
+//!             defaults ("status ok")
+//!
+//!   request:  "SETTINGS\n": the settings (settings.rs), and what the
+//!             settings page shows with them
+//!   response: status ok
+//!     setting       <key> <value>   (one per settings::KEYS)
+//!     league_option <name>          (poe.ninja's leagues)
+//!     league_pinned <name>          (POE_LEAGUE overrides the setting)
+//!     league        <name>          (prices are loaded for)
+//!     map_profile   <1-3>           (the map check's active profile)
+//!     version       <daemon version>
+//!     log           <where our log is>
+//!   request:  "SET\n" + lines of "<key>\t<value>" (a "reset" line first:
+//!             from the defaults): saved all together, or none on an
+//!             error (bad_request); replies like SETTINGS
 //!
 //! Normally started by systemd socket activation (poe-waytrade-daemon.socket):
 //! systemd owns the socket, starts us on the first connection, and we exit
@@ -86,6 +102,7 @@ mod item;
 mod lookup;
 mod mapcheck;
 mod ninja;
+mod settings;
 mod trade;
 
 use std::fmt::Write as _;
@@ -93,7 +110,7 @@ use std::io::{self, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::linux::net::SocketAddrExt;
 use std::os::unix::net::{SocketAddr, UnixListener, UnixStream};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -112,6 +129,13 @@ struct State {
     last_request: Mutex<Instant>,
     trade: Mutex<trade::Trade>,
     map_marks: Mutex<mapcheck::Decisions>,
+    settings: Mutex<settings::Settings>,
+    /// The leagues poe.ninja lists, for the settings page's league picker.
+    leagues: Mutex<Vec<String>>,
+    /// Set (and notified) to refresh prices now: the league was changed.
+    refresh_now: (Mutex<bool>, Condvar),
+    /// Started by systemd (logs in the journal) rather than the launcher.
+    socket_activated: bool,
 }
 
 fn main() {
@@ -135,15 +159,20 @@ fn main() {
     }
     eprintln!("poe-waytrade-daemon {VERSION}");
 
+    let systemd = systemd_listener();
     let state = Arc::new(State {
         db: RwLock::new(None),
         last_error: Mutex::new(None),
         last_request: Mutex::new(Instant::now()),
         trade: Mutex::new(trade::Trade::new()),
         map_marks: Mutex::new(mapcheck::Decisions::load()),
+        settings: Mutex::new(settings::Settings::load()),
+        leagues: Mutex::new(Vec::new()),
+        refresh_now: (Mutex::new(false), Condvar::new()),
+        socket_activated: systemd.is_some(),
     });
 
-    let listener = match systemd_listener() {
+    let listener = match systemd {
         Some(l) => {
             let idle = std::env::var("POE_WAYTRADE_IDLE_SECS")
                 .ok()
@@ -244,13 +273,10 @@ fn exit_when_idle(state: &State, idle: Duration) {
 
 fn refresh_loop(state: &State) {
     loop {
-        let result = match std::env::var("POE_LEAGUE") {
-            Ok(league) => Ok(league),
-            Err(_) => ninja::current_league(),
-        }
-        .and_then(|league| ninja::fetch(&league));
+        let wanted = state.settings.lock().unwrap().league.clone();
+        let result = choose_league(state, &wanted).and_then(|league| ninja::fetch(&league));
 
-        match result {
+        let wait = match result {
             Ok(db) => {
                 eprintln!(
                     "loaded {} exchange prices and {} item names for {}",
@@ -260,15 +286,44 @@ fn refresh_loop(state: &State) {
                 );
                 *state.db.write().unwrap() = Some(Arc::new(db));
                 *state.last_error.lock().unwrap() = None;
-                thread::sleep(REFRESH);
+                REFRESH
             }
             Err(e) => {
                 eprintln!("price refresh failed: {e}");
                 *state.last_error.lock().unwrap() = Some(e);
-                thread::sleep(RETRY);
+                RETRY
             }
+        };
+        // Until it's time, or the league is changed in the settings.
+        let (flag, wake) = &state.refresh_now;
+        let mut now = flag.lock().unwrap();
+        if !*now {
+            now = wake.wait_timeout(now, wait).unwrap().0;
         }
+        *now = false;
     }
+}
+
+/// POE_LEAGUE wins; then the league picked in the settings, while poe.ninja
+/// still has it; then the current challenge league.
+fn choose_league(state: &State, wanted: &str) -> Result<String, String> {
+    if let Ok(league) = std::env::var("POE_LEAGUE") {
+        return Ok(league);
+    }
+    let names = match ninja::leagues() {
+        Ok(names) => names,
+        // poe.ninja's league list failed; a named league may still load.
+        Err(_) if wanted != "auto" => return Ok(wanted.to_string()),
+        Err(e) => return Err(e),
+    };
+    *state.leagues.lock().unwrap() = names.clone();
+    if wanted != "auto" {
+        if names.iter().any(|n| n == wanted) {
+            return Ok(wanted.to_string());
+        }
+        eprintln!("poe.ninja has no {wanted} league (any more); using the current one");
+    }
+    Ok(ninja::pick_league(&names))
 }
 
 fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
@@ -340,6 +395,13 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
             }
             _ => bad_request("Bad profile"),
         }
+    } else if let Some(n) = request.strip_prefix("MAPRESET\n") {
+        let mut marks = state.map_marks.lock().unwrap();
+        if marks.reset(n.trim().parse().unwrap_or(0)) { save_marks(&marks) } else { bad_request("Bad profile") }
+    } else if request == "SETTINGS\n" {
+        settings_reply(state)
+    } else if let Some(changes) = request.strip_prefix("SET\n") {
+        change_settings(state, changes)
     } else if request == "PING\n" {
         let ready = state.db.read().unwrap().is_some();
         format!("status\t{}\n", if ready { "ready" } else { "loading" })
@@ -347,6 +409,71 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         "status\tbad_request\nmessage\tUnknown request\n".to_string()
     };
     write_frame(&mut stream, &response)
+}
+
+/// `setting` lines, then what the settings page shows besides:
+///   league_option <name>   (poe.ninja's leagues, 0+)
+///   league_pinned <name>   (POE_LEAGUE is set: the setting is ignored)
+///   league        <name>   (the league prices are loaded for)
+///   map_profile   <1-3>    (the map check's active profile)
+///   version       <daemon version>
+///   log           <where the daemon's log is>
+fn settings_reply(state: &State) -> String {
+    let mut out = "status\tok\n".to_string();
+    out += &state.settings.lock().unwrap().lines();
+    for name in state.leagues.lock().unwrap().iter() {
+        let _ = writeln!(out, "league_option\t{}", clean(name));
+    }
+    if let Ok(league) = std::env::var("POE_LEAGUE") {
+        let _ = writeln!(out, "league_pinned\t{}", clean(&league));
+    }
+    if let Some(db) = state.db.read().unwrap().as_ref() {
+        let _ = writeln!(out, "league\t{}", clean(&db.league));
+    }
+    let _ = writeln!(out, "map_profile\t{}", state.map_marks.lock().unwrap().profile);
+    let _ = writeln!(out, "version\t{VERSION}");
+    let log = if state.socket_activated {
+        "journalctl --user -u poe-waytrade-daemon".to_string()
+    } else {
+        let state_dir = std::env::var("XDG_STATE_HOME").unwrap_or_else(|_| "~/.local/state".to_string());
+        format!("{state_dir}/poe-waytrade/daemon.log")
+    };
+    let _ = writeln!(out, "log\t{}", clean(&log));
+    out
+}
+
+/// "SET\n" + lines of `<key>\t<value>`, all or none; a "reset" line first
+/// starts from the defaults. Replies like SETTINGS, with the new values.
+fn change_settings(state: &State, changes: &str) -> String {
+    let mut settings = state.settings.lock().unwrap();
+    let mut new = settings.clone();
+    for line in changes.lines().filter(|l| !l.trim().is_empty()) {
+        if line.trim() == "reset" {
+            new = settings::Settings::default();
+            continue;
+        }
+        let (key, value) = line.split_once('\t').unwrap_or((line, ""));
+        if let Err(e) = new.set(key.trim(), value) {
+            return bad_request(&clean(&e));
+        }
+    }
+    if new == *settings {
+        drop(settings);
+        return settings_reply(state);
+    }
+    if let Err(e) = new.save() {
+        return format!("status\terror\nmessage\tCouldn't save the settings: {}\n", clean(&e.to_string()));
+    }
+    new.apply();
+    let league_changed = new.league != settings.league;
+    *settings = new;
+    drop(settings);
+    if league_changed {
+        let (flag, wake) = &state.refresh_now;
+        *flag.lock().unwrap() = true;
+        wake.notify_all();
+    }
+    settings_reply(state)
 }
 
 fn base64(bytes: &[u8]) -> String {
