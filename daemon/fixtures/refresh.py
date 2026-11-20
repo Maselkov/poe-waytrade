@@ -25,7 +25,8 @@ NINJA = "https://poe.ninja/poe1/api"
 TRADE = "https://www.pathofexile.com/api/trade"
 
 # The exchange currencies the tests price things in.
-CURRENCIES = {"chaos", "divine", "alch", "exalted", "mirror"}
+CURRENCIES = {"chaos", "divine", "alch", "exalted", "mirror", "alt", "chance", "fusing", "jew", "chrome", "vaal",
+              "regal", "scour", "gcp", "chisel", "regret", "annul", "blessed", "transmute", "aug"}
 
 # Stat texts the tests' items use (trade.rs RING), in every group, and the
 # pseudo totals trade.rs looks up by name.
@@ -45,6 +46,16 @@ STAT_TEXTS = {
     "+# total to Strength",
     "+# total to Dexterity",
     "+# total to Intelligence",
+    # Cluster jewels, anointments and eldritch implicits (option stats and
+    # pseudo tiers).
+    "Adds # Passive Skills",
+    "# Added Passive Skills are Jewel Sockets",
+    "Added Small Passive Skills grant: 10% increased Spell Damage",
+    "Added Small Passive Skills grant: 12% increased Damage with Bows\n"
+    "Added Small Passive Skills grant: 12% increased Damage Over Time with Bow Skills",
+    "Allocates Charisma",
+    "Searing Exarch Implicit Modifier (#)",
+    "Eater of Worlds Implicit Modifier (#)",
 }
 
 # Fields the daemon doesn't read and that only make the files big.
@@ -91,6 +102,9 @@ def main():
         ("SkillGem", "ninja-skill-gem.json", lambda line: line["name"] == "Arc"),
         ("Map", "ninja-map.json", lambda line: line["name"] == "Nightmare Map"),
         ("Viscera", "ninja-viscera.json", lambda line: line["name"] == "Coven Queen's Crown"),
+        ("ClusterJewel", "ninja-cluster-jewel.json",
+         lambda line: line["name"] in ("10% increased Spell Damage", "Minions deal 10% increased Damage")),
+        ("BaseType", "ninja-base-type.json", lambda line: line["name"] == "Vaal Regalia"),
     ]:
         ov = get(f"{NINJA}/economy/stash/current/item/overview?league={q}&type={kind}")
         lines = [slim(line) for line in ov["lines"] if keep(line)]
@@ -103,6 +117,11 @@ def main():
         {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"] if e["text"] in STAT_TEXTS]}
         for g in stats["result"]
     ]})
+    items = get(f"{TRADE}/data/items")
+    save("trade-items.json", {"result": [
+        {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"] if e.get("type") == "Arc"]}
+        for g in items["result"] if g["id"] == "gem"
+    ]})
     static = get(f"{TRADE}/data/static")
     save("trade-static.json", {"result": [
         {"id": g["id"], "label": g.get("label"), "entries": [e for e in g["entries"] if e["id"] in CURRENCIES]}
@@ -111,7 +130,8 @@ def main():
 
     # A plain, busy search: cheap rare Sapphire Rings with life.
     search = get(f"{TRADE}/search/{q}", {
-        "query": {"status": {"option": "online"}, "type": "Sapphire Ring",
+        "query": {"status": {"option": "securable"}, "type": "Sapphire Ring",
+                  "filters": {"type_filters": {"filters": {"rarity": {"option": "rare"}}}},
                   "stats": [{"type": "and", "filters": [{"id": "pseudo.pseudo_total_life", "value": {"min": 60}}]}]},
         "sort": {"price": "asc"},
     })
@@ -126,6 +146,7 @@ def main():
         listing = {"indexed": e["listing"]["indexed"], "price": e["listing"]["price"]}
         entries.append({"id": e["id"], "listing": listing, "item": item})
     save("trade-fetch.json", {"result": entries})
+
 
 
 if __name__ == "__main__":

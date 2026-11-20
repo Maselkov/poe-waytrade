@@ -9,10 +9,10 @@
    "gemLevel": 1,
    "gemQuality": 20,
    "chaosValue": 1.0,
-   "exaltedValue": 1.25,
-   "count": 340,
+   "exaltedValue": 1.22,
+   "count": 351,
    "detailsId": "arc-1-20",
-   "listingCount": 340
+   "listingCount": 351
   },
   {
    "id": 61286,
@@ -22,10 +22,25 @@
    "itemClass": 4,
    "gemLevel": 1,
    "chaosValue": 1.0,
-   "exaltedValue": 1.25,
+   "exaltedValue": 1.22,
    "count": 275,
    "detailsId": "arc-1",
    "listingCount": 275
+  },
+  {
+   "id": 2645,
+   "name": "Arc",
+   "levelRequired": 72,
+   "variant": "21c",
+   "itemClass": 4,
+   "corrupted": true,
+   "gemLevel": 21,
+   "chaosValue": 2.0,
+   "exaltedValue": 2.45,
+   "divineValue": 0.01,
+   "count": 44,
+   "detailsId": "arc-21c",
+   "listingCount": 44
   },
   {
    "id": 127090,
@@ -37,26 +52,11 @@
    "gemLevel": 1,
    "gemQuality": 23,
    "chaosValue": 2.0,
-   "exaltedValue": 2.5,
+   "exaltedValue": 2.45,
    "divineValue": 0.01,
-   "count": 43,
+   "count": 44,
    "detailsId": "arc-1-23c",
-   "listingCount": 43
-  },
-  {
-   "id": 2645,
-   "name": "Arc",
-   "levelRequired": 72,
-   "variant": "21c",
-   "itemClass": 4,
-   "corrupted": true,
-   "gemLevel": 21,
-   "chaosValue": 2.0,
-   "exaltedValue": 2.5,
-   "divineValue": 0.01,
-   "count": 42,
-   "detailsId": "arc-21c",
-   "listingCount": 42
+   "listingCount": 44
   },
   {
    "id": 3231,
@@ -67,12 +67,12 @@
    "corrupted": true,
    "gemLevel": 21,
    "gemQuality": 20,
-   "chaosValue": 14.1,
-   "exaltedValue": 17.65,
-   "divineValue": 0.06,
-   "count": 32,
+   "chaosValue": 20.0,
+   "exaltedValue": 24.49,
+   "divineValue": 0.09,
+   "count": 26,
    "detailsId": "arc-21-20c",
-   "listingCount": 32
+   "listingCount": 26
   },
   {
    "id": 3122,
@@ -82,11 +82,11 @@
    "itemClass": 4,
    "gemLevel": 20,
    "chaosValue": 3.0,
-   "exaltedValue": 3.76,
+   "exaltedValue": 3.67,
    "divineValue": 0.01,
-   "count": 17,
+   "count": 18,
    "detailsId": "arc-20",
-   "listingCount": 17
+   "listingCount": 18
   },
   {
    "id": 3732,
@@ -97,11 +97,11 @@
    "gemLevel": 20,
    "gemQuality": 20,
    "chaosValue": 12.0,
-   "exaltedValue": 15.02,
+   "exaltedValue": 14.7,
    "divineValue": 0.05,
-   "count": 16,
+   "count": 17,
    "detailsId": "arc-20-20",
-   "listingCount": 16
+   "listingCount": 17
   },
   {
    "id": 4454,
@@ -112,12 +112,12 @@
    "corrupted": true,
    "gemLevel": 20,
    "gemQuality": 23,
-   "chaosValue": 9.0,
+   "chaosValue": 9.2,
    "exaltedValue": 11.27,
    "divineValue": 0.04,
-   "count": 16,
+   "count": 15,
    "detailsId": "arc-20-23c",
-   "listingCount": 16
+   "listingCount": 15
   },
   {
    "id": 3857,
@@ -129,11 +129,11 @@
    "gemLevel": 20,
    "gemQuality": 20,
    "chaosValue": 9.0,
-   "exaltedValue": 11.27,
+   "exaltedValue": 11.02,
    "divineValue": 0.04,
-   "count": 10,
+   "count": 9,
    "detailsId": "arc-20-20c",
-   "listingCount": 10
+   "listingCount": 9
   },
   {
    "id": 7152,
@@ -144,12 +144,12 @@
    "corrupted": true,
    "gemLevel": 21,
    "gemQuality": 23,
-   "chaosValue": 446.4,
-   "exaltedValue": 558.9,
+   "chaosValue": 447.6,
+   "exaltedValue": 548.2,
    "divineValue": 2.0,
-   "count": 3,
+   "count": 2,
    "detailsId": "arc-21-23c",
-   "listingCount": 3
+   "listingCount": 2
   },
   {
    "id": 4038,
@@ -159,12 +159,12 @@
    "itemClass": 4,
    "corrupted": true,
    "gemLevel": 20,
-   "chaosValue": 2.2,
-   "exaltedValue": 2.75,
-   "divineValue": 0.01,
-   "count": 2,
+   "chaosValue": 4.0,
+   "exaltedValue": 4.9,
+   "divineValue": 0.02,
+   "count": 1,
    "detailsId": "arc-20c",
-   "listingCount": 2
+   "listingCount": 1
   }
  ]
 }

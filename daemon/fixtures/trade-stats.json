@@ -43,6 +43,72 @@
      "id": "pseudo.pseudo_increased_rarity",
      "text": "#% increased Rarity of Items found",
      "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_searing_implicit_tier",
+     "text": "Searing Exarch Implicit Modifier (#)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Lesser"
+       },
+       {
+        "id": 2,
+        "text": "Greater"
+       },
+       {
+        "id": 3,
+        "text": "Grand"
+       },
+       {
+        "id": 4,
+        "text": "Exceptional"
+       },
+       {
+        "id": 5,
+        "text": "Exquisite"
+       },
+       {
+        "id": 6,
+        "text": "Perfect"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_tangled_implicit_tier",
+     "text": "Eater of Worlds Implicit Modifier (#)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Lesser"
+       },
+       {
+        "id": 2,
+        "text": "Greater"
+       },
+       {
+        "id": 3,
+        "text": "Grand"
+       },
+       {
+        "id": 4,
+        "text": "Exceptional"
+       },
+       {
+        "id": 5,
+        "text": "Exquisite"
+       },
+       {
+        "id": 6,
+        "text": "Perfect"
+       }
+      ]
+     }
     }
    ]
   },
@@ -81,8 +147,18 @@
      "type": "explicit"
     },
     {
+     "id": "explicit.stat_3086156145",
+     "text": "Adds # Passive Skills",
+     "type": "explicit"
+    },
+    {
      "id": "explicit.stat_2300185227",
      "text": "+# to Dexterity and Intelligence",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_4079888060",
+     "text": "# Added Passive Skills are Jewel Sockets",
      "type": "explicit"
     }
    ]
@@ -171,13 +247,44 @@
      "id": "fractured.stat_2300185227",
      "text": "+# to Dexterity and Intelligence",
      "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_4079888060",
+     "text": "# Added Passive Skills are Jewel Sockets",
+     "type": "fractured"
     }
    ]
   },
   {
    "id": "enchant",
    "label": "Enchant",
-   "entries": []
+   "entries": [
+    {
+     "id": "enchant.stat_3086156145",
+     "text": "Adds # Passive Skills",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_4079888060",
+     "text": "# Added Passive Skills are Jewel Sockets",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_3948993189|10",
+     "text": "Added Small Passive Skills grant: 10% increased Spell Damage",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_3948993189|4",
+     "text": "Added Small Passive Skills grant: 12% increased Damage with Bows\nAdded Small Passive Skills grant: 12% increased Damage Over Time with Bow Skills",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_2954116742|6799",
+     "text": "Allocates Charisma",
+     "type": "enchant"
+    }
+   ]
   },
   {
    "id": "scourge",

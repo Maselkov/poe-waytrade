@@ -300,6 +300,12 @@ bool WaylandInput::ctrl_held() const {
     return held_.count(KEY_LEFTCTRL) || held_.count(KEY_RIGHTCTRL);
 }
 
+uint32_t WaylandInput::mods() const {
+    uint32_t m = 0;
+    for (uint32_t key : held_) m |= key_mod(key);
+    return m;
+}
+
 void WaylandInput::on_key(uint32_t key, uint32_t state) {
     bool down = state == WL_KEYBOARD_KEY_STATE_PRESSED;
     last_key_ = key;
@@ -313,15 +319,29 @@ void WaylandInput::on_key(uint32_t key, uint32_t state) {
     bool already_held = held_.count(key);
     held_.insert(key);
     if (already_held) return;
-    bool alt = held_.count(KEY_LEFTALT) || held_.count(KEY_RIGHTALT);
-    if (key == KEY_D && ctrl_held()) {
-        hotkeys_.push_back(alt ? Hotkey::PriceCheckLocked : Hotkey::PriceCheck);
-        poe_log("wayland input: hotkey Ctrl+%sD", alt ? "Alt+" : "");
-    } else if (key == KEY_D && alt) {
-        hotkeys_.push_back(Hotkey::MapCheck);
-        poe_log("wayland input: hotkey Alt+D");
-    } else if (key == KEY_C && ctrl_held()) {
+    if (key_mod(key)) return;
+    uint32_t held = mods();
+    if (capturing_) {
+        capturing_ = false;
+        captured_ = KeyCombo{held, key};
+        poe_log("wayland input: captured %s", combo_label(*captured_).c_str());
+        return;
+    }
+    if (key == KEY_C && (held & kModCtrl)) {
         hotkeys_.push_back(Hotkey::CopySeen);
+        return;
+    }
+    // Exactly the binding's modifiers; failing that, one without Shift and
+    // Super matches with them held too (Ctrl+Shift+D is still Ctrl+D).
+    const HotkeyBinding* match = nullptr;
+    for (const HotkeyBinding& b : bindings_)
+        if (!match && b.combo.code == key && b.combo.mods == held) match = &b;
+    uint32_t extra = kModShift | kModSuper;
+    for (const HotkeyBinding& b : bindings_)
+        if (!match && b.combo.code == key && !(b.combo.mods & extra) && b.combo.mods == (held & ~extra)) match = &b;
+    if (match) {
+        hotkeys_.push_back(match->hotkey);
+        poe_log("wayland input: hotkey %s", combo_label(match->combo).c_str());
     }
 }
 

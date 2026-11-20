@@ -4,6 +4,8 @@
 #include "layer.h"
 #include "price_check.h"
 #include "rml_renderer.h"
+#include "settings_page.h"
+#include "version.h"
 
 #include <RmlUi/Core.h>
 
@@ -27,7 +29,13 @@ constexpr float kPreviewCell = 47;
 const char* const kPriceDoc = "ui/price_check.rml";
 const char* const kMapDoc = "ui/map_check.rml";
 const char* const kDebugDoc = "ui/debug.rml";
-const char* const kDocuments[] = {kPriceDoc, kMapDoc, kDebugDoc};
+const char* const kSettingsDoc = "ui/settings.rml";
+const char* const kToastDoc = "ui/toast.rml";
+const char* const kDocuments[] = {kPriceDoc, kMapDoc, kSettingsDoc, kToastDoc, kDebugDoc};
+
+// The start-up notice: shown once the daemon has answered (or after a
+// moment without it), for a few seconds, fading out.
+constexpr double kToastWait = 3.0, kToastShow = 6.0, kToastIn = 0.45, kToastFade = 0.5;
 
 // ---- RmlUi interfaces ------------------------------------------------------
 
@@ -150,6 +158,7 @@ struct UiFilter {
     bool enabled = false;
     Rml::String label, min;
     Rml::String bounds;            // "185+" or "185–220"
+    bool editing = false;          // being typed into (see PriceCheck::edit_bounds)
     float min_pct = 0, max_pct = 100;  // handle positions on the slider
     float roll_pct = -1;               // the item's own value; < 0: none
     bool has_slider = false, max_roll = false;
@@ -172,6 +181,7 @@ struct UiSprite {
 };
 struct UiListing {
     Rml::String price, sub, age, count, icon;
+    Rml::String tag;  // a gem's level and quality
     // Hover preview of the first listed item.
     bool has_preview = false;
     Rml::String rarity, name, base, meta, more;
@@ -191,13 +201,25 @@ struct UiMapMod {
     Rml::String tag;    // Deadly | Warning | Good | ""
 };
 
+// Settings page
+struct UiHotkey {
+    int index = 0;  // SettingsPage::Action
+    Rml::String label, desc, key;
+    Rml::String old;    // the key it had, for the warning's "Keep"
+    Rml::String state;  // capturing | warned | off | ""
+    bool can_clear = false;
+};
+struct UiAbout {
+    Rml::String label, value;
+};
+
 struct Model {
     Rml::String name, base, subtitle, rarity;
     Rml::String state;  // status | prices | trade
     Rml::String status, source, thin, total, hint;
     bool status_error = false, searching = false, has_url = false, closable = false;
     // Trade search options
-    Rml::String base_label, category_label, corrupted, corrupted_label;
+    Rml::String base_label, category_label, corrupted, corrupted_label, listing_status, listing_status_label;
     bool base_preset = false, preset_base = false;  // offered / active
     bool base_only = false, searched = false, stale = false;
     Rml::Vector<UiPrice> prices;
@@ -217,6 +239,23 @@ struct Model {
     // Map-like items switch between the map check and the price
     bool can_switch = false;
     Rml::String map_price, map_price_label;  // poe.ninja, in the map check
+    // Settings page (s_*)
+    int s_tab = 0;
+    Rml::Vector<Rml::String> s_tabs, s_profiles;
+    Rml::String s_version;
+    Rml::Vector<UiHotkey> s_hotkeys;
+    int s_warning = -1;  // the hotkey row with the "reaches the game" warning
+    Rml::String s_warning_title, s_warning_text, s_warning_key;
+    Rml::String s_league, s_league_pinned, s_status, s_min, s_scale;
+    bool s_scale_env = false;
+    int s_profile = 1;
+    bool s_reset_armed = false;
+    Rml::Vector<UiAbout> s_about;
+    Rml::String s_note;
+    bool s_note_error = false;
+    // Start-up notice
+    Rml::String t_state, t_hint, t_warn;
+    bool t_busy = false;
 };
 
 Rml::String format(const char* fmt, double v) {
@@ -316,7 +355,12 @@ struct OverlayUi::Impl {
     }
     uint64_t placed_check = 0;
     bool debug = getenv("POE_WAYTRADE_DEBUG") != nullptr;
-    float ui_scale = 1.0f;
+    double toast_started = -1;  // elapsed seconds; < 0: not yet
+    bool toast_off = getenv("POE_WAYTRADE_DEMO_ITEM") || getenv("POE_WAYTRADE_DEMO_SETTINGS");
+    void update_toast(PriceCheck& pc, VkExtent2D extent);
+    float ui_scale = 1.0f;     // POE_WAYTRADE_UI_SCALE, else the setting
+    bool ui_scale_env = false;
+    void sync_settings(PriceCheck& pc, Model& m);
     int frame = 0;
     time_t loaded_mtime = 0;
     bool ok = false;
@@ -328,7 +372,7 @@ struct OverlayUi::Impl {
     void sync(PriceCheck& pc);
     void sync_debug(WaylandInput* input, VkExtent2D extent);
     void place(PriceCheck& pc, VkExtent2D extent);
-    bool keep_on_screen(VkExtent2D extent);
+    bool keep_on_screen(const char* path, VkExtent2D extent);
     void mark_cut_mods();
     void sync_map(const PriceReply& reply, uint64_t check_id, Model& m);
     void fill_prices(const PriceReply& reply, Model& m);
@@ -357,7 +401,7 @@ OverlayUi::~OverlayUi() {
 bool OverlayUi::ok() const { return impl_->ok; }
 
 bool OverlayUi::Impl::init(RmlRenderer* renderer) {
-    if (const char* s = getenv("POE_WAYTRADE_UI_SCALE")) ui_scale = std::max(0.25f, (float)atof(s));
+    if (const char* s = getenv("POE_WAYTRADE_UI_SCALE")) ui_scale = std::max(0.25f, (float)atof(s)), ui_scale_env = true;
     Rml::SetRenderInterface(renderer);
     Rml::SetSystemInterface(&system);
     Rml::SetFileInterface(&files);
@@ -380,6 +424,11 @@ bool OverlayUi::Impl::init(RmlRenderer* renderer) {
         }
     }
 
+    // The panels' settings button.
+    for (size_t i = 0; i < embedded_file_count; i++)
+        if (strcmp(embedded_files[i].path, "ui/gear.png") == 0)
+            icons_put("gear", std::string((const char*)embedded_files[i].data, embedded_files[i].size));
+
     context = Rml::CreateContext("overlay", Rml::Vector2i(1920, 1080));
     if (!context) return false;
     bind_model();
@@ -401,6 +450,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("label", &UiFilter::label);
         h.RegisterMember("min", &UiFilter::min);
         h.RegisterMember("bounds", &UiFilter::bounds);
+        h.RegisterMember("editing", &UiFilter::editing);
         h.RegisterMember("min_pct", &UiFilter::min_pct);
         h.RegisterMember("roll_pct", &UiFilter::roll_pct);
         h.RegisterMember("max_pct", &UiFilter::max_pct);
@@ -440,6 +490,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("age", &UiListing::age);
         h.RegisterMember("count", &UiListing::count);
         h.RegisterMember("icon", &UiListing::icon);
+        h.RegisterMember("tag", &UiListing::tag);
     }
     c.RegisterArray<Rml::Vector<UiPrice>>();
     c.RegisterArray<Rml::Vector<UiFilter>>();
@@ -462,6 +513,21 @@ void OverlayUi::Impl::bind_model() {
     }
     c.RegisterArray<Rml::Vector<UiMapStat>>();
     c.RegisterArray<Rml::Vector<UiMapMod>>();
+    if (auto h = c.RegisterStruct<UiHotkey>()) {
+        h.RegisterMember("index", &UiHotkey::index);
+        h.RegisterMember("label", &UiHotkey::label);
+        h.RegisterMember("desc", &UiHotkey::desc);
+        h.RegisterMember("key", &UiHotkey::key);
+        h.RegisterMember("old", &UiHotkey::old);
+        h.RegisterMember("state", &UiHotkey::state);
+        h.RegisterMember("can_clear", &UiHotkey::can_clear);
+    }
+    c.RegisterArray<Rml::Vector<UiHotkey>>();
+    if (auto h = c.RegisterStruct<UiAbout>()) {
+        h.RegisterMember("label", &UiAbout::label);
+        h.RegisterMember("value", &UiAbout::value);
+    }
+    c.RegisterArray<Rml::Vector<UiAbout>>();
 
     c.Bind("name", &model.name);
     c.Bind("base", &model.base);
@@ -481,6 +547,8 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("preset_base", &model.preset_base);
     c.Bind("corrupted", &model.corrupted);
     c.Bind("corrupted_label", &model.corrupted_label);
+    c.Bind("listing_status", &model.listing_status);
+    c.Bind("listing_status_label", &model.listing_status_label);
     c.Bind("base_only", &model.base_only);
     c.Bind("searched", &model.searched);
     c.Bind("stale", &model.stale);
@@ -506,6 +574,30 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("can_switch", &model.can_switch);
     c.Bind("map_price", &model.map_price);
     c.Bind("map_price_label", &model.map_price_label);
+    c.Bind("s_tab", &model.s_tab);
+    c.Bind("s_tabs", &model.s_tabs);
+    c.Bind("s_profiles", &model.s_profiles);
+    c.Bind("s_version", &model.s_version);
+    c.Bind("s_hotkeys", &model.s_hotkeys);
+    c.Bind("s_warning", &model.s_warning);
+    c.Bind("s_warning_title", &model.s_warning_title);
+    c.Bind("s_warning_text", &model.s_warning_text);
+    c.Bind("s_warning_key", &model.s_warning_key);
+    c.Bind("s_league", &model.s_league);
+    c.Bind("s_league_pinned", &model.s_league_pinned);
+    c.Bind("s_status", &model.s_status);
+    c.Bind("s_min", &model.s_min);
+    c.Bind("s_scale", &model.s_scale);
+    c.Bind("s_scale_env", &model.s_scale_env);
+    c.Bind("s_profile", &model.s_profile);
+    c.Bind("s_reset_armed", &model.s_reset_armed);
+    c.Bind("s_about", &model.s_about);
+    c.Bind("s_note", &model.s_note);
+    c.Bind("s_note_error", &model.s_note_error);
+    c.Bind("t_state", &model.t_state);
+    c.Bind("t_hint", &model.t_hint);
+    c.Bind("t_warn", &model.t_warn);
+    c.Bind("t_busy", &model.t_busy);
 
     // Events arrive while update() feeds pointer input, with price_check set.
     c.BindEventCallback("close", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
@@ -516,6 +608,9 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("toggle_base", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check && price_check->reply()) price_check->set_base_only(!price_check->reply()->base_only);
+    });
+    c.BindEventCallback("cycle_status", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->cycle_status();
     });
     c.BindEventCallback("cycle_corrupted", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->cycle_corrupted();
@@ -530,11 +625,18 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("range_drag", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
         if (!args.empty()) range_input(args[0].Get<int>(), ev, false);
     });
-    // The wheel over a filter's value moves its minimum one step: typing
-    // isn't an option, since the game gets every key too.
+    // The wheel over a filter's value moves its minimum one step (also
+    // where typing isn't available: see edit_bounds below).
     c.BindEventCallback("bounds_scroll", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
         if (args.empty()) return;
         bounds_scroll(args[0].Get<int>(), ev.GetParameter<float>("wheel_delta_y", 0));
+        ev.StopPropagation();
+    });
+    // Clicking a filter's value types into it (where the compositor lets us
+    // take the keyboard); the click doesn't also toggle the filter.
+    c.BindEventCallback("edit_bounds", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
+        if (price_check && !args.empty() && ev.GetParameter<int>("button", 0) == 0)
+            price_check->edit_bounds(args[0].Get<int>());
         ev.StopPropagation();
     });
     c.BindEventCallback("toggle_filter", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
@@ -554,6 +656,35 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("open_trade", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->open_trade();
     });
+
+    // Settings page
+    auto settings_event = [this, &c](const char* name, auto fn) {
+        c.BindEventCallback(name, [this, fn](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+            if (price_check) fn(price_check->settings(), args);
+        });
+    };
+    using Args = const Rml::VariantList&;
+    auto arg = [](Args args) { return args.empty() ? 0 : args[0].Get<int>(); };
+    settings_event("open_settings", [this](SettingsPage&, Args) { price_check->open_settings(); });
+    settings_event("settings_close", [](SettingsPage& s, Args) { s.close(); });
+    settings_event("settings_tab", [arg](SettingsPage& s, Args a) { s.set_tab((SettingsPage::Tab)arg(a)); });
+    settings_event("hotkey_capture", [arg](SettingsPage& s, Args a) {
+        auto action = (SettingsPage::Action)arg(a);
+        s.capturing() == action ? s.cancel_capture() : s.begin_capture(action);
+    });
+    settings_event("hotkey_clear", [arg](SettingsPage& s, Args a) { s.clear_hotkey((SettingsPage::Action)arg(a)); });
+    settings_event("warning_retry", [](SettingsPage& s, Args) { s.warning_retry(); });
+    settings_event("warning_accept", [](SettingsPage& s, Args) { s.warning_accept(); });
+    settings_event("warning_keep", [](SettingsPage& s, Args) { s.warning_keep(); });
+    settings_event("league_step", [arg](SettingsPage& s, Args a) { s.step_league(arg(a)); });
+    settings_event("settings_status", [](SettingsPage& s, Args a) {
+        if (!a.empty()) s.set_status(a[0].Get<Rml::String>());
+    });
+    settings_event("min_step", [arg](SettingsPage& s, Args a) { s.step_min(arg(a)); });
+    settings_event("scale_step", [arg](SettingsPage& s, Args a) { s.step_scale(arg(a)); });
+    settings_event("settings_profile", [arg](SettingsPage& s, Args a) { s.set_map_profile(arg(a)); });
+    settings_event("map_reset", [](SettingsPage& s, Args) { s.reset_map_marks(); });
+    settings_event("settings_reset", [](SettingsPage& s, Args) { s.reset_defaults(); });
     handle = c.GetModelHandle();
 }
 
@@ -591,6 +722,7 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
     }
 
     d.context->SetDimensions(Rml::Vector2i((int)extent.width, (int)extent.height));
+    if (!d.ui_scale_env) d.ui_scale = (float)pc.settings().values().ui_scale;
     d.context->SetDensityIndependentPixelRatio((input ? (float)input->scale() : 1.0f) * d.ui_scale);
 
     d.price_check = &pc;
@@ -621,6 +753,12 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
         if (want && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
         if (!want && it->second->IsVisible()) it->second->Hide();
     }
+    if (auto it = d.docs.find(kSettingsDoc); it != d.docs.end()) {
+        bool want = pc.settings().visible();
+        if (want && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+        if (!want && it->second->IsVisible()) it->second->Hide();
+    }
+    d.update_toast(pc, extent);
     if (auto it = d.docs.find(kDebugDoc); it != d.docs.end()) {
         if (d.debug && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
     }
@@ -629,7 +767,8 @@ void OverlayUi::update(PriceCheck& pc, WaylandInput* input, VkExtent2D extent) {
     d.context->Update();
     // Keeping the panel on screen needs its laid-out size; redo the layout
     // if that moved it.
-    if (d.keep_on_screen(extent)) d.context->Update();
+    bool moved = d.keep_on_screen(d.shown_panel, extent);
+    if (d.keep_on_screen(kSettingsDoc, extent) || moved) d.context->Update();
     d.mark_cut_mods();
     if (input) input->set_cursor(d.system.cursor);
 }
@@ -642,7 +781,8 @@ std::vector<InputRect> OverlayUi::input_rects() const {
     std::vector<InputRect> rects;
     if (!impl_->ok) return rects;
     for (auto& [path, doc] : impl_->docs) {
-        if (!doc->IsVisible()) continue;
+        // The start-up notice lets clicks through to the game.
+        if (!doc->IsVisible() || path == kToastDoc) continue;
         Rml::Vector2f pos = doc->GetAbsoluteOffset(Rml::BoxArea::Border);
         Rml::Vector2f size = doc->GetBox().GetSize(Rml::BoxArea::Border);
         rects.push_back({(int)floorf(pos.x), (int)floorf(pos.y), (int)ceilf(size.x), (int)ceilf(size.y)});
@@ -656,17 +796,41 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
 
     Model m;
     m.debug_lines = std::move(model.debug_lines);
+    sync_settings(pc, m);
+    const SettingsPage::Values& sv = pc.settings().values();
+    // "ready" once prices are in; until then, or without the daemon, only running.
+    m.t_busy = pc.daemon_state() != "ready" && !pc.daemon_state().empty();
+    if (pc.daemon_state() == "loading") m.t_state = "is running · loading prices";
+    else if (pc.daemon_state() == "error") m.t_state = "is running";
+    else m.t_state = "is ready";
+    m.t_hint = combo_label(sv.hotkeys[(int)SettingsPage::Action::Quick]) + ": price check  ·  " +
+               combo_label(sv.hotkeys[(int)SettingsPage::Action::Settings]) + ": settings";
+    if (pc.daemon_state() == "error") m.t_warn = pc.daemon_error();
     m.searching = pc.searching();
     bool map = pc.purpose() == PriceCheck::Purpose::Map;
     // Only a locked panel (Ctrl+Alt+D, Alt+D) needs a close button: the
     // others close by themselves when the mouse moves away.
     m.closable = pc.mode() == PriceCheck::Mode::Locked;
     switch (pc.mode()) {
-    case PriceCheck::Mode::Quick: m.hint = map ? "Hold Ctrl and move here to mark mods" : "Hold Ctrl and move here to use filters"; break;
+    case PriceCheck::Mode::Quick: {
+        // The quick look key's modifiers (Ctrl) keep it open.
+        Rml::String hold = mods_label(pc.hold_mods());
+        Rml::String start = hold.empty() ? "Move" : "Hold " + hold + " and move";
+        m.hint = start + (map ? " here to mark mods" : " here to use filters");
+        break;
+    }
     // Same line count as in Quick, so pinning doesn't resize the panel
     // (and pull it out from under the pointer).
-    case PriceCheck::Mode::Pinned: m.hint = "Release Ctrl and move away to close"; break;
-    case PriceCheck::Mode::Locked: if (map) m.hint = "Click a mod to mark it · right-click to go back"; break;
+    case PriceCheck::Mode::Pinned: {
+        Rml::String hold = mods_label(pc.hold_mods());
+        m.hint = hold.empty() ? "Move away to close" : "Release " + hold + " and move away to close";
+        break;
+    }
+    case PriceCheck::Mode::Locked:
+        if (map) m.hint = "Click a mod to mark it · right-click to go back";
+        else if (pc.bounds_edit()) m.hint = pc.keyboard_taken() ? "Type a number · Tab: maximum · Enter: apply · Esc: cancel"
+                                                                 : "Taking the keyboard from the game…";
+        break;
     }
     const auto& item = pc.item();
     const auto& reply = pc.reply();
@@ -717,6 +881,10 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         // Short, so the button keeps its size; its colour tells the state too.
         m.corrupted = reply->corrupted;
         m.corrupted_label = reply->corrupted == "no" ? "Uncorrupted" : reply->corrupted == "yes" ? "Corrupted" : "Any";
+        m.listing_status = reply->listing_status;
+        m.listing_status_label = reply->listing_status == "available" ? "+ In person"
+                                 : reply->listing_status == "any"  ? "Any seller"
+                                                                   : "Instant buyout";
         m.source = reply->league;
         // A unique's poe.ninja price, which doesn't know its rolls.
         fill_prices(*reply, m);
@@ -725,14 +893,17 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             m.ninja_icon = m.prices[0].icon;
             const Rml::String& listed = p.listings;
             if (!listed.empty() && atoi(listed.c_str()) < 5) m.thin = listed + " listed";
-            m.ninja_meta = (listed.empty() ? "" : listed + " listed \u00b7 ") + "poe.ninja \u00b7 rolls not counted";
+            m.ninja_meta = (listed.empty() ? "" : listed + " listed \u00b7 ") + "poe.ninja";
+            if (item && item->rarity == "Unique") m.ninja_meta += " \u00b7 rolls not counted";
         }
         // Groups in panel order; the top one takes its name from what's in it.
         auto has = [&](const char* section) {
             return std::any_of(reply->filters.begin(), reply->filters.end(),
                                [&](const TradeFilter& f) { return f.section == section; });
         };
-        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? "Map" : "Item";
+        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? "Map"
+                        : has("gem")       ? "Gem"
+                                           : "Item";
         m.filter_groups = {{top, {}}, {"Enchant", {}}, {"Implicit", {}}, {"Totals", {}}, {"Mods", {}}};
         for (const TradeFilter& f : reply->filters) {
             UiFilter u{f.index, f.enabled, f.label, f.min};
@@ -743,8 +914,15 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
                 u.max_pct = f.max.empty() ? 100 : pct(atof(f.max.c_str()));
                 if (!f.roll.empty()) u.roll_pct = pct(atof(f.roll.c_str()));
             }
-            if (!f.min.empty()) u.bounds = f.min + (f.max.empty() ? "+" : "\u2013" + f.max);
+            if (!f.min.empty() && f.max == f.min) u.bounds = f.min;  // exactly (a cluster's passive count)
+            else if (!f.min.empty()) u.bounds = f.min + (f.max.empty() ? "+" : "\u2013" + f.max);
             else if (!f.max.empty()) u.bounds = "\u2264 " + f.max;
+            // Being typed into: what's typed so far, a caret in the field.
+            if (const auto& e = pc.bounds_edit(); e && e->index == f.index) {
+                u.editing = true;
+                u.bounds = e->field == 0 ? e->min + "|" + (e->max.empty() ? "+" : "\u2013" + e->max)
+                                         : e->min + "\u2013" + e->max + "|";
+            }
             u.max_roll = f.max_roll;
             if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
             u.section = f.section;
@@ -764,6 +942,9 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             u.age = l.age;
             if (l.count > 1) u.count = "×" + std::to_string(l.count);
             if (icons_get(l.currency_id)) u.icon = l.currency_id;
+            // A gem's level and quality, on its row (like APT's columns).
+            for (const auto& p : l.preview)
+                if (p.kind == "gem") u.tag = p.text;
             fill_preview(l, u);
             m.listings.push_back(u);
         }
@@ -792,6 +973,113 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
 
     model = std::move(m);
     handle.DirtyAllVariables();
+}
+
+void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
+    const SettingsPage& s = pc.settings();
+    const SettingsPage::Values& v = s.values();
+    using Action = SettingsPage::Action;
+    m.s_tab = (int)s.tab();
+    m.s_tabs = {"Hotkeys", "Price check", "Map check", "About"};
+    m.s_profiles = {"I", "II", "III"};
+    m.s_version = POE_WAYTRADE_VERSION;
+
+    static const char* const descs[SettingsPage::kActions] = {
+        "Price of the hovered item; closes when the mouse moves away",
+        "Stays open until × or a click in the game",
+        "Same as the locked panel, for old habits",
+        "This page",
+    };
+    for (int i = 0; i < SettingsPage::kActions; i++) {
+        UiHotkey h;
+        h.index = i;
+        h.label = SettingsPage::action_label((Action)i);
+        h.desc = descs[i];
+        h.old = v.hotkeys[i].empty() ? "it off" : combo_label(v.hotkeys[i]);
+        h.key = v.hotkeys[i].empty() ? "Off" : combo_label(v.hotkeys[i]);
+        h.can_clear = i == (int)Action::MapAlias && !v.hotkeys[i].empty();
+        if (v.hotkeys[i].empty()) h.state = "off";
+        if (s.capturing() == (Action)i) {
+            h.key = "Press keys…";
+            h.state = "capturing";
+            h.can_clear = false;
+        }
+        if (s.warning() && (int)s.warning()->action == i) {
+            h.key = combo_label(s.warning()->combo);
+            h.state = "warned";
+            h.can_clear = false;
+        }
+        m.s_hotkeys.push_back(h);
+    }
+    if (const auto& w = s.warning()) {
+        m.s_warning = (int)w->action;
+        m.s_warning_key = combo_label(w->combo);
+        m.s_warning_title = m.s_warning_key + " also reaches the game";
+        m.s_warning_text = "The game keeps the keyboard, so every press would do both. Add Ctrl or Alt to keep it to "
+                           "the overlay.";
+    }
+
+    if (v.league == "auto")
+        m.s_league = s.league_active().empty() ? "Current" : "Current (" + s.league_active() + ")";
+    else
+        m.s_league = v.league;
+    m.s_league_pinned = s.league_pinned();
+    m.s_status = v.status;
+    m.s_min = std::to_string(100 - v.min_percent) + "%";
+    m.s_scale = std::to_string((int)std::lround(v.ui_scale * 100)) + "%";
+    m.s_scale_env = ui_scale_env;
+    m.s_profile = s.map_profile();
+    m.s_reset_armed = s.reset_armed();
+
+    m.s_about.push_back({"Overlay", POE_WAYTRADE_VERSION});
+    m.s_about.push_back({"Daemon", s.loaded() ? s.daemon_version() : "not answering"});
+    m.s_about.push_back({"Prices for", s.league_active().empty() ? "(loading)" : s.league_active()});
+    if (!s.daemon_log().empty()) m.s_about.push_back({"Daemon log", s.daemon_log()});
+    const char* log = getenv("POE_WAYTRADE_LOG");
+    m.s_about.push_back({"Overlay log", log && *log ? log : "off (set POE_WAYTRADE_LOG)"});
+    // Only looked up on this tab: it connects to the compositor once.
+    if (s.tab() == SettingsPage::Tab::About)
+        m.s_about.push_back({"Typing in panels", pc.typing_supported()
+                                                     ? "yes (layer-shell)"
+                                                     : "no: needs KDE Plasma, Sway, Hyprland or another "
+                                                       "compositor with layer-shell"});
+    m.s_note = s.note();
+    m.s_note_error = s.note_error();
+}
+
+void OverlayUi::Impl::update_toast(PriceCheck& pc, VkExtent2D extent) {
+    auto it = docs.find(kToastDoc);
+    if (it == docs.end()) return;
+    Rml::ElementDocument* doc = it->second;
+    double now = system.GetElapsedTime();
+    if (toast_started < 0 && !toast_off &&
+        (pc.settings().loaded() || !pc.daemon_state().empty() || now > kToastWait)) {
+        toast_started = now;
+        poe_log("ui: start-up notice");
+    }
+    double t = toast_started < 0 ? -1 : now - toast_started;
+    if (t < 0 || t > kToastShow) {
+        if (doc->IsVisible()) doc->Hide();
+        return;
+    }
+    if (!doc->IsVisible()) doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+    // Rises into place and fades in, then sinks and fades out.
+    auto ease_out = [](double x) { return 1 - std::pow(1 - std::clamp(x, 0.0, 1.0), 3); };
+    double in = ease_out(t / kToastIn), out = ease_out((t - (kToastShow - kToastFade)) / kToastFade);
+    float dp = context->GetDensityIndependentPixelRatio();
+    float alpha = (float)(in * (1 - out));
+    float rise = (float)((1 - in) * 18 + out * 10) * dp;
+    float scale = (float)(0.96 + 0.04 * in);
+    doc->SetProperty(Rml::PropertyId::Opacity, Rml::Property(alpha, Rml::Unit::NUMBER));
+    char transform[64];
+    snprintf(transform, sizeof transform, "translateY(%.1fpx) scale(%.3f)", rise, scale);
+    doc->SetProperty("transform", transform);
+    // Centred just under PoE's login box (it ends at 87% of the height, on
+    // any window size), so it's seen at the login screen without covering it.
+    Rml::Vector2f size = doc->GetBox().GetSize(Rml::BoxArea::Border);
+    float top = std::min(extent.height * 0.885f, extent.height - size.y - 8 * dp);
+    doc->SetProperty(Rml::PropertyId::Left, Rml::Property(std::max(0.0f, (extent.width - size.x) / 2), Rml::Unit::PX));
+    doc->SetProperty(Rml::PropertyId::Top, Rml::Property(top, Rml::Unit::PX));
 }
 
 // Like Awakened PoE Trade: an item checked in the inventory (right half)
@@ -828,8 +1116,8 @@ void OverlayUi::Impl::mark_cut_mods() {
     }
 }
 
-bool OverlayUi::Impl::keep_on_screen(VkExtent2D extent) {
-    auto it = docs.find(shown_panel);
+bool OverlayUi::Impl::keep_on_screen(const char* path, VkExtent2D extent) {
+    auto it = docs.find(path);
     if (it == docs.end() || !it->second->IsVisible()) return false;
     Rml::ElementDocument* doc = it->second;
     float margin = 16 * context->GetDensityIndependentPixelRatio();
@@ -856,7 +1144,8 @@ void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
         if (kind == "rarity") u.rarity = text;
         else if (kind == "name") u.name = text;
         else if (kind == "base") u.base = text;
-        else if (kind == "ilvl") ilvl = "Item level " + text;
+        else if (kind == "ilvl" && u.rarity != "gem") ilvl = "Item level " + text;
+        else if (kind == "gem") ilvl = text;  // "Level 20 · 23%"
         else if (kind == "dps") dps = text;
         else if (kind == "sockets") sockets = text;
         else if (kind == "icon") {

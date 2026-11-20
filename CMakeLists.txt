@@ -22,16 +22,21 @@ set(PROTOCOL_DIR ${CMAKE_BINARY_DIR}/protocols)
 set(PROTOCOL_SOURCES)
 # ext-data-control: setting the clipboard without an input serial (to restore
 # the user's clipboard after our copy); wayland-protocols >= 1.39.
-foreach(xml staging/fractional-scale/fractional-scale-v1.xml staging/ext-data-control/ext-data-control-v1.xml)
+# wlr-layer-shell (vendored in protocols/, wlroots' protocol): taking the
+# keyboard while typing into a panel (wl_grab.cpp); it refers to xdg-shell.
+foreach(xml ${WAYLAND_PROTOCOLS_DIR}/staging/fractional-scale/fractional-scale-v1.xml
+            ${WAYLAND_PROTOCOLS_DIR}/staging/ext-data-control/ext-data-control-v1.xml
+            ${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml
+            ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml)
   get_filename_component(name ${xml} NAME_WE)
   set(header ${PROTOCOL_DIR}/${name}-client-protocol.h)
   set(code ${PROTOCOL_DIR}/${name}-protocol.c)
   add_custom_command(
     OUTPUT ${header} ${code}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTOCOL_DIR}
-    COMMAND ${WAYLAND_SCANNER} client-header ${WAYLAND_PROTOCOLS_DIR}/${xml} ${header}
-    COMMAND ${WAYLAND_SCANNER} private-code ${WAYLAND_PROTOCOLS_DIR}/${xml} ${code}
-    DEPENDS ${WAYLAND_PROTOCOLS_DIR}/${xml})
+    COMMAND ${WAYLAND_SCANNER} client-header ${xml} ${header}
+    COMMAND ${WAYLAND_SCANNER} private-code ${xml} ${code}
+    DEPENDS ${xml})
   list(APPEND PROTOCOL_SOURCES ${header} ${code})
 endforeach()
 
@@ -80,9 +85,12 @@ add_library(VkLayer_poe_waytrade SHARED
   src/assets.c
   src/wl_input.cpp
   src/wl_pointer.cpp
+  src/wl_grab.cpp
   src/uinput_kbd.cpp
   src/item_text.cpp
   src/price_check.cpp
+  src/settings_page.cpp
+  src/hotkeys.cpp
   src/daemon_client.cpp
   ${PROTOCOL_SOURCES}
   ${SHADER_OUTPUTS}
@@ -94,7 +102,7 @@ target_compile_definitions(VkLayer_poe_waytrade PRIVATE VK_NO_PROTOTYPES VK_USE_
 # Fonts and UI documents are built in with #embed (C23).
 set_source_files_properties(src/assets.c PROPERTIES
   COMPILE_OPTIONS "-std=gnu23;--embed-dir=${CMAKE_SOURCE_DIR}/assets"
-  OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/assets/ui/theme.rcss;${CMAKE_SOURCE_DIR}/assets/ui/price_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/map_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/debug.rml")
+  OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/assets/ui/theme.rcss;${CMAKE_SOURCE_DIR}/assets/ui/price_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/map_check.rml;${CMAKE_SOURCE_DIR}/assets/ui/debug.rml;${CMAKE_SOURCE_DIR}/assets/ui/settings.rml;${CMAKE_SOURCE_DIR}/assets/ui/toast.rml;${CMAKE_SOURCE_DIR}/assets/ui/gear.png")
 pkg_check_modules(WAYLAND_CURSOR REQUIRED IMPORTED_TARGET wayland-cursor)
 target_link_libraries(VkLayer_poe_waytrade PRIVATE PkgConfig::WAYLAND PkgConfig::WAYLAND_CURSOR rmlui_core)
 # The layer is loaded into the game (inside Steam's runtime container), so keep

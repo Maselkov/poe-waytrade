@@ -53,10 +53,47 @@ Ctrl+Alt+D.
 The game keeps keyboard focus (the panel is part of its window), so the
 overlay never uses keys PoE does; in particular there's no Esc to close.
 
+When the game starts, a small notice rises in under the login box saying the
+overlay is ready (or that prices are still loading, or that the price daemon
+isn't answering) and naming the price check and settings keys. It goes away
+after six seconds, and clicks go through it.
+
+**Settings**: Ctrl+Alt+S, or the gear at the top left of a panel. Four tabs:
+
+- **Hotkeys**: click a key, press the new combination. All four can be
+  rebound (Alt+D can also be turned off); Ctrl+C stays the copy key. A key
+  without Ctrl or Alt gets a warning first, since the game sees it too, and a
+  combination another action has swaps the two. Holding the quick look
+  key's modifiers (Ctrl, by default) keeps a quick look open.
+- **Price check**: the league ("Current" follows poe.ninja into each new
+  league), which listings a search starts with (instant buyout, + in person,
+  any), how far below your roll a ticked filter starts (10% by default), and
+  the panel size.
+- **Map check**: the active profile, and resetting its marks.
+- **About**: versions, where the logs are, whether typing into panels works.
+
+The daemon keeps them in `~/.config/poe-waytrade/settings.json` and applies
+each change at once. `POE_LEAGUE` and `POE_WAYTRADE_UI_SCALE` still win over
+the page.
+
 Priced: currency, fragments, essences, divination cards, omens, oils,
 fossils, tattoos and other exchange items; uniques (incl. 5L/6L and
 unidentified); skill gems (level/quality/corruption); maps, invitations,
-beasts; Wickerman limbs (Viscera, matched by their implicits).
+beasts; Wickerman limbs (Viscera, matched by their implicits); white and
+magic cluster jewels (by enchant, passive count and item level bracket);
+plain bases of item level 82+ (by item level and influences).
+
+Currency and other exchange items are priced from poe.ninja, whose figures
+come from the in-game Currency Exchange, where currency actually trades. The
+trade site's bulk exchange (whisper-and-trade listings from stash tabs) is
+left out: APT marks it as legacy for anything on the Currency Exchange.
+
+Skill gems get a trade search too, next to their poe.ninja price: gem level
+(ticked at max level) and quality (ticked from 16%, or 20% on a transfigured
+gem), matching corruption, and transfigured gems searched as the trade site
+knows them. Like APT, level and quality are minimums: a better gem listed
+for less is competition (an uncorrupted gem never meets one, since going
+past 20 takes a corruption). Listings show each gem's level and quality on its row.
 
 Identified uniques show their poe.ninja price too, but since that ignores
 rolls, they also get trade filters like APT's: one for each mod that rolls
@@ -69,7 +106,11 @@ like Awakened PoE Trade's defaults: life, mana, attributes and resistances
 from any mod (crafted ones included) become totals, and only total life and
 the resistance totals start ticked; other mods are listed, unticked, with a
 minimum 10% below your roll. Pick "Any Ring" or the exact base, and whether
-corrupted items count (uncorrupted items exclude them by default). Nothing is
+corrupted items count (uncorrupted items exclude them by default). Searches
+count **instant buyout** listings only by default (merchant tabs, which
+can't be price-fixed: the seller can't list low and refuse to sell); the
+button next to Search switches to instant buyout plus in-person sellers, or
+any listing. Nothing is
 searched until you press **Search**, since every search counts against GGG's
 rate limit; changing anything afterwards marks the listings as out of date
 until you search again.
@@ -82,8 +123,13 @@ like APT's: the left handle sets the minimum, the right one a maximum (at the
 far right: none). The minimum defaults to your roll minus 10% (the slider
 reaches down to it even below the tier), and a roll at the top of its tier defaults to exactly that value
 (marked with a gold star). Scrolling the mouse wheel over a filter's value
-moves its minimum one step; there's no typing in numbers, because the game
-receives every key too (digits would drink flasks). Weapons
+moves its minimum one step. **Clicking the value types into it**: the
+overlay takes the keyboard from the game while you type (so digits don't
+drink flasks), Tab switches between minimum and maximum, Enter applies and
+ticks the filter, Esc or a click in the game cancels, and the keyboard goes
+back to the game. This needs a compositor with layer-shell (KDE Plasma,
+Sway, Hyprland and other wlroots ones, COSMIC); on GNOME or gamescope the
+panel says typing isn't available, and the wheel and sliders still work. Weapons
 also get physical/elemental DPS, attack speed and critical strike chance
 filters from their properties; armour pieces get armour, evasion, energy
 shield, ward and block filters (unticked), scaled to 20% quality the way the
@@ -111,6 +157,15 @@ Any non-unique 5- or 6-link also gets the Base item button, with the links
 ticked. White and magic ones open in it, since they're worth their links and
 base rather than their mods; for these, item level and implicits start
 unticked unless the base also has crafting value.
+
+Mods that are one of a list rather than a number are searched as exactly
+that, ticked: a cluster jewel's "Added Small Passive Skills grant" (two-line
+grants included), an anointed notable ("Allocates Charisma"), Forbidden
+Flame/Flesh's ascendancy notable. A cluster jewel's passive count is
+searched exactly and its jewel sockets as a minimum. Searing Exarch and
+Eater of Worlds items get a filter for their implicit's tier (Lesser to
+Perfect, from advanced copy), or for the eldritch item flag, ticked on the
+Base item preset.
 
 After a search, the panel shows a one-line estimate (the median of the 10
 cheapest listings, with the price range and a "Low value" tag under 5c), then
@@ -159,6 +214,11 @@ mods with their tiers, like PoE's tooltip) beside the panel.
   the game's surface, sized to the visible panels, with an input region
   covering just them: clicks there reach the UI and never the game. With no
   panel visible it's unmapped.
+- `src/wl_grab.cpp`: typing into a panel. The game keeps keyboard focus, so
+  to type a number the layer briefly takes it: on a Wayland connection of
+  its own, a 1x1 transparent layer-shell surface on the overlay layer with
+  exclusive keyboard interactivity and an empty input region (clicks still
+  reach the panels and the game). Destroying it gives the keyboard back.
 - `daemon/` (Rust): `poe-waytrade-daemon` listens on the abstract Unix socket
   `@poe-waytrade` (reachable from inside Steam's runtime container, since
   abstract sockets ignore mount namespaces; other users are rejected via
@@ -215,8 +275,9 @@ in `/usr/share/vulkan/implicit_layer.d/`), the `waytrade` launcher,
 (`systemctl --global`), so there is nothing to start by hand from the next
 login on (`systemctl --user start poe-waytrade-daemon.socket` for the current
 one). Remove with `pacman -R poe-waytrade`. The daemon follows poe.ninja's
-current softcore league; set `POE_LEAGUE` in the service
-(`systemctl --user edit poe-waytrade-daemon.service`) to pin one.
+current softcore league unless another is picked in the settings; setting
+`POE_LEAGUE` in the service (`systemctl --user edit poe-waytrade-daemon.service`)
+overrides both.
 
 ## CI and releases
 
@@ -273,7 +334,9 @@ change; `POE_WAYTRADE_DEMO_ITEM` opens the panel on start with that item text
 (as copied from the game; maps open the map check). `POE_WAYTRADE_UI_SCALE`
 scales the whole UI. `POE_WAYTRADE_SNAPSHOT=<file.ppm>` saves one of the app's own rendered frames
 (after 300 frames) and `POE_WAYTRADE_DEMO_SEARCH=1` makes a demo item search by
-itself, for checking the UI without screenshots. `POE_WAYTRADE_DEMO_PRESET=base` opens a demo item on
+itself, for checking the UI without screenshots. `POE_WAYTRADE_DEMO_EDIT=<filter index>` starts
+typing into that filter's value, as if it were clicked. `POE_WAYTRADE_DEMO_SETTINGS=<0-3>` opens the
+settings page on that tab. `POE_WAYTRADE_DEMO_PRESET=base` opens a demo item on
 the Base item preset. `POE_WAYTRADE_TEST_COPY=1`
 does a Ctrl+D two seconds in without sending keys; `tests/clipboard-kwin.sh
 [text|image]` uses it in a nested, invisible KWin to check that the
@@ -284,16 +347,19 @@ testing a new daemon next to the installed one.
 
 ## Known limitations / next steps
 
-- Hotkeys are hard-coded (Ctrl+D, Ctrl+Alt+D) and still reach the game too.
+- Hotkeys still reach the game too (it keeps the keyboard), so they should be
+  combinations PoE doesn't use. Their labels name US keys: a hotkey is a
+  physical key, wherever the layout puts its letter.
 - Mouse input under fractional scaling assumes the app renders at full
   resolution if it runs under Wine, at logical size otherwise;
   `POE_WAYTRADE_SCALE` overrides the pixel-per-logical-unit ratio.
 - No X11 input path (would be `XQueryKeymap` polling like MangoHud).
 - Only one device gets the overlay (RmlUi is a process-wide singleton).
-- HDR (10-bit/PQ) swapchains aren't colour-corrected yet; sRGB ones are.
-- Scarabs, incubators and influenced/ilvl base types aren't priced yet.
-- Trade search: no item level, influence or socket filters yet, and magic
-  items can't be searched by exact base (their name hides it among affixes).
+- HDR (10-bit/PQ) swapchains wouldn't be colour-corrected (sRGB ones are).
+  PoE1 has no HDR mode, so this only matters for PoE2.
+- Magic items' exact base is only known from advanced copy's affix names;
+  with plain Ctrl+C a magic item searches its category.
+- Trade search has no socket colour filters (APT has none either).
 
 ## License
 
@@ -301,5 +367,7 @@ poe-waytrade is free software under the GNU General Public License, version
 3 or (at your option) any later version; see [LICENSE](LICENSE).
 
 Bundled third-party code keeps its own license: `third_party/rmlui` is RmlUi 6.3 core (MIT); `third_party/stb` has
-stb_image (public domain). `assets/fonts` has Inter and
+stb_image (public domain). `protocols/wlr-layer-shell-unstable-v1.xml` is
+wlroots' layer-shell protocol (its own permissive licence, in the file).
+`assets/fonts` has Inter and
 Cinzel, both under the SIL Open Font License (licence files alongside).

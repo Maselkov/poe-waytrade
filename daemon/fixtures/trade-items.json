@@ -1,0 +1,23 @@
+{
+ "result": [
+  {
+   "id": "gem",
+   "label": "Gems",
+   "entries": [
+    {
+     "type": "Arc"
+    },
+    {
+     "type": "Arc",
+     "text": "Arc of Oscillating",
+     "disc": "alt_y"
+    },
+    {
+     "type": "Arc",
+     "text": "Arc of Surging",
+     "disc": "alt_x"
+    }
+   ]
+  }
+ ]
+}

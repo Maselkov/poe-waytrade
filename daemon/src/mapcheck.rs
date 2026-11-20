@@ -186,6 +186,20 @@ impl Decisions {
         }
         true
     }
+
+    /// One profile's marks back to the defaults (1-based); the others stay.
+    pub fn reset(&mut self, profile: usize) -> bool {
+        if !(1..=PROFILES).contains(&profile) {
+            return false;
+        }
+        let defaults = Self::defaults();
+        let keys: Vec<String> = self.mods.keys().chain(defaults.mods.keys()).cloned().collect();
+        for key in keys {
+            let default = defaults.get(&key).chars().nth(profile - 1).unwrap_or('-');
+            self.set(profile, &key, default);
+        }
+        true
+    }
 }
 
 #[cfg(test)]
@@ -271,5 +285,19 @@ mod tests {
             item::parse("Item Class: Maps\nRarity: Unique\nMaelström of Chaos\nAtoll Map\n--------\nMap Tier: 5\n")
                 .unwrap();
         assert!(!is_map_like(&unique));
+    }
+
+    #[test]
+    fn reset_one_profile() {
+        let mut d = Decisions::defaults();
+        let (key, default) = d.mods.iter().next().map(|(k, v)| (k.clone(), v.clone())).unwrap();
+        d.set(1, &key, 'g');
+        d.set(2, &key, 'g');
+        d.set(2, "some other mod", 'd');
+        assert!(d.reset(2));
+        assert_eq!(d.get(&key).chars().nth(1), default.chars().nth(1));
+        assert_eq!(d.get(&key).chars().next(), Some('g'));
+        assert_eq!(d.get("some other mod"), "---");
+        assert!(!d.reset(0) && !d.reset(4));
     }
 }

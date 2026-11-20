@@ -18,6 +18,9 @@ use std::os::fd::{AsRawFd, OwnedFd};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc;
+use std::sync::{Mutex, OnceLock};
+use std::thread;
 use std::time::{Duration, Instant};
 
 /// The page we make requests from. Any same-origin URL works; this one is
@@ -53,6 +56,29 @@ pub fn find_binary() -> Option<String> {
             .find(|p| p.is_file())
             .map(|p| p.to_string_lossy().into_owned())
     })
+}
+
+/// Spawns a command from a thread that lives as long as the daemon.
+///
+/// Chromium gets `PR_SET_PDEATHSIG` so it never outlives us, but Linux
+/// sends that signal when the *thread* that forked it exits, not the
+/// process. Requests are each handled on a short-lived thread, so a browser
+/// spawned from one would be killed as soon as that request was answered.
+fn spawn_lasting(command: Command) -> io::Result<Child> {
+    type Job = (Command, mpsc::Sender<io::Result<Child>>);
+    static SPAWNER: OnceLock<Mutex<mpsc::Sender<Job>>> = OnceLock::new();
+    let spawner = SPAWNER.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<Job>();
+        thread::spawn(move || {
+            for (mut command, reply) in rx {
+                let _ = reply.send(command.spawn());
+            }
+        });
+        Mutex::new(tx)
+    });
+    let (reply_tx, reply_rx) = mpsc::channel();
+    spawner.lock().unwrap().send((command, reply_tx)).map_err(|_| io::Error::other("spawner thread is gone"))?;
+    reply_rx.recv().map_err(|_| io::Error::other("spawner thread is gone"))?
 }
 
 fn pipe() -> io::Result<(OwnedFd, OwnedFd)> {
@@ -104,7 +130,7 @@ impl Browser {
                 Ok(())
             });
         }
-        let child = command.spawn().map_err(|e| err(binary, e))?;
+        let child = spawn_lasting(command).map_err(|e| err(binary, e))?;
         drop(cmd_read);
         drop(res_write);
 

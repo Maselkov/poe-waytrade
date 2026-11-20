@@ -12,7 +12,10 @@
 // panels. Clicks there reach us and never the game.
 #pragma once
 
+#include "hotkeys.h"
+
 #include <cstdint>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -45,11 +48,20 @@ struct wp_fractional_scale_v1;
 
 // The game sees every key too (it keeps keyboard focus), so hotkeys must be
 // combinations PoE doesn't use. That's also why there's no Esc to close.
+// (Typing into a panel takes the keyboard for a moment instead: wl_grab.h.)
+// All but CopySeen are bound in the settings (set_bindings); the defaults
+// are in the comments.
 enum class Hotkey {
     PriceCheck,        // Ctrl+D: quick look; we send Ctrl+C ourselves
     PriceCheckLocked,  // Ctrl+Alt+D: a panel that stays until dismissed
     MapCheck,          // Alt+D: the old map check key, now like Ctrl+Alt+D
-    CopySeen,          // Ctrl+C pressed by the user
+    Settings,          // Ctrl+Alt+S: the settings page
+    CopySeen,          // Ctrl+C pressed by the user (fixed)
+};
+
+struct HotkeyBinding {
+    KeyCombo combo;
+    Hotkey hotkey;
 };
 
 // Positions are in swapchain pixels.
@@ -94,9 +106,21 @@ public:
     void poll();
 
     std::vector<Hotkey> take_hotkeys() { return std::exchange(hotkeys_, {}); }
+    // The combos that fire hotkeys. A combo matches its exact modifiers, or
+    // with Shift or Super held as well if no binding has those.
+    void set_bindings(std::vector<HotkeyBinding> bindings) { bindings_ = std::move(bindings); }
+    // Recording a new hotkey: the next key pressed (with the modifiers held)
+    // is captured instead of firing anything. The game gets it too.
+    void begin_capture() { capturing_ = true, captured_.reset(); }
+    void cancel_capture() { capturing_ = false; }
+    bool capturing() const { return capturing_; }
+    std::optional<KeyCombo> take_captured() { return std::exchange(captured_, std::nullopt); }
     bool focused() const { return focused_; }
     bool ctrl_held() const;
     bool alt_held() const;
+    uint32_t mods() const;  // KeyMod bits held
+    // All of `mods` held (false for none).
+    bool mods_held(uint32_t mods) const { return mods && (this->mods() & mods) == mods; }
     uint32_t last_key() const { return last_key_; }
     bool last_key_down() const { return last_key_down_; }
     const char* status() const;
@@ -175,6 +199,9 @@ private:
     uint32_t last_key_ = 0;
     bool last_key_down_ = false;
     std::vector<Hotkey> hotkeys_;
+    std::vector<HotkeyBinding> bindings_;
+    bool capturing_ = false;
+    std::optional<KeyCombo> captured_;
 
     // Each live offer's mime types, and the best text one ("" = none yet).
     struct OfferInfo {
@@ -238,6 +265,7 @@ private:
     wp_fractional_scale_v1* fractional_scale_ = nullptr;
     std::vector<InputRect> rects_;
     bool pointer_inside_ = false;
+    int buttons_held_ = 0;  // on our subsurface
     std::vector<PointerEvent> pointer_events_;
     bool pointer_on_game_ = false;
     bool game_pointer_known_ = false;

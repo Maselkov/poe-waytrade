@@ -4,8 +4,10 @@
 #pragma once
 
 #include "daemon_client.h"
+#include "settings_page.h"
 #include "item_text.h"
 #include "uinput_kbd.h"
+#include "wl_grab.h"
 
 #include <chrono>
 #include <cstdint>
@@ -41,7 +43,7 @@ public:
     void update(WaylandInput& input, Clock::time_point now);
 
     // State for the UI. revision() changes whenever anything below does.
-    uint64_t revision() const { return revision_; }
+    uint64_t revision() const { return revision_ + settings_.revision(); }
     bool visible() const { return visible_; }
     Mode mode() const { return mode_; }
     Purpose purpose() const { return purpose_; }
@@ -53,6 +55,20 @@ public:
     const std::optional<PriceReply>& reply() const { return reply_; }
     const std::string& status() const { return status_; }  // error/progress text
     bool searching() const { return daemon_.busy(); }
+    // The daemon's answer to the start-up ping: "" (none yet), ready,
+    // loading (prices still coming), or error with daemon_error().
+    const std::string& daemon_state() const { return daemon_state_; }
+    const std::string& daemon_error() const { return daemon_error_; }
+
+    // The settings page (its own hotkey, or the gear on the panel).
+    SettingsPage& settings() { return settings_; }
+    const SettingsPage& settings() const { return settings_; }
+    void open_settings();
+    // The quick look hotkey's modifiers: holding them keeps a quick panel
+    // open (Ctrl, by default).
+    uint32_t hold_mods() const { return settings_.values().hotkeys[0].mods & ~(kModShift | kModSuper); }
+    // Whether typing into panels works here (layer-shell; connects once).
+    bool typing_supported() { return grab_.supported(); }
 
     // Actions from the UI.
     void close() { set_visible(false); }
@@ -66,11 +82,25 @@ public:
     void set_bounds(int index, double min, double max);
     void set_base_only(bool base_only);
     void cycle_corrupted();  // any -> no -> yes
+    void cycle_status();     // instant -> available -> any
     // Switch between the normal filters and APT's "Base item" preset (the
     // item as a crafting base); fetches that preset's filters.
     void toggle_preset();
     void search();
     bool stale() const { return stale_; }
+    // Typing a filter's minimum and maximum. Clicking its value starts (or
+    // moves) the edit and takes the keyboard from the game (wl_grab.h);
+    // Tab switches between minimum and maximum, Enter applies, Esc or a
+    // click in the game cancels. Without layer-shell, status() says so.
+    void edit_bounds(int index);
+    struct BoundsEdit {
+        int index = -1;
+        int field = 0;         // 0: minimum, 1: maximum
+        std::string min, max;  // as typed
+        bool fresh = true;     // the next digit replaces the field's text
+    };
+    const std::optional<BoundsEdit>& bounds_edit() const { return edit_; }
+    bool keyboard_taken() const { return grab_.focused(); }
     void open_trade();
     // Map check: cycle the mod at this index in reply().map_mods through
     // unmarked -> deadly -> warning -> good (or backward) in the active
@@ -88,7 +118,7 @@ private:
     void begin_wait(WaylandInput& input, Mode mode, Purpose purpose, Clock::time_point deadline);
     void wait_for_clipboard(WaylandInput& input, Clock::time_point now);
     void open();
-    void apply_closing_rules(WaylandInput& input, Clock::time_point now);
+    void apply_closing_rules(WaylandInput& input, int game_clicks, Clock::time_point now);
     void set_visible(bool v);
     void changed() { revision_++; }
 
@@ -111,7 +141,9 @@ private:
     Clock::time_point deadline_;
 
     DaemonClient daemon_;
-    DaemonClient wake_;    // reply ignored
+    DaemonClient wake_;    // the start-up ping; see daemon_state()
+    std::string daemon_state_, daemon_error_;
+    Clock::time_point wake_at_;
     DaemonClient opener_;  // "open on trade site"; reply ignored
     // One-off saves (map marks, profile) go out one at a time, in order.
     DaemonClient sender_;
@@ -149,4 +181,11 @@ private:
     std::optional<Clock::time_point> left_panel_at_;
     std::optional<ParsedItem> item_;
     std::string status_;
+
+    SettingsPage settings_;
+    KeyboardGrab grab_;
+    bool grab_focused_ = false;  // as last shown
+    std::optional<BoundsEdit> edit_;
+    void handle_edit_keys();
+    void end_edit(bool apply);
 };

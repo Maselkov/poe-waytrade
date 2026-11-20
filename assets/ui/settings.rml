@@ -1,0 +1,114 @@
+<rml>
+<head>
+    <title>Settings</title>
+    <link type="text/rcss" href="theme.rcss"/>
+</head>
+<body id="settings" data-model="ui">
+<div id="panel">
+    <handle id="settings-head" move_target="#document">
+        <div id="close" data-event-click="settings_close">×</div>
+        <div class="title currency">Waytrade</div>
+        <div class="subtitle">Settings · {{s_version}}</div>
+        <div class="tabs">
+            <div data-for="t, i : s_tabs" data-attr-class="s_tab == i ? 'tab on' : 'tab'" data-event-click="settings_tab(i)">{{t}}</div>
+        </div>
+    </handle>
+
+    <div class="settings-body" data-if="s_tab == 0">
+        <div class="group-label">Panels</div>
+        <div data-for="h : s_hotkeys">
+            <div data-attr-class="h.index > 0 ? 'setting-row ruled' : 'setting-row'">
+                <div class="setting-text">
+                    <div class="setting-name">{{h.label}}</div>
+                    <div class="setting-desc">{{h.desc}}</div>
+                </div>
+                <div class="key-off" data-if="h.can_clear" data-event-click="hotkey_clear(h.index)">Turn off</div>
+                <div data-attr-class="'key ' + h.state" data-event-click="hotkey_capture(h.index)">{{h.key}}</div>
+            </div>
+            <div class="key-warning" data-if="s_warning == h.index">
+                <div class="key-warning-title">{{s_warning_title}}</div>
+                <div class="key-warning-text">{{s_warning_text}}</div>
+                <div class="button-row">
+                    <div class="button primary" data-event-click="warning_retry">Press again</div>
+                    <div class="button warn" data-event-click="warning_accept">Use {{s_warning_key}} anyway</div>
+                    <div class="button" data-event-click="warning_keep">Keep {{h.old}}</div>
+                </div>
+            </div>
+        </div>
+        <div class="setting-foot">The game sees these keys too. A key another action uses swaps the two.</div>
+    </div>
+
+    <div class="settings-body" data-if="s_tab == 1">
+        <div class="group-label">League</div>
+        <div class="stepper wide" data-if="s_league_pinned == ''">
+            <div class="step" data-event-click="league_step(-1)">‹</div>
+            <div class="step-value">{{s_league}}</div>
+            <div class="step" data-event-click="league_step(1)">›</div>
+        </div>
+        <div class="setting-foot" data-if="s_league_pinned == ''">"Current" follows poe.ninja into each new league.</div>
+        <div class="step-value fixed" data-if="s_league_pinned != ''">{{s_league_pinned}}</div>
+        <div class="setting-foot" data-if="s_league_pinned != ''">Set by POE_LEAGUE, which overrides this.</div>
+
+        <div class="group-label spaced">Trade searches count</div>
+        <div class="button-row">
+            <div data-attr-class="s_status == 'instant' ? 'button on' : 'button'" data-event-click="settings_status('instant')">Instant buyout</div>
+            <div data-attr-class="s_status == 'available' ? 'button on' : 'button'" data-event-click="settings_status('available')">+ In person</div>
+            <div data-attr-class="s_status == 'any' ? 'button on' : 'button'" data-event-click="settings_status('any')">Any seller</div>
+        </div>
+
+        <div class="group-label spaced">Filters</div>
+        <div class="setting-row">
+            <div class="setting-text">
+                <div class="setting-name">Default minimum</div>
+                <div class="setting-desc">How far below your roll a ticked filter starts</div>
+            </div>
+            <div class="stepper">
+                <div class="step" data-event-click="min_step(5)">−</div>
+                <div class="step-value">{{s_min}}</div>
+                <div class="step" data-event-click="min_step(-5)">+</div>
+            </div>
+        </div>
+        <div class="setting-row ruled">
+            <div class="setting-text">
+                <div class="setting-name">Panel size</div>
+                <div class="setting-desc" data-if="!s_scale_env">On top of the display's scale</div>
+                <div class="setting-desc" data-if="s_scale_env">Set by POE_WAYTRADE_UI_SCALE</div>
+            </div>
+            <div class="stepper" data-if="!s_scale_env">
+                <div class="step" data-event-click="scale_step(-1)">−</div>
+                <div class="step-value">{{s_scale}}</div>
+                <div class="step" data-event-click="scale_step(1)">+</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-body" data-if="s_tab == 2">
+        <div class="group-label">Active profile</div>
+        <div class="button-row">
+            <div data-for="p, i : s_profiles" data-attr-class="s_profile == i + 1 ? 'button on' : 'button'" data-event-click="settings_profile(i + 1)">{{p}}</div>
+        </div>
+        <div class="setting-foot">Each profile keeps its own marks; switch per build. The map check panel shows the same profile.</div>
+        <div class="group-label spaced">Marks</div>
+        <div class="setting-row">
+            <div class="setting-text">
+                <div class="setting-name">Reset this profile</div>
+                <div class="setting-desc">Back to the default deadly and warning mods</div>
+            </div>
+            <div data-attr-class="s_reset_armed ? 'button warn' : 'button'" data-event-click="map_reset">{{s_reset_armed ? 'Click again to reset' : 'Reset…'}}</div>
+        </div>
+    </div>
+
+    <div class="settings-body" data-if="s_tab == 3">
+        <div data-for="a : s_about" class="about-row">
+            <div class="about-label">{{a.label}}</div>
+            <div class="about-value">{{a.value}}</div>
+        </div>
+    </div>
+
+    <div class="settings-foot">
+        <div data-attr-class="s_note_error ? 'note error' : 'note'">{{s_note}}</div>
+        <div class="link" data-if="s_tab &lt; 2" data-event-click="settings_reset">Reset to defaults</div>
+    </div>
+</div>
+</body>
+</rml>
