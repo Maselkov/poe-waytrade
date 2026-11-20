@@ -570,8 +570,15 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 #settings .button.primary { background-color: $accent; border-color: $accent; color: $text-strong; }
 #settings .button.warn { border-color: #6a5426; color: $warn; }
 
+/* The league picker: two to a row, so poe.ninja's softcore / hardcore pairs
+   line up. */
+.league-grid { display: flex; flex-wrap: wrap; }
+.league-cell { width: 50%; margin-bottom: 6dp; }
+#settings .league-cell .button { overflow: hidden; }
+.league-now { font-size: 10dp; color: $text-muted; margin-top: 1dp; }
+#settings .button.on .league-now { color: $accent-text; }
+
 .stepper { display: flex; align-items: center; flex-shrink: 0; }
-.stepper.wide { width: 100%; }
 .step {
     width: 26dp;
     height: 26dp;
@@ -593,7 +600,6 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
     color: $text-strong;
     font-weight: 500;
 }
-.stepper.wide .step-value { flex: 1 1 0; }
 .step-value.fixed { width: auto; margin: 0; }
 
 .about-row { display: flex; padding: 5dp 0; border-bottom: 1dp #1a1d23; }

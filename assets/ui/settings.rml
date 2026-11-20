@@ -52,12 +52,15 @@
 
     <div class="settings-body" data-if="s_tab == 1">
         <div class="group-label">League</div>
-        <div class="stepper wide" data-if="s_league_pinned == ''">
-            <div class="step" data-event-click="league_step(-1)">‹</div>
-            <div class="step-value">{{s_league}}</div>
-            <div class="step" data-event-click="league_step(1)">›</div>
+        <div class="league-grid" data-if="s_league_pinned == ''">
+            <div class="league-cell" data-for="l : s_leagues">
+                <div data-attr-class="l.on ? 'button on' : 'button'" data-event-click="league_pick(l.value)">
+                    <div>{{l.label}}</div>
+                    <div class="league-now" data-if="l.now != ''">{{l.now}}</div>
+                </div>
+            </div>
         </div>
-        <div class="setting-foot" data-if="s_league_pinned == ''">"Current" follows poe.ninja into each new league.</div>
+        <div class="setting-foot" data-if="s_league_pinned == ''">"Current" and "Current hardcore" follow poe.ninja into each new league.</div>
         <div class="step-value fixed" data-if="s_league_pinned != ''">{{s_league_pinned}}</div>
         <div class="setting-foot" data-if="s_league_pinned != ''">Set by POE_LEAGUE, which overrides this.</div>
 
