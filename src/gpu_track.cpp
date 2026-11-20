@@ -290,6 +290,7 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
     int count = 0;
     size_t used = 0;
     int plate_h = 0;
+    float spread = 0;  // the furthest a prediction ran from its measurement
     for (const GpuLabel& l : labels) {
         if (count == (int)kMaxLabels) break;
         if (!l.plate) continue;
@@ -300,8 +301,13 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
             used + n2 + n4 > kMaxLabels * kTemplateFloats)
             continue;
         Slot& slot = slots[count++];
-        slot.center[0] = slot.laid[0] = l.plate_x;
-        slot.center[1] = slot.laid[1] = l.plate_y;
+        // Search between where it was measured and where it's predicted:
+        // after a sudden turn it's somewhere in between, not ahead.
+        slot.laid[0] = l.plate_x;
+        slot.laid[1] = l.plate_y;
+        slot.center[0] = (l.plate_x + l.seen_x) / 2;
+        slot.center[1] = (l.plate_y + l.seen_y) / 2;
+        spread = std::max({spread, std::abs(l.plate_x - l.seen_x) / 2, std::abs(l.plate_y - l.seen_y) / 2});
         memcpy(slot.rect, l.rect.data(), sizeof(slot.rect));
         memcpy(templ + used, t2.v.data(), n2 * sizeof(float));
         slot.tw2 = t2.w;
@@ -319,9 +325,9 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
     }
     if (count == 0) return VK_NULL_HANDLE;
     img.count = count;
-    // Room for the CPU's guess to be off (a sudden turn): half a plate's
-    // height each way, at least 24 pixels; a multiple of the coarse step.
-    int radius = (std::max(24, plate_h / 2) + 3) & ~3;
+    // Half a plate's height each way (at least 24 pixels) beyond the span
+    // the prediction covers, up to 96; a multiple of the coarse step.
+    int radius = std::min(96, (std::max(24, plate_h / 2) + (int)std::ceil(spread) + 3) & ~3);
     *header = {count, is_srgb(s->format), (int32_t)s->extent.width, (int32_t)s->extent.height, radius, {}};
     uint32_t coarse = (uint32_t)(radius / 2 + 1) * (uint32_t)(radius / 2 + 1);
 

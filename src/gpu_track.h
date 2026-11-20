@@ -23,6 +23,7 @@ class RmlRenderer;
 // the CPU predicts it now), its box, and the plate to look for.
 struct GpuLabel {
     float plate_x = 0, plate_y = 0;
+    float seen_x = 0, seen_y = 0;  // its last measured place (no prediction)
     std::array<float, 4> rect{};  // x0, y0, x1, y1 (swapchain pixels)
     std::shared_ptr<const ScreenScan::Plate> plate;
 };

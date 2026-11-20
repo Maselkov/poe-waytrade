@@ -78,6 +78,9 @@ public:
         // Its plate, for the GPU to find it in the frame (gpu_track.h): the
         // top-left the label was placed for, and the plate's looks.
         float plate_x = 0, plate_y = 0;
+        // Where it last was in a copy, before predicting on: after a sharp
+        // turn it's between here and plate_x/y.
+        float seen_x = 0, seen_y = 0;
         std::shared_ptr<const Plate> plate;
     };
     std::vector<Label> labels() const;

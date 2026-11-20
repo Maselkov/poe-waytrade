@@ -629,6 +629,8 @@ std::vector<ScreenScan::Label> ScreenScan::labels() const {
         float dt = t.moving ? std::clamp(std::chrono::duration<float>(now_ - t.sampled).count(), 0.0f, kMaxPredict) : 0;
         l.plate_x = t.x + t.vx * dt;
         l.plate_y = t.y + t.vy * dt;
+        l.seen_x = t.x;
+        l.seen_y = t.y;
         l.plate = t.plate;
         l.x = l.plate_x + t.w / 2;
         l.y = l.plate_y;

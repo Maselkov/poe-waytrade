@@ -31,15 +31,15 @@ layout(std430, set = 0, binding = 1) readonly buffer Slots {
     int count;
     int srgb;  // the image is sRGB: samples come back linear
     int width, height;
-    int radius;  // full-size pixels to search around center (a multiple of 4)
+    int radius;  // full-size pixels to search around center (a multiple of 4, <= 96)
     int pad0, pad1, pad2;
     Slot slots[];
 };
 layout(std430, set = 0, binding = 2) readonly buffer Templates { float templ[]; };
 // Per slot: x, y (full-size pixels to move the label by), score, found (1/0).
 layout(std430, set = 0, binding = 3) writeonly buffer Results { vec4 result[]; };
-// Per slot: the best of stage 0, then of stage 1, as score (high bits) and
-// position (low 10 bits): atomicMax keeps the best. Zeroed by stage 2.
+// Per slot: the best of stage 0, then of stage 1, as score (high 20 bits)
+// and position (low 12 bits): atomicMax keeps the best. Zeroed by stage 2.
 layout(std430, set = 0, binding = 4) coherent buffer Best { uint best[]; };
 
 shared float s_sum[64], s_sq[64], s_dot[64];
@@ -54,11 +54,11 @@ float grey(vec2 p) {
 }
 
 uint pack_best(float score, int index) {
-    uint q = uint(clamp((score + 1.0) * 0.5, 0.0, 1.0) * 4194303.0);  // 22 bits
-    return (q << 10) | uint(index);
+    uint q = uint(clamp((score + 1.0) * 0.5, 0.0, 1.0) * 1048575.0);  // 20 bits
+    return (q << 12) | uint(index);
 }
-float best_score(uint b) { return float(b >> 10) / 4194303.0 * 2.0 - 1.0; }
-int best_index(uint b) { return int(b & 1023u); }
+float best_score(uint b) { return float(b >> 12) / 1048575.0 * 2.0 - 1.0; }
+int best_index(uint b) { return int(b & 4095u); }
 
 // This workgroup's NCC of a template (step: its pixel in frame pixels) at
 // `at`; every invocation gets the result.
