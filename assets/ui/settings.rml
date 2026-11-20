@@ -60,6 +60,16 @@
                 <div data-attr-class="s_auto_watch ? 'button' : 'button on'" data-event-click="auto_watch(0)">Off</div>
             </div>
         </div>
+        <div class="setting-row ruled">
+            <div class="setting-text">
+                <div class="setting-name">Price tags follow by</div>
+                <div class="setting-desc">GPU: found in each frame as it's drawn. CPU: predicted, a frame or two behind</div>
+            </div>
+            <div class="button-row toggle">
+                <div data-attr-class="s_gpu_tracking ? 'button on' : 'button'" data-event-click="gpu_tracking(1)">GPU</div>
+                <div data-attr-class="s_gpu_tracking ? 'button' : 'button on'" data-event-click="gpu_tracking(0)">CPU</div>
+            </div>
+        </div>
 
         <div class="group-label spaced">Cursor</div>
         <div class="setting-row">

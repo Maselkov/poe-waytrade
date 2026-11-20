@@ -293,6 +293,7 @@ struct Model {
     bool s_stash_scroll = true;
     bool s_desktop_cursor = false;
     bool s_auto_watch = true;
+    bool s_gpu_tracking = true;
     bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
     int s_profile = 1;
     bool s_reset_armed = false;
@@ -383,6 +384,10 @@ struct OverlayUi::Impl {
     System system;
     Files files;
     Rml::Context* context = nullptr;
+    // The display labels have a context of their own, drawn on its own, so
+    // the GPU's tracking can move them (and only them).
+    Rml::Context* scan_context = nullptr;
+    RmlRenderer* renderer = nullptr;
     std::map<std::string, Rml::ElementDocument*> docs;
     Model model;
     Rml::DataModelHandle handle;
@@ -493,6 +498,7 @@ bool OverlayUi::ok() const { return impl_->ok; }
 
 bool OverlayUi::Impl::init(RmlRenderer* renderer) {
     if (const char* s = getenv("POE_WAYTRADE_UI_SCALE")) ui_scale = std::max(0.25f, (float)atof(s)), ui_scale_env = true;
+    this->renderer = renderer;
     Rml::SetRenderInterface(renderer);
     Rml::SetSystemInterface(&system);
     Rml::SetFileInterface(&files);
@@ -521,7 +527,8 @@ bool OverlayUi::Impl::init(RmlRenderer* renderer) {
             icons_put("gear", std::string((const char*)embedded_files[i].data, embedded_files[i].size));
 
     context = Rml::CreateContext("overlay", Rml::Vector2i(1920, 1080));
-    if (!context) return false;
+    scan_context = Rml::CreateContext("labels", Rml::Vector2i(1920, 1080));
+    if (!context || !scan_context) return false;
     bind_model();
     load_documents();
     return !docs.empty();
@@ -709,6 +716,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_stash_scroll", &model.s_stash_scroll);
     c.Bind("s_desktop_cursor", &model.s_desktop_cursor);
     c.Bind("s_auto_watch", &model.s_auto_watch);
+    c.Bind("s_gpu_tracking", &model.s_gpu_tracking);
     c.Bind("s_scaled", &model.s_scaled);
     c.Bind("s_profile", &model.s_profile);
     c.Bind("s_reset_armed", &model.s_reset_armed);
@@ -809,6 +817,7 @@ void OverlayUi::Impl::bind_model() {
     settings_event("stash_scroll", [arg](SettingsPage& s, Args a) { s.set_stash_scroll(arg(a) != 0); });
     settings_event("desktop_cursor", [arg](SettingsPage& s, Args a) { s.set_desktop_cursor(arg(a) != 0); });
     settings_event("auto_watch", [arg](SettingsPage& s, Args a) { s.set_auto_watch(arg(a) != 0); });
+    settings_event("gpu_tracking", [arg](SettingsPage& s, Args a) { s.set_gpu_tracking(arg(a) != 0); });
     settings_event("league_pick", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_league(a[0].Get<Rml::String>());
     });
@@ -830,7 +839,8 @@ void OverlayUi::Impl::load_documents() {
     Rml::Factory::ClearStyleSheetCache();
     Rml::Factory::ClearTemplateCache();
     for (const char* path : kDocuments) {
-        if (auto* doc = context->LoadDocument(path))
+        Rml::Context* into = path == kScanDoc ? scan_context : context;
+        if (auto* doc = into->LoadDocument(path))
             docs[path] = doc;
         else
             poe_log("ui: couldn't load %s", path);
@@ -860,6 +870,8 @@ void OverlayUi::update(PriceCheck& pc, ScreenScan& scan, WaylandInput* input, Vk
     d.context->SetDimensions(Rml::Vector2i((int)extent.width, (int)extent.height));
     if (!d.ui_scale_env) d.ui_scale = (float)pc.settings().values().ui_scale;
     d.context->SetDensityIndependentPixelRatio((input ? (float)input->scale() : 1.0f) * d.ui_scale);
+    d.scan_context->SetDimensions(Rml::Vector2i((int)extent.width, (int)extent.height));
+    d.scan_context->SetDensityIndependentPixelRatio(d.context->GetDensityIndependentPixelRatio());
     // Wine draws its cursor for scale 1 over our surface, so at any other
     // scale (fractional or not) it shows at the wrong size there.
     bool scaled = input && std::abs(input->scale() - 1.0) > 0.01;
@@ -903,6 +915,7 @@ void OverlayUi::update(PriceCheck& pc, ScreenScan& scan, WaylandInput* input, Vk
     }
     d.update_toast(pc, extent);
     d.update_scan_labels(scan, extent);
+    d.scan_context->Update();
     if (auto it = d.docs.find(kDebugDoc); it != d.docs.end()) {
         if (d.debug && !it->second->IsVisible()) it->second->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
     }
@@ -917,8 +930,26 @@ void OverlayUi::update(PriceCheck& pc, ScreenScan& scan, WaylandInput* input, Vk
     if (input) input->set_cursor(pc.settings().values().desktop_cursor, d.system.cursor);
 }
 
-void OverlayUi::render() {
-    if (impl_->ok) impl_->context->Render();
+void OverlayUi::render(bool gpu_labels) {
+    if (!impl_->ok) return;
+    impl_->context->Render();
+    impl_->renderer->set_label_mode(gpu_labels);
+    impl_->scan_context->Render();
+    impl_->renderer->set_label_mode(false);
+}
+
+std::vector<std::array<float, 4>> OverlayUi::scan_label_rects() const {
+    std::vector<std::array<float, 4>> out;
+    auto it = impl_->docs.find(kScanDoc);
+    if (!impl_->ok || it == impl_->docs.end() || !it->second->IsVisible()) return out;
+    Rml::ElementDocument* doc = it->second;
+    for (int i = 0; i < doc->GetNumChildren(); i++) {
+        Rml::Element* e = doc->GetChild(i);
+        Rml::Vector2f pos = e->GetAbsoluteOffset(Rml::BoxArea::Border);
+        Rml::Vector2f size = e->GetBox().GetSize(Rml::BoxArea::Border);
+        out.push_back({pos.x, pos.y, pos.x + size.x, pos.y + size.y});
+    }
+    return out;
 }
 
 std::vector<InputRect> OverlayUi::input_rects() const {
@@ -1286,6 +1317,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_stash_scroll = v.stash_scroll;
     m.s_desktop_cursor = v.desktop_cursor;
     m.s_auto_watch = v.auto_watch;
+    m.s_gpu_tracking = v.gpu_tracking;
     m.s_profile = s.map_profile();
     m.s_reset_armed = s.reset_armed();
 

@@ -627,8 +627,11 @@ std::vector<ScreenScan::Label> ScreenScan::labels() const {
         Label l;
         // Where it is by now: its last place, moved on at its speed.
         float dt = t.moving ? std::clamp(std::chrono::duration<float>(now_ - t.sampled).count(), 0.0f, kMaxPredict) : 0;
-        l.x = t.x + t.vx * dt + t.w / 2;
-        l.y = t.y + t.vy * dt;
+        l.plate_x = t.x + t.vx * dt;
+        l.plate_y = t.y + t.vy * dt;
+        l.plate = t.plate;
+        l.x = l.plate_x + t.w / 2;
+        l.y = l.plate_y;
         if (!t.replied) {
             l.amount = "…";
             l.pending = true;

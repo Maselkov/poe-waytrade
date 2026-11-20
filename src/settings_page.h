@@ -35,6 +35,7 @@ public:
         bool stash_scroll = true;     // Ctrl + wheel switches stash tabs
         bool desktop_cursor = false;  // over the panels; else the game's
         bool auto_watch = true;       // price displays on entering a vault
+        bool gpu_tracking = true;     // display labels placed by the GPU (gpu_track.h)
         static std::array<KeyCombo, kActions> defaults();
     };
 
@@ -93,6 +94,7 @@ public:
     void set_stash_scroll(bool on);
     void set_desktop_cursor(bool on);
     void set_auto_watch(bool on);
+    void set_gpu_tracking(bool on);
 
     // Price check
     void set_league(const std::string& league);

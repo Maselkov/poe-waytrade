@@ -174,6 +174,12 @@ tooltip as you move. The most valuable one in sight gets a gold border.
   first use to `~/.cache/poe-waytrade/ocrs/`. Set `POE_WAYTRADE_OCR_MODELS`
   to a folder that has `text-detection.onnx` and `text-recognition.onnx` to
   use your own.
+- Price tags follow their tooltips exactly: each frame, before it's shown,
+  the GPU finds every tooltip in it (a compute shader, about 0.15 ms of GPU
+  time) and the tag is drawn there. Setting "Price tags follow by" to CPU
+  (Hotkeys tab) uses the older tracking instead: no GPU work, but tags trail
+  a frame or two and overshoot on sudden turns. Without GPU support for it,
+  CPU tracking is used anyway.
 - The vault list, the automatic start and the log's path are under
   `auto_watch_areas`, `auto_watch` and `client_log` in
   `~/.config/poe-waytrade/settings.json`. Automatic start is also on the

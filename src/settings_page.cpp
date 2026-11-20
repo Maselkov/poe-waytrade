@@ -124,6 +124,7 @@ void SettingsPage::apply_reply(const PriceReply& reply) {
         else if (key == "stash_scroll") v.stash_scroll = value != "off";
         else if (key == "cursor") v.desktop_cursor = value == "desktop";
         else if (key == "auto_watch") v.auto_watch = value != "off";
+        else if (key == "tracking") v.gpu_tracking = value != "cpu";
         for (int i = 0; i < kActions; i++)
             if (key == kHotkeyKeys[i]) v.hotkeys[i] = parse_combo(value);
     }
@@ -262,6 +263,13 @@ void SettingsPage::set_auto_watch(bool on) {
     if (on == values_.auto_watch) return;
     values_.auto_watch = on;
     set("auto_watch", on ? "on" : "off");
+    set_note("");
+}
+
+void SettingsPage::set_gpu_tracking(bool on) {
+    if (on == values_.gpu_tracking) return;
+    values_.gpu_tracking = on;
+    set("tracking", on ? "gpu" : "cpu");
     set_note("");
 }
 

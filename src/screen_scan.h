@@ -64,6 +64,7 @@ public:
     // The frame size (swapchain pixels), for clipping regions.
     void set_extent(int width, int height) { extent_w_ = width, extent_h_ = height; }
 
+    struct Plate;
     // For the UI: a label above each display in sight.
     struct Label {
         float x = 0, y = 0;  // the plate's top centre (swapchain pixels), predicted for now
@@ -74,6 +75,10 @@ public:
         std::string note;    // why there's no price
         bool best = false;   // the most valuable one in sight
         bool pending = false;
+        // Its plate, for the GPU to find it in the frame (gpu_track.h): the
+        // top-left the label was placed for, and the plate's looks.
+        float plate_x = 0, plate_y = 0;
+        std::shared_ptr<const Plate> plate;
     };
     std::vector<Label> labels() const;
     uint64_t revision() const { return revision_; }

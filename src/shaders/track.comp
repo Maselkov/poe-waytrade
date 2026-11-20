@@ -1,0 +1,130 @@
+#version 450
+// Finds each display label's title plate in the frame being drawn, so the
+// label can be drawn on it with no delay (gpu_track.h). Normalized
+// cross-correlation of the plate (grey, as the CPU first saw it) around
+// where the CPU expects it, in three dispatches:
+//   stage 0: every 4 pixels within the radius, the quarter-size plate;
+//   stage 1: every pixel within 3 of the best, the half-size plate;
+//   stage 2: the best, as the label's move.
+// Stages 0 and 1 run a workgroup per (label, position), so the whole GPU
+// shares the work; each keeps its best with an atomic max.
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push { int stage; } pc;
+
+// The swapchain image, sampled bilinearly: a sample on the corner of four
+// pixels is their average, which is how the templates were shrunk.
+layout(set = 0, binding = 0) uniform sampler2D frame;
+
+struct Slot {
+    vec2 center;  // where the CPU expects the plate's top-left (full-size pixels)
+    vec2 laid;    // where the label was laid out for
+    vec4 rect;    // the label's box (for rml.vert): x0, y0, x1, y1
+    int tw2, th2, offset2;  // half-size template: size, start in templ
+    float norm2;            // its (zero-mean) length
+    int tw4, th4, offset4;  // quarter-size template
+    float norm4;
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer Slots {
+    int count;
+    int srgb;  // the image is sRGB: samples come back linear
+    int width, height;
+    int radius;  // full-size pixels to search around center (a multiple of 4)
+    int pad0, pad1, pad2;
+    Slot slots[];
+};
+layout(std430, set = 0, binding = 2) readonly buffer Templates { float templ[]; };
+// Per slot: x, y (full-size pixels to move the label by), score, found (1/0).
+layout(std430, set = 0, binding = 3) writeonly buffer Results { vec4 result[]; };
+// Per slot: the best of stage 0, then of stage 1, as score (high bits) and
+// position (low 10 bits): atomicMax keeps the best. Zeroed by stage 2.
+layout(std430, set = 0, binding = 4) coherent buffer Best { uint best[]; };
+
+shared float s_sum[64], s_sq[64], s_dot[64];
+
+float grey(vec2 p) {
+    vec3 c = texture(frame, p / vec2(width, height)).rgb;
+    // Back to the encoded values the templates have. A square root is close
+    // enough for matching (it's blind to a gentle curve) and far cheaper
+    // than sRGB's pow.
+    if (srgb != 0) c = sqrt(c);
+    return dot(c, vec3(0.299, 0.587, 0.114)) * 255.0;
+}
+
+uint pack_best(float score, int index) {
+    uint q = uint(clamp((score + 1.0) * 0.5, 0.0, 1.0) * 4194303.0);  // 22 bits
+    return (q << 10) | uint(index);
+}
+float best_score(uint b) { return float(b >> 10) / 4194303.0 * 2.0 - 1.0; }
+int best_index(uint b) { return int(b & 1023u); }
+
+// This workgroup's NCC of a template (step: its pixel in frame pixels) at
+// `at`; every invocation gets the result.
+float ncc(int offset, int tw, int th, float norm, int step_, vec2 at) {
+    uint lid = gl_LocalInvocationID.x;
+    float sum = 0.0, sq = 0.0, d = 0.0;
+    for (int i = int(lid); i < tw * th; i += 64) {
+        vec2 p = at + vec2(i % tw, i / tw) * float(step_);
+        float v;
+        if (step_ == 2) {
+            v = grey(p + 1.0);
+        } else {  // 4x4: four 2x2 samples
+            v = 0.25 * (grey(p + vec2(1, 1)) + grey(p + vec2(3, 1)) + grey(p + vec2(1, 3)) + grey(p + vec2(3, 3)));
+        }
+        sum += v;
+        sq += v * v;
+        d += v * templ[offset + i];
+    }
+    s_sum[lid] = sum;
+    s_sq[lid] = sq;
+    s_dot[lid] = d;
+    for (uint s = 32; s > 0; s >>= 1) {
+        barrier();
+        if (lid < s) {
+            s_sum[lid] += s_sum[lid + s];
+            s_sq[lid] += s_sq[lid + s];
+            s_dot[lid] += s_dot[lid + s];
+        }
+    }
+    barrier();
+    float n = float(tw * th);
+    float var = s_sq[0] - s_sum[0] * s_sum[0] / n;
+    if (var < 1.0 || norm < 1e-3) return -1.0;
+    return s_dot[0] / (sqrt(var) * norm);
+}
+
+void main() {
+    uint slot = gl_WorkGroupID.x;
+    int pos = int(gl_WorkGroupID.y);
+    if (int(slot) >= count) return;
+    Slot s = slots[slot];
+    vec2 base = floor(s.center);
+    int side0 = radius / 2 + 1;  // stage 0 positions per row: -radius..radius step 4
+
+    if (pc.stage == 0) {
+        if (pos >= side0 * side0) return;
+        vec2 at = base + vec2(pos % side0, pos / side0) * 4.0 - float(radius);
+        float score = ncc(s.offset4, s.tw4, s.th4, s.norm4, 4, at);
+        if (gl_LocalInvocationID.x == 0) atomicMax(best[slot * 2], pack_best(score, pos));
+    } else if (pc.stage == 1) {
+        if (pos >= 49) return;
+        int coarse = best_index(best[slot * 2]);
+        vec2 found = base + vec2(coarse % side0, coarse / side0) * 4.0 - float(radius);
+        vec2 at = found + vec2(pos % 7 - 3, pos / 7 - 3);
+        float score = ncc(s.offset2, s.tw2, s.th2, s.norm2, 2, at);
+        if (gl_LocalInvocationID.x == 0) atomicMax(best[slot * 2 + 1], pack_best(score, pos));
+    } else {
+        if (gl_LocalInvocationID.x != 0 || pos != 0) return;
+        uint b0 = best[slot * 2], b1 = best[slot * 2 + 1];
+        int coarse = best_index(b0);
+        vec2 found = base + vec2(coarse % side0, coarse / side0) * 4.0 - float(radius);
+        int fine = best_index(b1);
+        vec2 at = found + vec2(fine % 7 - 3, fine / 7 - 3);
+        float score = best_score(b1);
+        result[slot] = vec4(at - s.laid, score, b1 != 0u && score >= 0.6 ? 1.0 : 0.0);
+        best[slot * 2] = 0u;
+        best[slot * 2 + 1] = 0u;
+    }
+}

@@ -21,7 +21,17 @@ public:
     // released a few frames ago, which the GPU can no longer be using.
     void begin_frame();
     // Point drawing at a command buffer inside an open render pass.
-    void begin_render(VkCommandBuffer cmd, VkExtent2D extent);
+    // `labels`: the display labels' tracking data for this frame
+    // (gpu_track.h), or null for none.
+    void begin_render(VkCommandBuffer cmd, VkExtent2D extent, VkDescriptorSet labels = VK_NULL_HANDLE);
+    // What's drawn next is the display labels: rml.vert moves each by where
+    // the GPU found its tooltip this frame.
+    void set_label_mode(bool on) { label_mode_ = on; }
+
+    // The tracking data's descriptor set (rml.vert's set 1: the slots and
+    // results buffers), for gpu_track.cpp.
+    VkDescriptorSet create_label_set(VkBuffer slots, VkBuffer results);
+    void free_label_set(VkDescriptorSet set);
 
     Rml::CompiledGeometryHandle CompileGeometry(Rml::Span<const Rml::Vertex> vertices,
                                                 Rml::Span<const int> indices) override;
@@ -70,6 +80,13 @@ private:
     VkSampler sampler_ = VK_NULL_HANDLE;
     VkDescriptorSetLayout set_layout_ = VK_NULL_HANDLE;
     VkDescriptorPool pool_ = VK_NULL_HANDLE;
+    // Set 1: the display labels' tracking data, and a stand-in (no labels)
+    // for when there's none.
+    VkDescriptorSetLayout label_layout_ = VK_NULL_HANDLE;
+    VkDescriptorPool label_pool_ = VK_NULL_HANDLE;
+    Buffer no_labels_;
+    VkDescriptorSet no_labels_set_ = VK_NULL_HANDLE;
+    bool label_mode_ = false;
     VkPipelineLayout layout_ = VK_NULL_HANDLE;
     VkPipeline pipeline_ = VK_NULL_HANDLE;
     VkCommandPool upload_pool_ = VK_NULL_HANDLE;

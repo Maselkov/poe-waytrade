@@ -1,4 +1,5 @@
 // Draws the overlay UI into the app's swapchain images right before present.
+#include "gpu_track.h"
 #include "layer.h"
 #include "price_check.h"
 #include "rml_renderer.h"
@@ -30,6 +31,8 @@ struct OverlaySwapchain {
     bool ready = false;
     bool unsupported = false;
     bool can_copy = false;  // created with TRANSFER_SRC (layer.cpp)
+    // Created with SAMPLED, in a format that filters: GPU label tracking.
+    bool can_sample = false;
     VkRenderPass render_pass = VK_NULL_HANDLE;
     VkCommandPool pool = VK_NULL_HANDLE;
     std::vector<OverlayImage> images;
@@ -87,6 +90,10 @@ struct OverlayDevice {
     // ui is destroyed before renderer: shutting RmlUi down releases textures.
     std::unique_ptr<RmlRenderer> renderer;
     std::unique_ptr<OverlayUi> ui;
+    // Display labels tracked on the GPU (gpu_track.h); null if the queue
+    // can't compute or it couldn't be set up. Goes before the renderer.
+    std::unique_ptr<GpuTracker> gpu;
+    bool gpu_tried = false;
     VkRenderPass ui_render_pass = VK_NULL_HANDLE;
     VkFormat ui_format = VK_FORMAT_UNDEFINED;
     bool ui_failed = false;
@@ -172,6 +179,7 @@ void destroy_swapchain_resources(DeviceData* dev, OverlaySwapchain& sc) {
     }
     dev->DestroyCommandPool(dev->device, sc.pool, nullptr);
     dev->DestroyRenderPass(dev->device, sc.render_pass, nullptr);
+    if (dev->overlay && dev->overlay->gpu) dev->overlay->gpu->remove_swapchain(&sc);
     sc.images.clear();
     sc.ready = false;
 }
@@ -231,6 +239,7 @@ bool setup_swapchain(DeviceData* dev, OverlaySwapchain& sc, uint32_t family) {
 }
 
 void shutdown_ui(DeviceData* dev, OverlayDevice& ov) {
+    ov.gpu.reset();
     ov.ui.reset();
     ov.renderer.reset();  // waits for the device to go idle
     if (ov.ui_render_pass) dev->DestroyRenderPass(dev->device, ov.ui_render_pass, nullptr);
@@ -269,6 +278,15 @@ bool init_ui(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, VkQueue q
             return false;
         }
         poe_log("ui: ready");
+    }
+    // GPU label tracking, if the presenting queue can run compute shaders.
+    if (!ov.gpu_tried) {
+        ov.gpu_tried = true;
+        if (dev->families[family].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+            ov.gpu = std::make_unique<GpuTracker>(dev, ov.renderer.get());
+            if (!ov.gpu->ok()) ov.gpu.reset();
+        }
+        poe_log("gpu tracking: %s", ov.gpu ? "ready" : "unavailable (labels use CPU tracking)");
     }
     return true;
 }
@@ -687,8 +705,26 @@ bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc,
     rbi.framebuffer = img.framebuffer;
     rbi.renderArea.extent = sc.extent;
     dev->CmdBeginRenderPass(img.cmd, &rbi, VK_SUBPASS_CONTENTS_INLINE);
-    ov.renderer->begin_render(img.cmd, sc.extent);
-    ov.ui->render();
+    // The display labels, moved on the GPU to where their tooltips are in
+    // this very frame (gpu_track.h); else where the CPU tracking puts them.
+    VkDescriptorSet labels = VK_NULL_HANDLE;
+    if (ov.gpu && sc.can_sample && ov.scan.active() && ov.price_check.settings().values().gpu_tracking) {
+        if (!ov.gpu->has_swapchain(&sc)) {
+            std::vector<VkImageView> views;
+            for (auto& i : sc.images) views.push_back(i.view);
+            if (!ov.gpu->add_swapchain(&sc, views, sc.format, sc.extent)) sc.can_sample = false;
+        }
+        std::vector<ScreenScan::Label> ls = ov.scan.labels();
+        std::vector<std::array<float, 4>> rects = ov.ui->scan_label_rects();
+        if (sc.can_sample && ls.size() == rects.size()) {
+            std::vector<GpuLabel> gpu_labels;
+            for (size_t i = 0; i < ls.size(); i++)
+                if (ls[i].plate) gpu_labels.push_back({ls[i].plate_x, ls[i].plate_y, rects[i], ls[i].plate});
+            labels = ov.gpu->record(&sc, index, img.cmd, img.image, gpu_labels);
+        }
+    }
+    ov.renderer->begin_render(img.cmd, sc.extent, labels);
+    ov.ui->render(labels != VK_NULL_HANDLE);
     dev->CmdEndRenderPass(img.cmd);
     VK_CHECK(dev->EndCommandBuffer(img.cmd));
 
@@ -749,6 +785,10 @@ void overlay_swapchain_created(DeviceData* dev, VkSwapchainKHR handle, const VkS
     sc->extent = info->imageExtent;
     sc->min_images = info->minImageCount;
     sc->can_copy = info->imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    VkFormatProperties fp = {};
+    dev->instance->GetPhysicalDeviceFormatProperties(dev->physical_device, info->imageFormat, &fp);
+    VkFormatFeatureFlags want = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    sc->can_sample = (info->imageUsage & VK_IMAGE_USAGE_SAMPLED_BIT) && (fp.optimalTilingFeatures & want) == want;
     dev->overlay->swapchains.push_back(std::move(sc));
 }
 

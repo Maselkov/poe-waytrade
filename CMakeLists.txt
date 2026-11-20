@@ -55,7 +55,7 @@ add_custom_target(poe_waytrade_version
 find_program(GLSLC glslc REQUIRED)
 set(SHADER_DIR ${CMAKE_BINARY_DIR}/shaders)
 set(SHADER_OUTPUTS)
-foreach(shader rml.vert rml.frag)
+foreach(shader rml.vert rml.frag track.comp)
   set(out ${SHADER_DIR}/${shader}.inc)
   add_custom_command(
     OUTPUT ${out}
@@ -90,6 +90,7 @@ add_library(VkLayer_poe_waytrade SHARED
   src/item_text.cpp
   src/price_check.cpp
   src/screen_scan.cpp
+  src/gpu_track.cpp
   src/settings_page.cpp
   src/stash_scroll.cpp
   src/hotkeys.cpp

@@ -26,7 +26,10 @@ struct Push {
     float translate[2];
     float to_ndc[2];
     int32_t srgb;
+    int32_t labels;
 };
+// Sets of label tracking data: one per swapchain image, a few swapchains.
+constexpr uint32_t kMaxLabelSets = 32;
 
 // Frames to wait before freeing what RmlUi released: the overlay waits on a
 // swapchain image's fence before reusing it, and swapchains have <= 4 images.
@@ -62,6 +65,9 @@ RmlRenderer::~RmlRenderer() {
     if (layout_) dev_->DestroyPipelineLayout(device_, layout_, nullptr);
     if (pool_) dev_->DestroyDescriptorPool(device_, pool_, nullptr);
     if (set_layout_) dev_->DestroyDescriptorSetLayout(device_, set_layout_, nullptr);
+    if (label_pool_) dev_->DestroyDescriptorPool(device_, label_pool_, nullptr);
+    if (label_layout_) dev_->DestroyDescriptorSetLayout(device_, label_layout_, nullptr);
+    destroy_buffer(no_labels_);
     if (sampler_) dev_->DestroySampler(device_, sampler_, nullptr);
     if (upload_pool_) dev_->DestroyCommandPool(device_, upload_pool_, nullptr);
 }
@@ -90,10 +96,33 @@ bool RmlRenderer::create_static_objects() {
     pci.pPoolSizes = &size;
     if (dev_->CreateDescriptorPool(device_, &pci, nullptr, &pool_) != VK_SUCCESS) return false;
 
+    VkDescriptorSetLayoutBinding label_bindings[2] = {};
+    for (uint32_t i = 0; i < 2; i++) {
+        label_bindings[i].binding = i;
+        label_bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        label_bindings[i].descriptorCount = 1;
+        label_bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    }
+    lci.bindingCount = 2;
+    lci.pBindings = label_bindings;
+    if (dev_->CreateDescriptorSetLayout(device_, &lci, nullptr, &label_layout_) != VK_SUCCESS) return false;
+    VkDescriptorPoolSize label_size = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kMaxLabelSets * 2};
+    pci.maxSets = kMaxLabelSets;
+    pci.pPoolSizes = &label_size;
+    if (dev_->CreateDescriptorPool(device_, &pci, nullptr, &label_pool_) != VK_SUCCESS) return false;
+    // The stand-in: a count of 0 (and room for a result nobody reads).
+    if (!create_buffer(64, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, &no_labels_)) return false;
+    void* zero = nullptr;
+    dev_->MapMemory(device_, no_labels_.memory, 0, VK_WHOLE_SIZE, 0, &zero);
+    memset(zero, 0, 64);
+    no_labels_set_ = create_label_set(no_labels_.buffer, no_labels_.buffer);
+    if (!no_labels_set_) return false;
+
     VkPushConstantRange range = {VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(Push)};
+    VkDescriptorSetLayout layouts[2] = {set_layout_, label_layout_};
     VkPipelineLayoutCreateInfo plci = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    plci.setLayoutCount = 1;
-    plci.pSetLayouts = &set_layout_;
+    plci.setLayoutCount = 2;
+    plci.pSetLayouts = layouts;
     plci.pushConstantRangeCount = 1;
     plci.pPushConstantRanges = &range;
     if (dev_->CreatePipelineLayout(device_, &plci, nullptr, &layout_) != VK_SUCCESS) return false;
@@ -201,14 +230,42 @@ void RmlRenderer::begin_frame() {
     }
 }
 
-void RmlRenderer::begin_render(VkCommandBuffer cmd, VkExtent2D extent) {
+void RmlRenderer::begin_render(VkCommandBuffer cmd, VkExtent2D extent, VkDescriptorSet labels) {
     cmd_ = cmd;
     extent_ = extent;
     scissor_enabled_ = false;
+    label_mode_ = false;
     memcpy(transform_, kIdentity, sizeof(transform_));
     dev_->CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+    VkDescriptorSet set = labels ? labels : no_labels_set_;
+    dev_->CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 1, 1, &set, 0, nullptr);
     VkViewport viewport = {0, 0, (float)extent.width, (float)extent.height, 0, 1};
     dev_->CmdSetViewport(cmd, 0, 1, &viewport);
+}
+
+VkDescriptorSet RmlRenderer::create_label_set(VkBuffer slots, VkBuffer results) {
+    VkDescriptorSetAllocateInfo ai = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    ai.descriptorPool = label_pool_;
+    ai.descriptorSetCount = 1;
+    ai.pSetLayouts = &label_layout_;
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    if (dev_->AllocateDescriptorSets(device_, &ai, &set) != VK_SUCCESS) return VK_NULL_HANDLE;
+    VkDescriptorBufferInfo infos[2] = {{slots, 0, VK_WHOLE_SIZE}, {results, 0, VK_WHOLE_SIZE}};
+    VkWriteDescriptorSet writes[2] = {};
+    for (uint32_t i = 0; i < 2; i++) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = set;
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1;
+        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writes[i].pBufferInfo = &infos[i];
+    }
+    dev_->UpdateDescriptorSets(device_, 2, writes, 0, nullptr);
+    return set;
+}
+
+void RmlRenderer::free_label_set(VkDescriptorSet set) {
+    if (set) dev_->FreeDescriptorSets(device_, label_pool_, 1, &set);
 }
 
 void RmlRenderer::defer(std::function<void()> fn) {
@@ -282,6 +339,7 @@ void RmlRenderer::RenderGeometry(Rml::CompiledGeometryHandle handle, Rml::Vector
     push.to_ndc[0] = 2.0f / extent_.width;
     push.to_ndc[1] = 2.0f / extent_.height;
     push.srgb = srgb_;
+    push.labels = label_mode_;
     dev_->CmdPushConstants(cmd_, layout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push),
                            &push);
     dev_->CmdBindDescriptorSets(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &t->set, 0, nullptr);

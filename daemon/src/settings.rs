@@ -32,6 +32,7 @@ pub const KEYS: &[&str] = &[
     "auto_watch",
     "auto_watch_areas",
     "client_log",
+    "tracking",
 ];
 
 /// Areas where the display price check starts by itself: mob-free rooms of
@@ -61,6 +62,9 @@ pub struct Settings {
     pub auto_watch_areas: Vec<String>,
     /// The game's Client.txt; "" finds it in the Steam libraries.
     pub client_log: String,
+    /// How display labels follow their tooltips: "gpu" (found in each frame
+    /// as it's drawn) or "cpu" (from copies a frame or two old, predicted).
+    pub tracking: String,
 }
 
 /// Each a key combination as the layer matches it: modifiers and an evdev
@@ -91,6 +95,7 @@ impl Default for Settings {
             auto_watch: true,
             auto_watch_areas: DEFAULT_WATCH_AREAS.iter().map(|a| a.to_string()).collect(),
             client_log: String::new(),
+            tracking: "gpu".to_string(),
         }
     }
 }
@@ -199,6 +204,7 @@ impl Settings {
             "auto_watch" => if self.auto_watch { "on" } else { "off" }.to_string(),
             "auto_watch_areas" => self.auto_watch_areas.join(";"),
             "client_log" => self.client_log.clone(),
+            "tracking" => self.tracking.clone(),
             _ => String::new(),
         }
     }
@@ -256,6 +262,12 @@ impl Settings {
                     return Err("Client.txt's path is absolute, or empty to find it".to_string());
                 }
                 self.client_log = value.to_string();
+            }
+            "tracking" => {
+                if !["gpu", "cpu"].contains(&value) {
+                    return Err("Tracking is gpu or cpu".to_string());
+                }
+                self.tracking = value.to_string();
             }
             "stash_scroll" => match value {
                 "on" => self.stash_scroll = true,
@@ -339,6 +351,8 @@ mod tests {
         s.set("auto_watch", "off").unwrap();
         s.set("auto_watch_areas", " Zealot's Vault ;; Arkhon's Vault").unwrap();
         s.set("client_log", "/games/poe/logs/Client.txt").unwrap();
+        s.set("tracking", "cpu").unwrap();
+        assert_eq!(s.get("tracking"), "cpu");
         assert_eq!(s.auto_watch_areas, ["Zealot's Vault", "Arkhon's Vault"]);
         assert_eq!(s.get("auto_watch_areas"), "Zealot's Vault;Arkhon's Vault");
         assert!(!s.auto_watch);
@@ -361,6 +375,7 @@ mod tests {
             ("cursor", "theme"),
             ("auto_watch", "yes"),
             ("client_log", "logs/Client.txt"),
+            ("tracking", "fast"),
             ("nonsense", "1"),
         ] {
             let before = s.clone();
