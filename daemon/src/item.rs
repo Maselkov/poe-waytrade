@@ -384,7 +384,10 @@ pub fn parse(text: &str) -> Option<Item> {
         }
     }
 
-    for line in sections.iter().skip(1).flatten() {
+    // The Requirements section lists what the character needs ("Level: 68"),
+    // not the item's own properties, so a gem's level comes only from above it.
+    let properties = sections.iter().skip(1).filter(|s| s.first() != Some(&"Requirements:"));
+    for line in properties.flatten() {
         if *line == "Corrupted" {
             item.corrupted = true;
         } else if *line == "Fractured Item" {
@@ -518,6 +521,16 @@ pub(crate) mod tests {
         assert_eq!(item.gem_level, Some(20));
         assert_eq!(item.quality, 20);
         assert!(item.corrupted);
+    }
+
+    #[test]
+    fn gem_level_ignores_requirements() {
+        let text = "Item Class: Skill Gems\nRarity: Gem\nMolten Shell\n--------\n\
+                    Spell, AoE, Duration, Fire, Physical, Guard\nLevel: 19\nCost: 12 Mana\n--------\n\
+                    Requirements:\nLevel: 68\nStr: 151\n--------\nExperience: 66,335,536/212,023,122\n";
+        let item = parse(text).unwrap();
+        assert_eq!(item.gem_level, Some(19));
+        assert!(!item.gem_max_level);
     }
 
     #[test]
