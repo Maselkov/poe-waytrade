@@ -72,7 +72,12 @@
                             <div class="mod-full">{{f.label}}</div>
                         </div>
                         <div data-attr-class="'tier ' + f.tier">{{f.tier}}</div>
-                        <div class="min" data-class-editing="f.editing" data-event-click="edit_bounds(f.index)" data-event-mousescroll="bounds_scroll(f.index)">{{f.bounds}}<span class="star" data-if="f.max_roll"> ★</span></div>
+                        <div class="bounds" data-if="f.split">
+                            <div class="bound" data-class-editing="f.edit_field == 0" data-event-click="edit_bounds(f.index, 0)" data-event-mousescroll="bounds_scroll(f.index, 0)">{{f.lo}}<span class="star" data-if="f.max_roll"> ★</span></div>
+                            <div class="bound-gap"/>
+                            <div class="bound" data-class-editing="f.edit_field == 1" data-class-empty="f.hi_empty" data-event-click="edit_bounds(f.index, 1)" data-event-mousescroll="bounds_scroll(f.index, 1)">{{f.hi}}</div>
+                        </div>
+                        <div class="min" data-if="!f.split">{{f.bounds}}</div>
                     </div>
                     <div class="slider-row" data-if="f.has_slider">
                         <div class="range" data-event-mousedown="range_press(f.index)" data-event-drag="range_drag(f.index)">
@@ -93,7 +98,6 @@
             <div data-if="!searched">
                 <div class="actions">
                     <div class="button" data-event-click="search">{{searching ? 'Searching…' : 'Search'}}</div>
-                    <div data-attr-class="'toggle-chip status ' + listing_status" data-event-click="cycle_status">{{listing_status_label}}</div>
                 </div>
             </div>
             <div data-if="searched">
@@ -128,7 +132,6 @@
                 <div class="actions">
                     <div data-attr-class="stale ? 'button' : 'button secondary'" data-event-click="search">{{searching ? 'Searching…' : 'Search again'}}</div>
                     <div class="button secondary" data-if="has_url" data-event-click="open_trade">Open on trade site</div>
-                    <div data-attr-class="'toggle-chip status ' + listing_status" data-event-click="cycle_status">{{listing_status_label}}</div>
                 </div>
             </div>
         </div>

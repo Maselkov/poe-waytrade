@@ -34,6 +34,8 @@ namespace {
 constexpr int kMargin = 16;
 // Round the buffer up so it isn't reallocated for every pixel of resize.
 constexpr int kBufferStep = 64;
+// Finger (touchpad) scrolling over the game: logical units per wheel notch.
+constexpr double kSmoothStep = 30.0;
 
 WaylandInput* self(void* data) { return static_cast<WaylandInput*>(data); }
 
@@ -50,10 +52,12 @@ void ptr_button(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, ui
 void ptr_axis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value) {
     self(data)->on_pointer_axis(axis, wl_fixed_to_double(value));
 }
-void ptr_frame(void*, wl_pointer*) {}
-void ptr_axis_source(void*, wl_pointer*, uint32_t) {}
-void ptr_axis_stop(void*, wl_pointer*, uint32_t, uint32_t) {}
-void ptr_axis_discrete(void*, wl_pointer*, uint32_t, int32_t) {}
+void ptr_frame(void* data, wl_pointer*) { self(data)->on_pointer_frame(); }
+void ptr_axis_source(void* data, wl_pointer*, uint32_t source) { self(data)->on_pointer_axis_source(source); }
+void ptr_axis_stop(void* data, wl_pointer*, uint32_t, uint32_t axis) { self(data)->on_pointer_axis_stop(axis); }
+void ptr_axis_discrete(void* data, wl_pointer*, uint32_t axis, int32_t discrete) {
+    self(data)->on_pointer_axis_discrete(axis, discrete);
+}
 const wl_pointer_listener pointer_listener = {
     .enter = ptr_enter,
     .leave = ptr_leave,
@@ -317,6 +321,7 @@ void WaylandInput::on_pointer_enter(uint32_t serial, wl_surface* surface, double
 void WaylandInput::on_pointer_leave(wl_surface* surface) {
     if (surface != input_surface_) {
         pointer_on_game_ = false;
+        smooth_rest_ = 0;
         return;
     }
     buttons_held_ = 0;
@@ -350,8 +355,39 @@ void WaylandInput::on_pointer_button(uint32_t button, uint32_t state) {
 }
 
 void WaylandInput::on_pointer_axis(uint32_t axis, double value) {
-    if (!pointer_inside_ || axis != WL_POINTER_AXIS_VERTICAL_SCROLL) return;
-    PointerEvent ev{PointerEvent::Wheel};
-    ev.wheel = float(-value / 10.0);  // ~10 units per wheel notch
-    pointer_events_.push_back(ev);
+    if (axis != WL_POINTER_AXIS_VERTICAL_SCROLL) return;
+    if (pointer_inside_) {
+        PointerEvent ev{PointerEvent::Wheel};
+        ev.wheel = float(-value / 10.0);  // ~10 units per wheel notch
+        pointer_events_.push_back(ev);
+    } else if (pointer_on_game_) {
+        frame_value_ += value;
+        // Before wl_pointer 5 there are no frames: each event stands alone.
+        if (wl_pointer_get_version(pointer_) < WL_POINTER_FRAME_SINCE_VERSION) on_pointer_frame();
+    }
+}
+
+void WaylandInput::on_pointer_axis_discrete(uint32_t axis, int32_t discrete) {
+    if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL && !pointer_inside_ && pointer_on_game_) frame_discrete_ += discrete;
+}
+
+void WaylandInput::on_pointer_axis_stop(uint32_t axis) {
+    if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL) smooth_rest_ = 0;
+}
+
+// A frame ends a group of pointer events. A wheel sends its notches as
+// axis_discrete (a high-resolution wheel only once it has turned a whole
+// notch; the axis values in between are left alone); a touchpad sends only
+// values, which add up to a notch every kSmoothStep units.
+void WaylandInput::on_pointer_frame() {
+    uint32_t source = std::exchange(axis_source_, UINT32_MAX);
+    int discrete = std::exchange(frame_discrete_, 0);
+    double value = std::exchange(frame_value_, 0.0);
+    int steps = discrete;
+    if (!discrete && source != WL_POINTER_AXIS_SOURCE_WHEEL && value != 0) {
+        smooth_rest_ += value;
+        steps = (int)(smooth_rest_ / kSmoothStep);  // toward zero
+        smooth_rest_ -= steps * kSmoothStep;
+    }
+    if (steps) game_wheel_.push_back({steps, game_x_, game_y_, mods()});
 }

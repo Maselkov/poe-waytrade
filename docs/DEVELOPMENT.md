@@ -37,6 +37,13 @@ host. They talk over an abstract Unix socket.
   game's surface, sized to the visible panels, with an input region covering
   just them. Clicks there reach the UI and never the game. With no panel
   visible, the subsurface is unmapped.
+- `src/stash_scroll.cpp`: Ctrl + wheel.
+  - The layer's own `wl_pointer` on the game's connection gets the game's
+    wheel events too. Whole notches come from `axis_discrete`, and touchpad
+    scrolling is added up per `wl_pointer` frame.
+  - Outside the stash, while the game has keyboard focus, each notch becomes
+    an arrow key on the uinput keyboard: pressed in one frame and released in
+    the next.
 - `src/wl_grab.cpp`: typing into a panel. The game keeps keyboard focus, so
   to type a number the layer briefly takes it:
   - On a Wayland connection of its own, it creates a 1x1 transparent
@@ -45,7 +52,7 @@ host. They talk over an abstract Unix socket.
     the panels and the game.
   - Destroying the surface gives the keyboard back.
 - `src/uinput_kbd.cpp`: a virtual keyboard on `/dev/uinput` that sends
-  Ctrl+C. Wayland has no other way to inject keys into a window, and the
+  Ctrl+C and, for stash scroll, the arrow keys. Wayland has no other way to inject keys into a window, and the
   compositor treats the device as a normal keyboard. It needs write access to
   `/dev/uinput`: systemd's uaccess ACL usually grants it to the logged-in
   user; otherwise the user needs the `input` group.
@@ -155,7 +162,7 @@ POE_WAYTRADE_UI_DIR=$PWD/assets POE_WAYTRADE_DEMO_ITEM=item.txt \
 | `POE_WAYTRADE_DEMO_ITEM=<file>` | Open the panel on start with this item text, as copied from the game (maps open the map check) |
 | `POE_WAYTRADE_DEMO_VIEW=price` | A demo map opens on its price instead |
 | `POE_WAYTRADE_DEMO_SEARCH=1` | A demo item searches by itself |
-| `POE_WAYTRADE_DEMO_EDIT=<filter index>` | Start typing into that filter's value, as if it were clicked |
+| `POE_WAYTRADE_DEMO_EDIT=<filter index>[:max]` | Start typing into that filter's minimum (or maximum), as if it were clicked |
 | `POE_WAYTRADE_DEMO_PRESET=base` | Open a demo item on the Base item preset |
 | `POE_WAYTRADE_DEMO_SETTINGS=<0-3>` | Open the settings page on that tab |
 | `POE_WAYTRADE_SNAPSHOT=<file.ppm>` | Save one of the app's rendered frames (after 300 frames), for checking the UI without screenshots |

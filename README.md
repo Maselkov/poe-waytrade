@@ -34,8 +34,9 @@ MangoHud is:
 - **It's safe.**
   - It only hooks the game's Vulkan presentation, the way MangoHud does.
     It doesn't read or change the game's memory or files.
-  - The only key it presses for you is the Ctrl+C that copies the item,
-    exactly as if you had copied it yourself.
+  - The only keys it presses for you are the Ctrl+C that copies the item
+    and, for stash scroll, Left/Right to switch stash tabs. These are the
+    same keys you'd press yourself.
   - Every web request (poe.ninja, the trade site) comes from the separate
     daemon, never from the game client.
   - The daemon follows GGG's rate limits, so searches won't get your IP
@@ -98,6 +99,7 @@ Hover an item and press **Ctrl+D**. Open the settings with **Ctrl+Alt+S**.
 | **Ctrl+C** | Your own copy of an item opens a quick look too. |
 | **Ctrl+Alt+S** | Settings. Also the gear at the top left of a panel. |
 | **Alt+D** | The old map check key; now the same as Ctrl+Alt+D. Can be turned off. |
+| **Ctrl + mouse wheel** | Stash scroll: switches stash tabs with the cursor anywhere in the game. |
 
 All of them except Ctrl+C can be rebound. The game keeps the keyboard (the
 panel is part of its window), so it sees your hotkeys too. Pick combinations
@@ -107,6 +109,17 @@ label names the US key there.
 
 The panel opens next to PoE's inventory when you check an item there, or
 next to the stash for items on the left half of the screen.
+
+**Stash scroll** works like the game's own Ctrl + wheel over the stash, but
+anywhere on the screen:
+- Each notch down presses Right (the next tab), and each notch up presses Left.
+- Over the stash itself the game already does this, so the overlay leaves
+  those notches alone.
+- The game still sees the wheel. Since you're holding Ctrl, it also sees
+  Ctrl+Right and Ctrl+Left.
+- On a touchpad, two-finger scrolling counts as a notch about every 30 pixels.
+
+You can turn it off on the settings page's Hotkeys tab.
 
 ### What gets priced
 
@@ -170,7 +183,9 @@ Items without a fixed price get filters for the official trade site:
   5-link. An unlinked 6-socket gets a sockets filter.
 
 You can also pick "Any Ring" or the exact base, and whether corrupted items
-count. Uncorrupted items exclude them by default.
+count. Uniques, gems and the Base item preset start on the item's own
+corruption state. Other items start on Any, since their price is in their
+mods.
 
 Each filter's minimum starts 10% of the mod's range below your roll (you can
 change this in the settings). A roll at the top of its tier starts at exactly
@@ -184,11 +199,13 @@ Ways to adjust a filter:
 - **Click a row** to tick it.
 - **Drag the slider** under it. The left handle sets the minimum and the
   right one the maximum (none at the far right).
-- **Scroll the wheel** over its value to move the minimum one step.
-- **Click the value to type.** The overlay takes the keyboard from the game
-  while you type, so digits don't drink flasks. Tab switches between minimum
-  and maximum. Enter applies and ticks the filter. Esc or a click in the game
-  cancels. Typing needs a compositor with layer-shell (KDE Plasma, Sway,
+- **Scroll the wheel** over its value. Each filter's value is split into a
+  minimum half and a maximum half, and the wheel moves the half under the
+  pointer one step. Stepping the maximum to the top of the range leaves no
+  maximum.
+- **Click a half to type into it.** The overlay takes the keyboard from the
+  game while you type, so digits don't drink flasks. Tab switches halves.
+  Enter applies and ticks the filter. Esc or a click in the game cancels. Typing needs a compositor with layer-shell (KDE Plasma, Sway,
   Hyprland and other wlroots ones, COSMIC). On GNOME and gamescope, use the
   wheel and sliders.
 
@@ -207,8 +224,8 @@ a filter for their implicit's tier.
 
 **Searching.** Nothing is searched until you press **Search**, since every
 search counts against GGG's rate limit. By default it counts only
-**instant buyout** listings, which can't be price-fixed. The button next to
-Search adds in-person sellers, or any listing. The results show:
+**instant buyout** listings, which can't be price-fixed. The settings can
+add in-person sellers, or any listing. The results show:
 
 - An estimate: the median of the 10 cheapest listings, with the price range.
 - The listings, grouped by price, with how long ago they were listed.
@@ -224,7 +241,8 @@ Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
 
 - **Hotkeys:** click a key, then press the new combination. A key without Ctrl
   or Alt gets a warning, since the game sees it too. Choosing a combination
-  another action uses swaps the two.
+  another action uses swaps the two. Stash scroll is switched on and off
+  here too.
 - **Price check:**
   - The league. "Current" follows poe.ninja into each new league.
   - Which listings a search starts with.

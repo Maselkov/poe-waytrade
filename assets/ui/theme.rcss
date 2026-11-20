@@ -130,8 +130,22 @@ body {
 .filter.off .mod-full { color: $text-muted; }
 .filter.off .mod { color: $text-muted; }
 .filter-main .tier { width: 22dp; flex-shrink: 0; text-align: right; font-size: 11dp; color: $text-faint; margin-left: 6dp; }
-/* A value being typed into (PriceCheck::edit_bounds). */
-.min.editing { border-color: $accent; background-color: #1d1a33; color: $accent-text; }
+/* A filter's bounds: one chip split into its minimum and its maximum ("max"
+   in faint text when there's none). Each half is clicked to type into
+   (PriceCheck::edit_bounds) and scrolled to step; the half being typed into
+   is framed in place, so nothing moves. */
+/* Inline blocks of one minimum width, not a nested flexbox: RmlUi sized that to
+   its first half, and a half growing as its number changed moved the row. */
+.bounds { flex-shrink: 0; display: block; white-space: nowrap; margin-left: 8dp; background-color: $chip; border-radius: 6dp; }
+.bound { display: inline-block; min-width: 30dp; text-align: center; padding: 1dp 5dp; border: 1dp transparent; border-radius: 6dp; color: $text-strong; }
+.bound:hover { background-color: #262b34; }
+.bound.empty { color: $text-faint; }
+.bound.editing { border-color: $accent; background-color: #1d1a33; color: $accent-text; }
+.bound-gap { display: inline-block; vertical-align: middle; width: 1dp; height: 12dp; background-color: $off; }
+.filter.off .bounds { background-color: transparent; }
+.filter.off .bound { color: $text-faint; }
+.filter.off .bound.empty { color: #3a3f48; }
+/* A filter with only a maximum, or none to show. */
 .min { flex-shrink: 0; min-width: 40dp; text-align: center; background-color: $chip; border: 1dp transparent; border-radius: 6dp; padding: 1dp 6dp; color: $text-strong; margin-left: 8dp; }
 .filter.off .min { background-color: transparent; color: $text-faint; }
 .star { color: $price; }
@@ -280,10 +294,6 @@ body {
 .map-price-text { flex: 1; }
 .map-price-value { color: $price; }
 .toggle-chip.view { width: 86dp; margin-left: 8dp; }
-/* Which listings a search counts: instant buyout (the default, since
-   merchant prices can't be faked) or, in amber, in-person ones too (or offline sellers). */
-.actions .toggle-chip.status { width: 96dp; margin-left: 6dp; padding: 6dp 0; }
-.toggle-chip.status.available, .toggle-chip.status.any { border-color: #6a5426; color: $warn; }
 .view-row { display: flex; justify-content: center; padding: 0 14dp 10dp; }
 .view-row .toggle-chip.view { margin-left: 0; }
 .profiles { display: flex; align-items: center; justify-content: flex-end; padding: 2dp 14dp 4dp; font-size: 11dp; color: $text-muted; }
@@ -490,6 +500,10 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
     cursor: pointer;
 }
 #settings .setting-row .button { flex: 0 0 auto; width: 130dp; margin: 0; }
+/* On / Off, as wide as a hotkey's button above it. */
+#settings .button-row.toggle { flex-shrink: 0; width: 118dp; }
+#settings .setting-row .toggle .button { flex: 1 1 0; width: auto; margin: 0 0 0 4dp; }
+#settings .setting-row .toggle .button:first-child { margin-left: 0; }
 #settings .button:hover { background-color: $chip; color: $text-strong; }
 #settings .button.on { background-color: #2a2546; border-color: $accent; color: $accent-text; }
 #settings .button.primary { background-color: $accent; border-color: $accent; color: $text-strong; }

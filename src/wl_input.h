@@ -100,6 +100,16 @@ public:
     // swapchain pixels, if known, and clicks the game received.
     bool game_pointer(float* x, float* y) const;
     int take_game_clicks() { return std::exchange(game_clicks_, 0); }
+    // Mouse wheel turns over the game itself (the game gets them too), in
+    // whole notches: positive scrolls down. A touchpad's scrolling counts a
+    // notch per stretch of finger movement. With the cursor's position
+    // (swapchain pixels) and the modifiers held when it turned.
+    struct GameWheel {
+        int steps;
+        float x, y;
+        uint32_t mods;
+    };
+    std::vector<GameWheel> take_game_wheel() { return std::exchange(game_wheel_, {}); }
 
     // Non-blocking: read and dispatch whatever is pending on our queue, and
     // continue any clipboard transfer in progress.
@@ -157,6 +167,10 @@ public:
     void on_pointer_motion(double x, double y);
     void on_pointer_button(uint32_t button, uint32_t state);
     void on_pointer_axis(uint32_t axis, double value);
+    void on_pointer_axis_source(uint32_t source) { axis_source_ = source; }
+    void on_pointer_axis_discrete(uint32_t axis, int32_t discrete);
+    void on_pointer_axis_stop(uint32_t axis);
+    void on_pointer_frame();
     void on_preferred_scale(uint32_t scale_120);
     void on_input_serial(uint32_t serial) { last_serial_ = serial; }
     void on_source_send(wl_data_source* source, const char* mime, int fd);
@@ -271,6 +285,12 @@ private:
     bool game_pointer_known_ = false;
     float game_x_ = 0, game_y_ = 0;
     int game_clicks_ = 0;
+    // Wheel over the game, gathered over one wl_pointer frame.
+    std::vector<GameWheel> game_wheel_;
+    uint32_t axis_source_ = UINT32_MAX;  // this frame's; UINT32_MAX: not said
+    int frame_discrete_ = 0;
+    double frame_value_ = 0;
+    double smooth_rest_ = 0;  // finger scrolling not yet a whole notch
     uint32_t enter_serial_ = 0;
     struct wl_cursor_theme* cursor_theme_ = nullptr;
     wl_surface* cursor_surface_ = nullptr;
