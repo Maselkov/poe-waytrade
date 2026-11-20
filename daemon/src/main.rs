@@ -1092,6 +1092,10 @@ fn scan_item(state: &State, request: &str) -> String {
             return out;
         }
     };
+    if scan::partly_hidden(&read) {
+        eprintln!("scan: partly hidden: {} ({}ms)", read.lines.join(" | "), started.elapsed().as_millis());
+        return "status\tunreadable\nmessage\tPartly hidden\n".to_string();
+    }
     let detail = scan_detail(&read);
     let title = read.item.name.clone().unwrap_or_else(|| read.item.base.clone());
     let cache_key = format!("{title}\n{}\n{detail}", read.item.base);

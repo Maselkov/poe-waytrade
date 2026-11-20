@@ -32,12 +32,14 @@ constexpr auto kIdleOff = std::chrono::minutes(3);
 // A tooltip not found for this long is forgotten (SCANFIND finds it again
 // if it comes back; its price is remembered, see kRemember).
 constexpr auto kForget = std::chrono::seconds(4);
-// Its label hides after this many copies without finding it, and it isn't
-// looked for each frame any more (a wide search is costly): SCANFIND finds
-// it again, a few times a second. (Stopping sooner would leave its tag
-// standing where it was last seen until it's forgotten.)
-constexpr int kHideAfter = 8;
-constexpr int kStopLooking = kHideAfter;
+// Not found (covered by another tooltip, or moved too fast): its label
+// hides after this long, and it isn't looked for each frame after the
+// next (SCANFIND finds it again, a few times a second). Meanwhile it's
+// taken to move with the camera, like the displays still found.
+constexpr auto kHideAfter = std::chrono::milliseconds(150);
+constexpr auto kStopLooking = std::chrono::seconds(1);
+// A display read as partly hidden this many times is taken as no item.
+constexpr int kMaxRereads = 4;
 // The daemon is still loading prices or names: ask again after this.
 constexpr auto kRetryLoading = std::chrono::seconds(2);
 // A display read as partly hidden: read again (from a newer frame) after this.
@@ -361,6 +363,7 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
         matches.swap(worker_->done);
     }
     for (const Match& m : matches) apply(m);
+    measure_camera();
 
     for (Tracked& t : tracked_) {
         if (t.request_job.valid() && t.request_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
@@ -373,11 +376,19 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
                 t.retry_at = now + kRetryLoading;
                 continue;
             }
+            bool gave_up = false;
+            // Not an item, says the first read: one more look from a later
+            // frame first (another tooltip may have covered all of it).
+            if (reply.status == "no_item" && t.rereads == 0) reply.status = "unreadable";
             if (reply.status == "unreadable") {
                 // Covered by another tooltip: crop it again from a later frame.
-                t.reread_at = now + kReread;
-                t.request.clear();
-                continue;
+                if (++t.rereads < kMaxRereads) {
+                    t.reread_at = now + kReread;
+                    t.request.clear();
+                    continue;
+                }
+                reply.status = "no_item";
+                gave_up = true;
             }
             std::string lines;
             for (const auto& l : reply.lines) lines += (lines.empty() ? "" : " | ") + l;
@@ -385,7 +396,8 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
                     reply.detail.c_str(), reply.value_text.c_str(), reply.message.empty() ? "" : ": ",
                     reply.message.c_str(), lines.c_str());
             reply.lines.clear();
-            if (reply.status == "no_item" && !t.name.v.empty()) not_items_.push_back(t.name);
+            // (Not one that only stayed hidden: it may be read when seen again.)
+            if (reply.status == "no_item" && !gave_up && !t.name.v.empty()) not_items_.push_back(t.name);
             if (t.verify && reply.title != t.reply.title)
                 poe_log("displays: not %s after all, but %s", t.reply.title.c_str(), reply.title.c_str());
             t.reply = std::move(reply);
@@ -403,11 +415,13 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
     std::erase_if(tracked_, [&](const Tracked& t) { return t.lost > 0 && now - t.seen > kForget; });
     dedupe();
     if (tracked_.size() != before) changed();
+    for (Tracked& t : tracked_)
+        if (hidden(t) != t.was_hidden) t.was_hidden = !t.was_hidden, changed();
 
     // Heist: back to idle once no display's tag has been in view for a while.
     if (idling_ && !idle_) {
         for (const Tracked& t : tracked_)
-            if (t.lost < kHideAfter && !t.duplicate && !(t.replied && t.reply.status == "no_item")) last_tag_ = now;
+            if (!hidden(t) && !t.duplicate && !(t.replied && t.reply.status == "no_item")) last_tag_ = now;
         if (now - last_tag_ > kIdleAfter) {
             for (Tracked& t : tracked_) forget(t);
             tracked_.clear();
@@ -514,6 +528,9 @@ void ScreenScan::poll_find(Clock::time_point now) {
             if (!best || std::abs((s.at - frame_at_).count()) < std::abs((best->at - frame_at_).count())) best = &s;
         if (best) *x = best->x, *y = best->y;
     };
+    // How far the camera has moved the displays since that frame.
+    float shift_x = 0, shift_y = 0;
+    bool shifted = camera_shift(&shift_x, &shift_y);
     for (const auto& p : reply.plates) {
         float cx = p[0] + p[2] / 2;
         // The nearest tracked display where this plate was. Displays stand
@@ -532,7 +549,7 @@ void ScreenScan::poll_find(Clock::time_point now) {
         }
         if (!match) {
             // A display (not a known non-item) wakes an idle scan.
-            if (add_plate(p, now) && idle_) {
+            if (add_plate(p, now, shifted, shift_x, shift_y) && idle_) {
                 idle_ = false;
                 last_tag_ = now;
                 next_find_ = now + kFindGap;
@@ -541,11 +558,13 @@ void ScreenScan::poll_find(Clock::time_point now) {
             }
         } else if (match->lost > 0) {
             // Lost while tracking (moved too fast, or covered): found again.
-            match->x = p[0];
-            match->y = p[1];
+            match->x = p[0] + shift_x;
+            match->y = p[1] + shift_y;
             match->lost = 0;
-            match->moving = false;
-            match->vx = match->vy = 0;
+            match->moving = shifted && camera_;
+            match->vx = match->moving ? camera_vx_ : 0;
+            match->vy = match->moving ? camera_vy_ : 0;
+            if (match->moving) match->sampled = camera_at_;
             match->samples.clear();
             match->seen = now;
             changed();
@@ -584,7 +603,55 @@ void make_template(const std::vector<uint8_t>& g, int w, int h, std::vector<floa
 
 }  // namespace
 
-bool ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now) {
+bool ScreenScan::camera_shift(float* dx, float* dy) const {
+    // From each display found now and where it was in that frame (its
+    // history), the median: one the game's layout pushed aside doesn't count.
+    std::vector<float> xs, ys;
+    for (const Tracked& t : tracked_) {
+        if (t.lost != 0 || t.seq == 0) continue;
+        const Tracked::Sample* best = nullptr;
+        for (const auto& s : t.history)
+            if (!best || std::abs((s.at - frame_at_).count()) < std::abs((best->at - frame_at_).count())) best = &s;
+        if (!best || std::abs(std::chrono::duration<float>(best->at - frame_at_).count()) > 0.05f) continue;
+        xs.push_back(t.x - best->x);
+        ys.push_back(t.y - best->y);
+    }
+    if (xs.empty()) {
+        // None to go by: the camera's last known speed, if any.
+        if (!camera_) return false;
+        float dt = std::chrono::duration<float>(camera_at_ - frame_at_).count();
+        *dx = camera_vx_ * dt, *dy = camera_vy_ * dt;
+        return true;
+    }
+    std::nth_element(xs.begin(), xs.begin() + xs.size() / 2, xs.end());
+    std::nth_element(ys.begin(), ys.begin() + ys.size() / 2, ys.end());
+    *dx = xs[xs.size() / 2], *dy = ys[ys.size() / 2];
+    return true;
+}
+
+void ScreenScan::measure_camera() {
+    // The displays stand in the world: found ones move together, by the
+    // camera. Their median speed, for those lost a moment.
+    std::vector<float> xs, ys;
+    Clock::time_point at{};
+    for (const Tracked& t : tracked_) {
+        if (t.lost != 0 || !t.moving) continue;
+        xs.push_back(t.vx);
+        ys.push_back(t.vy);
+        at = std::max(at, t.sampled);
+    }
+    camera_ = !xs.empty();
+    if (!camera_) return;
+    std::nth_element(xs.begin(), xs.begin() + xs.size() / 2, xs.end());
+    std::nth_element(ys.begin(), ys.begin() + ys.size() / 2, ys.end());
+    camera_vx_ = xs[xs.size() / 2], camera_vy_ = ys[ys.size() / 2];
+    camera_at_ = at;
+}
+
+bool ScreenScan::hidden(const Tracked& t) const { return t.lost > 0 && now_ - t.seen >= kHideAfter; }
+
+bool ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now, bool shifted, float shift_x,
+                           float shift_y) {
     int px = (int)p[0], py = (int)p[1], pw = (int)p[2], ph = (int)p[3];
     int cx = (int)p[4], cy = (int)p[5], cw = (int)p[6], ch = (int)p[7];
     if (frame_.empty() || pw < 8 || ph < 8 || px < 0 || py < 0 || px + pw > frame_w_ || py + ph > frame_h_) return false;
@@ -592,11 +659,14 @@ bool ScreenScan::add_plate(const std::array<float, 8>& p, Clock::time_point now)
 
     Tracked t;
     t.id = next_id_++;
-    t.x = (float)px;
-    t.y = (float)py;
+    // Where it is by now: moved since that frame along with the displays
+    // being tracked (the frame is a fifth of a second old or so).
+    t.x = (float)px + shift_x;
+    t.y = (float)py + shift_y;
     t.w = (float)pw;
     t.h = (float)ph;
     t.seen = t.sampled = now;
+    if (shifted && camera_) t.moving = true, t.vx = camera_vx_, t.vy = camera_vy_, t.sampled = camera_at_;
     auto grey = [&](int x0, int y0, int w, int h) {
         std::vector<uint8_t> g((size_t)w * h);
         for (int y = 0; y < h; y++)
@@ -741,7 +811,7 @@ std::vector<ScreenScan::Region> ScreenScan::regions_wanted() const {
         float dt = t.moving ? std::min(kMaxPredict, std::chrono::duration<float>(now_ - t.sampled).count()) : 0;
         float ex = t.x + t.vx * dt, ey = t.y + t.vy * dt;
         // Lost for a while: SCANFIND looks for it, not us.
-        if (t.lost >= kStopLooking) continue;
+        if (t.lost > 0 && now_ - t.seen >= kStopLooking) continue;
         // Wider before its first sample (the plate was found in a frame from
         // a moment ago, and may have moved since) and right after losing it.
         bool unsure = t.seq == 0 || t.lost > 0;
@@ -796,10 +866,25 @@ void ScreenScan::apply(const Match& m) {
         if (track_log())
             poe_log("track %llu seq %llu lost (score %.2f)", (unsigned long long)t->id, (unsigned long long)m.seq,
                     m.score);
-        if (t->lost++ == kHideAfter) changed();
-        t->moving = false;
-        t->vx = t->vy = 0;
+        t->lost++;
         t->samples.clear();
+        // Moved on with the camera meanwhile, to be looked for where it is.
+        if (camera_) {
+            float dt = std::chrono::duration<float>(m.at - t->sampled).count();
+            if (dt > 0) {
+                t->x += camera_vx_ * dt;
+                t->y += camera_vy_ * dt;
+                t->sampled = m.at;
+                t->history.push_back({m.at, t->x, t->y});
+            }
+            t->moving = true;
+            t->vx = camera_vx_;
+            t->vy = camera_vy_;
+        } else {
+            t->moving = false;
+            t->vx = t->vy = 0;
+        }
+        changed();
         return;
     }
     Clock::time_point at = m.at;
@@ -816,7 +901,7 @@ void ScreenScan::apply(const Match& m) {
     t->moving = at - first.at >= kVelocityMin && at - first.at <= kVelocitySpan * 3;
     t->vx = t->moving ? (nx - first.x) / span : 0;
     t->vy = t->moving ? (ny - first.y) / span : 0;
-    if (t->lost >= kHideAfter || std::abs(nx - t->x) >= 1 || std::abs(ny - t->y) >= 1) changed();
+    if (hidden(*t) || std::abs(nx - t->x) >= 1 || std::abs(ny - t->y) >= 1) changed();
     if (track_log())
         poe_log("track %llu seq %llu t %.4f x %.0f y %.0f vx %.0f score %.2f", (unsigned long long)t->id,
                 (unsigned long long)m.seq, std::chrono::duration<double>(at.time_since_epoch()).count(), nx, ny,
@@ -838,7 +923,7 @@ std::vector<ScreenScan::Label> ScreenScan::labels() const {
     for (const Remembered& r : remembered_)
         if (r.reply.status == "ok") best = std::max(best, r.reply.value_chaos);
     for (const Tracked& t : tracked_) {
-        if (t.lost >= kHideAfter) continue;
+        if (hidden(t)) continue;
         // Not an item (another kind of tooltip with a plate), or an item
         // another display's tag shows already: no label.
         if ((t.replied && t.reply.status == "no_item") || t.duplicate) continue;

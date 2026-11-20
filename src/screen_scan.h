@@ -156,6 +156,8 @@ private:
         // Read as partly hidden (another tooltip over it): read again from a
         // later frame, from this time.
         std::optional<Clock::time_point> reread_at;
+        int rereads = 0;
+        bool was_hidden = false;  // hidden(), as last drawn
         Clock::time_point retry_at;
         // The reply is a remembered display's, by the look of its name: read
         // it anyway, and take what that says.
@@ -178,7 +180,15 @@ private:
     void poll_area(Clock::time_point now);
     void poll_find(Clock::time_point now);
     // False if it wasn't added: a plate known not to be an item's.
-    bool add_plate(const std::array<float, 8>& p, Clock::time_point now);
+    // `shift`: how far the camera moved it since its frame, if known.
+    bool add_plate(const std::array<float, 8>& p, Clock::time_point now, bool shifted, float shift_x,
+                   float shift_y);
+    // How far the displays tracked now moved since frame_ was taken.
+    bool camera_shift(float* dx, float* dy) const;
+    // The camera's speed, from the displays being tracked.
+    void measure_camera();
+    // Lost long enough for its label to hide.
+    bool hidden(const Tracked& t) const;
     // SCANITEM for a crop of frame_ (its plate's box within it), made off
     // the game's thread.
     std::future<std::string> crop_request(int cx, int cy, int cw, int ch, int px, int py, int pw, int ph) const;
@@ -228,6 +238,11 @@ private:
     bool find_busy_ = false;
 
     std::vector<Tracked> tracked_;
+    // The camera's motion (pixels a second), as of camera_at_: the median
+    // of the displays being tracked.
+    bool camera_ = false;
+    float camera_vx_ = 0, camera_vy_ = 0;
+    Clock::time_point camera_at_;
     std::vector<Remembered> remembered_;
     int extent_w_ = 0, extent_h_ = 0;
 

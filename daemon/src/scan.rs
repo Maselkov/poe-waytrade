@@ -446,6 +446,29 @@ impl Vocabulary {
         found.iter().all(|&i| key(&self.label(i)) == first).then_some(found)
     }
 
+    /// A unique's name, its start maybe cut off by the crop or covered:
+    /// "ICA GRIP OF THE COUNCIL" is Replica Grip of the Council, not the
+    /// nearer Grip of the Council (a name read whole is itself).
+    fn unique(&self, text: &str) -> Option<Vec<usize>> {
+        let k = key(text);
+        let found = self.closest(&self.uniques, text);
+        let exact = found.as_ref().is_some_and(|f| key(&self.label(f[0])) == k);
+        if !exact && k.len() >= 8 {
+            let longer: Vec<usize> = self
+                .uniques
+                .iter()
+                .filter(|(name, _)| name.len() > k.len() && name.ends_with(&k))
+                .map(|&(_, i)| i)
+                .collect();
+            if let Some(&first) = longer.first()
+                && longer.iter().all(|&i| self.label(i) == self.label(first))
+            {
+                return Some(longer);
+            }
+        }
+        found
+    }
+
     fn label(&self, i: usize) -> String {
         let n = &self.names[i];
         n.name.clone().unwrap_or_else(|| n.base.clone())
@@ -527,7 +550,7 @@ pub fn read_item(
         let first = &lines[i];
         let second = lines.get(i + 1);
         // A unique: its name, then its base.
-        if let (Some(found), Some(second)) = (vocabulary.closest(&vocabulary.uniques, &first.text), second) {
+        if let (Some(found), Some(second)) = (vocabulary.unique(&first.text), second) {
             let base = vocabulary.closest(&vocabulary.bases, &second.text);
             let pair = found.iter().map(|&u| &vocabulary.names[u]).find(|u| {
                 base.as_ref().is_some_and(|b| b.iter().any(|&b| key(&vocabulary.names[b].base) == key(&u.base)))
@@ -607,12 +630,39 @@ pub fn read_item(
     Ok(ScreenItem { item, stored_experience, lines: texts })
 }
 
-/// Whether any of these lines is an item's name (a unique's or a base's),
-/// even though read_item couldn't make an item of them.
+/// Whether the item was made of too little to price, to be read again:
+/// - a name cut short: an item with no name of its own (a base, currency)
+///   whose first line is shorter than its base's ("R CANIST GLOVES"), as
+///   when another tooltip covers the start of a unique's name and the base
+///   under it is all that's left;
+/// - a currency's name with nothing under it (its stack size covered).
+pub fn partly_hidden(read: &ScreenItem) -> bool {
+    read.item.name.is_none() && read.lines.first().is_some_and(|l| key(l).len() < key(&read.item.base).len())
+        || read.item.rarity == "Currency" && read.item.stack_size.is_none() && read.lines.len() < 2
+}
+
+/// Lines only an item's tooltip has.
+/// (Parts of them: the start of a line may be covered too.)
+const ITEM_MARKERS: [&str; 8] =
+    ["CONTRABAND", "KSIZE", "QUIRESLEVEL", "OUIRESLEVEL", "ITEMLEVEL", "CORRUPTED", "QUALITY", "SOCKETS"];
+
+/// Whether these lines look like an item's tooltip read badly (another
+/// tooltip over its name, or the crop cut it), though read_item couldn't
+/// make an item of them: an item's name (or the end of one, "PLICA GRIP OF
+/// THE COUNCIL"), a line only items have, or nothing read at all.
 pub fn names_an_item(lines: &[Line], vocabulary: &Vocabulary) -> bool {
+    if lines.iter().all(|l| key(&l.text).len() < 3) {
+        return true;
+    }
+    let part_of_a_name =
+        |k: &str| k.len() >= 8 && vocabulary.uniques.iter().chain(&vocabulary.bases).any(|(name, _)| name.contains(k));
     lines.iter().take(4).any(|l| {
         vocabulary.closest(&vocabulary.uniques, &l.text).is_some()
             || vocabulary.closest(&vocabulary.bases, &l.text).is_some()
+            || part_of_a_name(&key(&l.text))
+    }) || lines.iter().any(|l| {
+        let k = key(&l.text);
+        ITEM_MARKERS.iter().any(|m| k.contains(m))
     })
 }
 
@@ -675,6 +725,9 @@ mod tests {
             named(None, "Greater Multistrike Support", "gem"),
             named(None, "Multistrike Support", "gem"),
             named(None, "Tenderizer", "weapon"),
+            named(Some("Replica Grip of the Council"), "Arcanist Gloves", "armour"),
+            named(Some("Grip of the Council"), "Arcanist Gloves", "armour"),
+            named(None, "Arcanist Gloves", "armour"),
             named(None, "Primordial Staff", "weapon"),
         ]))
     }
@@ -782,6 +835,43 @@ mod tests {
         let covered = lines(&["MOTHER'S EMBRACE", "00:00"]);
         assert!(read_item(&covered, &v, |_| None).is_err());
         assert!(names_an_item(&covered, &v));
+        // An item's name cut short, the lines under a name another tooltip
+        // covers (a currency's), and nothing read: read them again too.
+        assert!(names_an_item(&lines(&["PLICA GRIP OF THE COUNCIL"]), &v));
+        let stack = lines(&["STACK SIZE: 19/40", "GRANTS A PASSIVE SKILL REFUND POINT", "CONTRABAND"]);
+        assert!(names_an_item(&stack, &v));
+        assert!(names_an_item(&[], &v));
+        assert!(names_an_item(&lines(&["11", "CK SIZE: 19/40"]), &v));
+    }
+
+    #[test]
+    fn replica_names_cut_short() {
+        let v = vocabulary();
+        let read = |ls: &[&str]| read_item(&lines(ls), &v, |_| None).unwrap().item.name;
+        assert_eq!(
+            read(&["ICA GRIP OF THE COUNCIL", "ARCANIST GLOVES"]).as_deref(),
+            Some("Replica Grip of the Council")
+        );
+        assert_eq!(read(&["GRIP OF THE COUNCIL", "ARCANIST GLOVES"]).as_deref(), Some("Grip of the Council"));
+        assert_eq!(
+            read(&["REPLICA GRIP OF THE COUNCL", "ARCANIST GLOVES"]).as_deref(),
+            Some("Replica Grip of the Council")
+        );
+    }
+
+    #[test]
+    fn names_cut_short() {
+        let v = vocabulary();
+        let read = |ls: &[&str]| read_item(&lines(ls), &v, |_| None).unwrap();
+        let cut = read(&["R CANIST GLOVES", "ENERGY SHIELD: 47"]);
+        assert_eq!((cut.item.name.as_deref(), cut.item.base.as_str()), (None, "Arcanist Gloves"));
+        assert!(partly_hidden(&cut));
+        assert!(!partly_hidden(&read(&["ARCANIST GLOVES", "ENERGY SHIELD: 47"])));
+        // A typo isn't a cut.
+        assert!(!partly_hidden(&read(&["ARCANIST GLOVFS", "ENERGY SHIELD: 47"])));
+        // A currency without its stack size.
+        assert!(partly_hidden(&read(&["CHAOS ORB"])));
+        assert!(!partly_hidden(&read(&["CHAOS ORB", "STACK SIZE: 12/20"])));
     }
 
     #[test]
