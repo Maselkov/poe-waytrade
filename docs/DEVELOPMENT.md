@@ -196,12 +196,16 @@ To set `POE_LEAGUE` for the socket-activated daemon, use
 
 ## CI and releases
 
-GitHub Actions runs three jobs in Arch containers on every push to main and
+GitHub Actions runs these jobs in Arch containers on every push to main and
 every pull request:
 - `lint`: rustfmt, and clippy with warnings as errors.
 - `test`: the daemon's tests and the `waytrade` launcher.
-- `package`: the Arch package, which builds the layer and the daemon, and a
-  check that the layer exports only the three Vulkan loader entry points.
+- `layer`: builds the layer (with ccache, so the vendored RmlUi is rarely
+  rebuilt) and checks that it exports only the three Vulkan loader entry
+  points.
+
+Pushes to main also run `package`, the full Arch package (layer and daemon),
+which takes about 4 minutes, so pull requests don't wait for it.
 
 [AGENTS.md](../AGENTS.md) lists the commands to run them locally, how to
 refresh the daemon's test fixtures, and how to bump the version.

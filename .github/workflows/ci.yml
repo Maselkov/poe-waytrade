@@ -10,9 +10,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Three independent jobs, so each shows its own status and one failing
-# doesn't hide the others. All run in Arch, so clippy is the same version
-# everywhere.
+# Independent jobs, so each shows its own status and one failing doesn't
+# hide the others. All run in Arch, so clippy is the same version everywhere.
+# Pull requests wait for lint, test and layer (about a minute each); the full
+# Arch package is built only after the push to main.
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -57,8 +58,49 @@ jobs:
           cargo build --locked --manifest-path daemon/Cargo.toml
           .github/scripts/test-launcher.sh daemon/target/debug/poe-waytrade-daemon
 
-  # makepkg builds the layer and the daemon, so this is also the layer build.
+  # The layer on its own, and its exports. ccache keeps the compiled objects
+  # between runs, so the vendored RmlUi (most of the build, and it rarely
+  # changes) isn't rebuilt every time: pushes to main save the cache, and every
+  # run, pull requests included, restores the newest one.
+  layer:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    env:
+      CCACHE_DIR: /ccache
+      CCACHE_MAXSIZE: 500M
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          .github/scripts/arch-setup.sh ccache cmake ninja gcc pkgconf \
+            vulkan-headers wayland wayland-protocols shaderc freetype2
+      - uses: actions/cache/restore@v4
+        with:
+          path: /ccache
+          key: ccache-layer-${{ github.sha }}
+          restore-keys: ccache-layer-
+      - name: Build
+        run: |
+          ccache --zero-stats
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build build
+          ccache --show-stats
+      - name: Layer exports only Vulkan entry points
+        run: .github/scripts/check-exports.sh build/libVkLayer_poe_waytrade.so
+      - name: Drop cache entries unused for two weeks
+        if: github.event_name != 'pull_request'
+        run: ccache --evict-older-than 14d
+      - uses: actions/cache/save@v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: /ccache
+          key: ccache-layer-${{ github.sha }}
+
+  # The Arch package, after the push to main (and by hand); release.yml builds
+  # it for tags. --nocheck because the test job has run the daemon's tests.
   package:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -73,7 +115,7 @@ jobs:
         run: .github/scripts/arch-setup.sh
       - name: Arch package
         working-directory: packaging/arch
-        run: su builder -c 'makepkg --noconfirm'
+        run: su builder -c 'makepkg --noconfirm --nocheck'
       - name: Layer exports only Vulkan entry points
         run: .github/scripts/check-exports.sh packaging/arch/pkg/poe-waytrade/usr/lib/libVkLayer_poe_waytrade.so
       - uses: actions/upload-artifact@v4
