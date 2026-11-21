@@ -482,6 +482,14 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .filter.sec-eater .range-fill { background-color: #2f78c4; }
 .filter.sec-eater .range-handle { decorator: image(disc:#cfe5fb:#2f78c4); }
 
+/* Corruption implicits (a Vaal Orb's) in corrupted crimson, like the game's
+   "Corrupted" line: redder and darker than the Exarch's orange. */
+.filter.sec-corruption .mod, .filter.sec-corruption .mod-full { color: #e8656e; }
+.filter.sec-corruption.on { border-left-color: #b8323e; background-color: #230e12; }
+.filter.sec-corruption.off .mod, .filter.sec-corruption.off .mod-full { color: #a8545b; }
+.filter.sec-corruption .range-fill { background-color: #b8323e; }
+.filter.sec-corruption .range-handle { decorator: image(disc:#fbd0d4:#b8323e); }
+
 /* Influence flags in their influence's color, only when ticked; unticked
    they look like any other filter. */
 .filter.sec-shaper.on .mod, .filter.sec-shaper.on .mod-full { color: #8fb4ea; }

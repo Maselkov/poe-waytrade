@@ -138,6 +138,9 @@ pub struct ModLine {
     pub tier: Option<u32>,
     /// An eldritch implicit's altar, from its advanced-copy header.
     pub eldritch: Option<Eldritch>,
+    /// An implicit a Vaal Orb put there, from its advanced-copy header
+    /// (`{ Corruption Implicit Modifier — Caster, Curse }`).
+    pub corruption: bool,
     /// The mod's tags from its advanced-copy header ("Life", "Defences").
     pub tags: Vec<String>,
 }
@@ -210,6 +213,7 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
                 ranges: Vec::new(),
                 tier: None,
                 eldritch: None,
+                corruption: false,
                 tags: Vec::new(),
             };
         }
@@ -221,6 +225,7 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
         ranges: Vec::new(),
         tier: None,
         eldritch: None,
+        corruption: false,
         tags: Vec::new(),
     }
 }
@@ -384,6 +389,7 @@ pub fn parse(text: &str) -> Option<Item> {
             let mut tier = None;
             let mut header_kind = None;
             let mut eldritch = None;
+            let mut corruption = false;
             let mut tags = Vec::new();
             for line in section {
                 // A property, wherever the game puts it. PoE2's granted
@@ -402,6 +408,7 @@ pub fn parse(text: &str) -> Option<Item> {
                     header_kind = kind_from_header(line);
                     let header = eldritch_header(line);
                     eldritch = header.map(|(e, _)| e);
+                    corruption = line.starts_with("{ Corruption Implicit Modifier");
                     tags = header_tags(line);
                     match header {
                         Some((Eldritch::Exarch, t)) => item.searing = Some(t),
@@ -440,6 +447,7 @@ pub fn parse(text: &str) -> Option<Item> {
                 m.ranges = ranges;
                 m.tier = tier;
                 m.eldritch = eldritch;
+                m.corruption = corruption;
                 m.tags = tags.clone();
                 item.mods.push(m);
             }

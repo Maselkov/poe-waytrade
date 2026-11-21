@@ -188,7 +188,7 @@ struct UiFilter {
     bool has_slider = false, max_roll = false;
     bool has_max = false;  // a maximum is set: its handle shows; else the fill runs open to the end
     Rml::String tier;     // "T1"; empty: none
-    Rml::String section;  // weapon | base | armour | total | enchant | implicit | exarch | eater | mod | fractured | crafted | map | shaper, elder, ... (influence)
+    Rml::String section;  // weapon | base | armour | total | enchant | implicit | exarch | eater | corruption | mod | fractured | crafted | map | shaper, elder, ... (influence)
 };
 struct UiGroup {
     Rml::String label;
@@ -1141,13 +1141,17 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             u.section = f.section;
             const std::string& sec = f.section;
             size_t group = sec == "enchant"                                         ? 1
-                         : sec == "implicit" || sec == "exarch" || sec == "eater" ? 2
+                         : sec == "implicit" || sec == "exarch" || sec == "eater"
+                                 || sec == "corruption"                           ? 2
                          : sec == "total"                                         ? 3
                          : sec == "mod" || sec == "fractured" || sec == "crafted" ? 4 : 0;
             m.filter_groups[group].filters.push_back(u);
         }
-        // Each eldritch implicit's tier row next to its mods: plain, Exarch, Eater.
-        auto rank = [](const UiFilter& f) { return f.section == "exarch" ? 1 : f.section == "eater" ? 2 : 0; };
+        // Each eldritch implicit's tier row next to its mods: plain, Exarch,
+        // Eater, then corruption's, which replaced the base's own.
+        auto rank = [](const UiFilter& f) {
+            return f.section == "exarch" ? 1 : f.section == "eater" ? 2 : f.section == "corruption" ? 3 : 0;
+        };
         std::stable_sort(m.filter_groups[2].filters.begin(), m.filter_groups[2].filters.end(),
                          [&](const UiFilter& a, const UiFilter& b) { return rank(a) < rank(b); });
         m.filter_groups.erase(std::remove_if(m.filter_groups.begin(), m.filter_groups.end(),
