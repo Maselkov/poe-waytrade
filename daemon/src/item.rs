@@ -116,6 +116,8 @@ pub struct ModLine {
     pub tier: Option<u32>,
     /// An eldritch implicit's altar, from its advanced-copy header.
     pub eldritch: Option<Eldritch>,
+    /// The mod's tags from its advanced-copy header ("Life", "Defences").
+    pub tags: Vec<String>,
 }
 
 /// `{ Prefix Modifier "Virile" (Tier: 3) — Life }` -> 3. Crafted mods have
@@ -123,6 +125,14 @@ pub struct ModLine {
 fn header_tier(header: &str) -> Option<u32> {
     let rest = &header[header.find("(Tier: ")? + "(Tier: ".len()..];
     rest[..rest.find(')')?].trim().parse().ok()
+}
+
+/// `{ Prefix Modifier "Virile" (Tier: 3) — Life, Defences }` -> ["Life",
+/// "Defences"]. A header without tags has no " — ".
+fn header_tags(header: &str) -> Vec<String> {
+    let Some(inner) = header.strip_prefix("{ ").and_then(|h| h.strip_suffix(" }")) else { return Vec::new() };
+    let Some((_, tags)) = inner.rsplit_once(" — ") else { return Vec::new() };
+    tags.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect()
 }
 
 /// `{ Searing Exarch Implicit Modifier (Grand) — … }` -> (Exarch, Some(3)).
@@ -173,6 +183,7 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
                 ranges: Vec::new(),
                 tier: None,
                 eldritch: None,
+                tags: Vec::new(),
             };
         }
     }
@@ -183,6 +194,7 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
         ranges: Vec::new(),
         tier: None,
         eldritch: None,
+        tags: Vec::new(),
     }
 }
 
@@ -327,6 +339,7 @@ pub fn parse(text: &str) -> Option<Item> {
             let mut tier = None;
             let mut header_kind = None;
             let mut eldritch = None;
+            let mut tags = Vec::new();
             for line in section {
                 // A property, wherever the game puts it.
                 if line.starts_with("Memory Strands: ")
@@ -342,6 +355,7 @@ pub fn parse(text: &str) -> Option<Item> {
                     header_kind = kind_from_header(line);
                     let header = eldritch_header(line);
                     eldritch = header.map(|(e, _)| e);
+                    tags = header_tags(line);
                     match header {
                         Some((Eldritch::Exarch, t)) => item.searing = Some(t),
                         Some((Eldritch::Eater, t)) => item.tangled = Some(t),
@@ -379,6 +393,7 @@ pub fn parse(text: &str) -> Option<Item> {
                 m.ranges = ranges;
                 m.tier = tier;
                 m.eldritch = eldritch;
+                m.tags = tags.clone();
                 item.mods.push(m);
             }
         } else if let Some(v) = section.iter().find_map(|l| l.strip_prefix("Item Level: ")) {
@@ -587,6 +602,8 @@ pub(crate) mod tests {
         );
         let tiers: Vec<_> = item.mods.iter().map(|m| m.tier).collect();
         assert_eq!(tiers, vec![None, Some(3), Some(4)]);
+        let tags: Vec<_> = item.mods.iter().map(|m| m.tags.join(",")).collect();
+        assert_eq!(tags, vec!["Elemental,Cold,Resistance", "Life", "Elemental,Fire,Resistance"]);
     }
 
     #[test]

@@ -37,6 +37,8 @@ pub enum Target {
     Property(&'static str, &'static str),
     /// A yes/no item filter, e.g. misc_filters.fractured_item.
     Flag(&'static str, &'static str),
+    /// Items with none of these stats (a "not" group).
+    NoneOf(Vec<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2114,11 +2116,72 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     add("+# total to Dexterity", dexterity, false);
     add("+# total to Intelligence", intelligence, false);
 
+    filters.extend(no_life_filter(item, data));
     filters.extend(fractured);
     filters.extend(listed);
     drop_covered_eldritch(&mut filters);
     exact_cluster_counts(&mut filters);
     filters
+}
+
+/// Stats of the mods tagged Life that body armour can have (RePoE's mod
+/// list and bench crafts), and the trade groups they come in: e explicit,
+/// f fractured, i implicit (synthesis, eldritch), c crafted. Hybrid mods'
+/// other stats ("#% increased Armour") aren't here: other mods have them too.
+const LIFE_STATS: &[(&str, &str)] = &[
+    ("+# to maximum Life", "efic"),
+    ("#% increased maximum Life", "efic"),
+    ("Regenerate # Life per second", "efi"),
+    ("Regenerate #% of Life per second", "efi"),
+    ("#% increased Life Recovery rate", "efi"),
+    ("#% increased Life Reservation Efficiency of Skills", "ef"),
+    ("#% of Damage taken Recouped as Life", "efi"),
+    ("Every # seconds, Regenerate #% of Life over one second", "ef"),
+    ("Recover #% of Life on Kill", "ef"),
+    ("#% of Damage is taken from Mana before Life", "ef"),
+    ("#% of Damage is taken from Mana before Life while Focused", "efc"),
+    ("#% of Evasion Rating is Regenerated as Life per second while Focused", "efc"),
+    ("Minions have #% increased maximum Life", "ef"),
+];
+
+/// "No life modifiers", unticked: a body armour without a mod tagged Life,
+/// searched as one with none of `LIFE_STATS` (a passive mastery rewards
+/// such armour). Only from advanced copy, whose headers carry the tags.
+fn no_life_filter(item: &Item, data: &TradeData) -> Option<Filter> {
+    if item.class != "Body Armours" || !item.advanced || item.mods.iter().any(|m| m.tags.iter().any(|t| t == "Life")) {
+        return None;
+    }
+    let mut ids = Vec::new();
+    for (text, groups) in LIFE_STATS {
+        for (c, group) in [('e', "explicit"), ('f', "fractured"), ('i', "implicit"), ('c', "crafted")] {
+            if !groups.contains(c) {
+                continue;
+            }
+            // A stat with a fixed number ("Every 4 seconds") is listed with it.
+            let numbered = data.numbered.get(&(group.to_string(), text.to_string())).into_iter().flatten();
+            let found = data.stat_ids(group, text).into_iter().flatten();
+            let numbered = numbered.filter_map(|(t, _)| data.stats.get(&(group.to_string(), t.clone())).cloned());
+            for id in found.chain(numbered) {
+                if !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+        }
+    }
+    (!ids.is_empty()).then(|| Filter {
+        label: "No life modifiers".into(),
+        target: Target::NoneOf(ids),
+        min: None,
+        slider: None,
+        draw_slider: false,
+        step: 1.0,
+        max_roll: false,
+        default_on: false,
+        section: Section::Total,
+        tier: None,
+        max: None,
+        roll: None,
+    })
 }
 
 /// One fetched listing: amount, currency id, currency name, chaos value,
@@ -2148,7 +2211,7 @@ fn listing_value(item: &Value, target: &Target) -> Option<String> {
         Target::Stat(id) => stat_value(item, id)?,
         Target::AnyStat(ids) => ids.iter().find_map(|id| stat_value(item, id))?,
         Target::Property(group, key) => property_value(item, group, key)?,
-        Target::StatOption(..) | Target::Flag(..) => return None,
+        Target::StatOption(..) | Target::Flag(..) | Target::NoneOf(..) => return None,
     };
     Some(format!("{}{}", trim_number(value), if percent { "%" } else { "" }))
 }
@@ -2532,6 +2595,7 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
         "filters": { "type_filters": { "filters": { "rarity": { "option": if unique { "unique" } else { "nonunique" } } } } },
     });
     let mut any_of = Vec::new();
+    let mut none_of = Vec::new();
     let stat = |id: &str, bounds| match bounds {
         (None, None) => json!({ "id": id }),
         _ => json!({ "id": id, "value": bounds_json(bounds) }),
@@ -2548,9 +2612,12 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
             Target::StatOption(id, option) => stats.push(json!({ "id": id, "value": { "option": option } })),
             Target::Property(group, key) => q["filters"][*group]["filters"][*key] = bounds_json(bounds),
             Target::Flag(group, key) => q["filters"][*group]["filters"][*key] = json!({ "option": "true" }),
+            Target::NoneOf(ids) => none_of.extend(ids.iter().map(|id| json!({ "id": id }))),
         }
     }
-    q["stats"] = Value::Array([json!({ "type": "and", "filters": stats })].into_iter().chain(any_of).collect());
+    let not = (!none_of.is_empty()).then(|| json!({ "type": "not", "filters": none_of }));
+    q["stats"] =
+        Value::Array([json!({ "type": "and", "filters": stats })].into_iter().chain(any_of).chain(not).collect());
     if unique {
         q["name"] = json!(item.name);
         q["type"] = json!(item.base);
@@ -3743,6 +3810,76 @@ mod tests {
         let impale = "#% chance to Impale Enemies on Hit with Attacks";
         assert_eq!(find(ModKind::Fractured, impale, Local::Weapon).as_deref(), Some("fractured.stat_725880290"));
         assert_eq!(find(ModKind::Fractured, impale, Local::None).as_deref(), Some("fractured.stat_3739863694"));
+    }
+
+    #[test]
+    fn body_armour_without_life_mods() {
+        let entry = |group: &str, stat: &str, text: &str| json!({ "id": format!("{group}.{stat}"), "text": text });
+        let stats = json!({ "result": [
+            { "id": "explicit", "entries": [
+                entry("explicit", "stat_3299347043", "+# to maximum Life"),
+                entry("explicit", "stat_regen", "Every 4 seconds, Regenerate #% of Life over one second"),
+                entry("explicit", "stat_fire", "+#% to Fire Resistance"),
+            ]},
+            { "id": "crafted", "entries": [
+                entry("crafted", "stat_3299347043", "+# to maximum Life"),
+                entry("crafted", "stat_983749596", "#% increased maximum Life"),
+            ]},
+            { "id": "implicit", "entries": [entry("implicit", "stat_3299347043", "+# to maximum Life")] },
+        ]});
+        let data = TradeData::from_json(&stats, &Value::Null, &Value::Null);
+        let armour = |mods: &str| {
+            format!(
+                "Item Class: Body Armours\nRarity: Rare\nCorpse Shell\nVaal Regalia\n--------\n\
+                 Energy Shield: 400\n--------\nItem Level: 86\n--------\n{mods}"
+            )
+        };
+        let fire = "{ Suffix Modifier \"of the Furnace\" (Tier: 4) — Elemental, Fire, Resistance }\n\
+                    +30(30-35)% to Fire Resistance\n";
+        let life = "{ Prefix Modifier \"Virile\" (Tier: 3) — Life }\n+60(55-69) to maximum Life\n";
+        let no_life = |text: &str| {
+            let item = crate::item::parse(text).unwrap();
+            let filters = build_filters(&item, &data, Preset::Normal);
+            let i = filters.iter().position(|f| f.label == "No life modifiers")?;
+            Some((item, filters, i))
+        };
+
+        let (item, filters, i) = no_life(&armour(fire)).unwrap();
+        assert!(!filters[i].default_on);
+        let Target::NoneOf(ids) = &filters[i].target else { panic!("{:?}", filters[i].target) };
+        assert_eq!(
+            ids,
+            &[
+                "explicit.stat_3299347043",
+                "implicit.stat_3299347043",
+                "crafted.stat_3299347043",
+                "crafted.stat_983749596",
+                "explicit.stat_regen"
+            ]
+        );
+        let chosen: Vec<Option<Bounds>> = (0..filters.len()).map(|j| (j == i).then_some((None, None))).collect();
+        let opts = SearchOptions {
+            six_link: false,
+            unidentified: false,
+            base_only: false,
+            corrupted: Corrupted::Any,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
+        let q = query(&item, &filters, &chosen, opts);
+        let not = &q["query"]["stats"][1];
+        assert_eq!(not["type"], "not");
+        assert_eq!(not["filters"][0], json!({ "id": "explicit.stat_3299347043" }));
+        assert_eq!(not["filters"].as_array().unwrap().len(), ids.len());
+        // Unticked, it adds nothing to the query.
+        let q = query(&item, &filters, &vec![None; filters.len()], opts);
+        assert_eq!(q["query"]["stats"].as_array().unwrap().len(), 1);
+
+        // A mod tagged Life, any other item class, or no tags to go by: none.
+        assert!(no_life(&armour(&format!("{life}{fire}"))).is_none());
+        let helmet = armour(fire).replace("Body Armours", "Helmets");
+        assert!(no_life(&helmet).is_none());
+        assert!(no_life(&armour("+30% to Fire Resistance\n")).is_none());
     }
 
     // ---- against replies captured by fixtures/refresh.py ----
