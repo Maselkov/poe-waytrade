@@ -35,6 +35,7 @@ pub const KEYS: &[&str] = &[
     "tracking",
     "heist_watch",
     "startup_notice",
+    "copy_check",
 ];
 
 /// Areas where the display price check starts by itself: mob-free rooms of
@@ -72,6 +73,8 @@ pub struct Settings {
     pub heist_watch: bool,
     /// The notice at start-up that the overlay is running (and loading prices).
     pub startup_notice: bool,
+    /// The user's own Ctrl+C on an item opens a quick look, like Ctrl+D.
+    pub copy_check: bool,
 }
 
 /// Each a key combination as the layer matches it: modifiers and an evdev
@@ -105,6 +108,7 @@ impl Default for Settings {
             tracking: "gpu".to_string(),
             heist_watch: true,
             startup_notice: true,
+            copy_check: false,
         }
     }
 }
@@ -216,6 +220,7 @@ impl Settings {
             "tracking" => self.tracking.clone(),
             "heist_watch" => if self.heist_watch { "on" } else { "off" }.to_string(),
             "startup_notice" => if self.startup_notice { "on" } else { "off" }.to_string(),
+            "copy_check" => if self.copy_check { "on" } else { "off" }.to_string(),
             _ => String::new(),
         }
     }
@@ -283,6 +288,11 @@ impl Settings {
                 "on" => self.startup_notice = true,
                 "off" => self.startup_notice = false,
                 _ => return Err("The start-up notice is on or off".to_string()),
+            },
+            "copy_check" => match value {
+                "on" => self.copy_check = true,
+                "off" => self.copy_check = false,
+                _ => return Err("Ctrl+C price checks are on or off".to_string()),
             },
             "tracking" => {
                 if !["gpu", "cpu"].contains(&value) {
@@ -378,6 +388,9 @@ mod tests {
         s.set("startup_notice", "off").unwrap();
         assert!(!s.startup_notice);
         assert_eq!(s.get("startup_notice"), "off");
+        assert_eq!(s.get("copy_check"), "off");
+        s.set("copy_check", "on").unwrap();
+        assert!(s.copy_check);
         assert_eq!(s.get("tracking"), "cpu");
         assert_eq!(s.auto_watch_areas, ["Zealot's Vault", "Arkhon's Vault"]);
         assert_eq!(s.get("auto_watch_areas"), "Zealot's Vault;Arkhon's Vault");
@@ -404,6 +417,7 @@ mod tests {
             ("tracking", "fast"),
             ("heist_watch", "maybe"),
             ("startup_notice", "maybe"),
+            ("copy_check", "maybe"),
             ("nonsense", "1"),
         ] {
             let before = s.clone();
@@ -423,6 +437,7 @@ mod tests {
         assert!(s.stash_scroll, "missing from older files: on");
         assert_eq!(s.cursor, "game", "missing from older files: the game's");
         assert!(s.auto_watch, "missing from older files: on");
+        assert!(!s.copy_check, "missing from older files: off");
         assert_eq!(s.auto_watch_areas.len(), DEFAULT_WATCH_AREAS.len());
         assert_eq!(s.hotkeys.displays, "ctrl+alt+33");
 

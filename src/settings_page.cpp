@@ -127,6 +127,7 @@ void SettingsPage::apply_reply(const PriceReply& reply) {
         else if (key == "tracking") v.gpu_tracking = value != "cpu";
         else if (key == "heist_watch") v.heist_watch = value != "off";
         else if (key == "startup_notice") v.startup_notice = value != "off";
+        else if (key == "copy_check") v.copy_check = value == "on";
         for (int i = 0; i < kActions; i++)
             if (key == kHotkeyKeys[i]) v.hotkeys[i] = parse_combo(value);
     }
@@ -289,6 +290,13 @@ void SettingsPage::set_startup_notice(bool on) {
     if (on == values_.startup_notice) return;
     values_.startup_notice = on;
     set("startup_notice", on ? "on" : "off");
+    set_note("");
+}
+
+void SettingsPage::set_copy_check(bool on) {
+    if (on == values_.copy_check) return;
+    values_.copy_check = on;
+    set("copy_check", on ? "on" : "off");
     set_note("");
 }
 
