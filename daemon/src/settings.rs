@@ -34,6 +34,7 @@ pub const KEYS: &[&str] = &[
     "client_log",
     "tracking",
     "heist_watch",
+    "startup_notice",
 ];
 
 /// Areas where the display price check starts by itself: mob-free rooms of
@@ -69,6 +70,8 @@ pub struct Settings {
     /// In Heist, watch for item displays (curio displays) at a slow pace,
     /// speeding up while one is in view.
     pub heist_watch: bool,
+    /// The notice at start-up that the overlay is running (and loading prices).
+    pub startup_notice: bool,
 }
 
 /// Each a key combination as the layer matches it: modifiers and an evdev
@@ -101,6 +104,7 @@ impl Default for Settings {
             client_log: String::new(),
             tracking: "gpu".to_string(),
             heist_watch: true,
+            startup_notice: true,
         }
     }
 }
@@ -211,6 +215,7 @@ impl Settings {
             "client_log" => self.client_log.clone(),
             "tracking" => self.tracking.clone(),
             "heist_watch" => if self.heist_watch { "on" } else { "off" }.to_string(),
+            "startup_notice" => if self.startup_notice { "on" } else { "off" }.to_string(),
             _ => String::new(),
         }
     }
@@ -273,6 +278,11 @@ impl Settings {
                 "on" => self.heist_watch = true,
                 "off" => self.heist_watch = false,
                 _ => return Err("Heist watch is on or off".to_string()),
+            },
+            "startup_notice" => match value {
+                "on" => self.startup_notice = true,
+                "off" => self.startup_notice = false,
+                _ => return Err("The start-up notice is on or off".to_string()),
             },
             "tracking" => {
                 if !["gpu", "cpu"].contains(&value) {
@@ -365,6 +375,9 @@ mod tests {
         s.set("tracking", "cpu").unwrap();
         s.set("heist_watch", "off").unwrap();
         assert!(!s.heist_watch);
+        s.set("startup_notice", "off").unwrap();
+        assert!(!s.startup_notice);
+        assert_eq!(s.get("startup_notice"), "off");
         assert_eq!(s.get("tracking"), "cpu");
         assert_eq!(s.auto_watch_areas, ["Zealot's Vault", "Arkhon's Vault"]);
         assert_eq!(s.get("auto_watch_areas"), "Zealot's Vault;Arkhon's Vault");
@@ -390,6 +403,7 @@ mod tests {
             ("client_log", "logs/Client.txt"),
             ("tracking", "fast"),
             ("heist_watch", "maybe"),
+            ("startup_notice", "maybe"),
             ("nonsense", "1"),
         ] {
             let before = s.clone();
