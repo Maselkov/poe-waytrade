@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "assets.h"
+#include "game.h"
 #include "icons.h"
 #include "layer.h"
 #include "price_check.h"
@@ -298,6 +299,7 @@ struct Model {
     bool s_auto_watch = true;
     bool s_gpu_tracking = true;
     bool s_heist_watch = true;
+    bool s_displays = true;  // the item displays settings (PoE1's vaults and Heist)
     bool s_startup_notice = true;
     bool s_copy_check = false;
     bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
@@ -727,6 +729,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_auto_watch", &model.s_auto_watch);
     c.Bind("s_gpu_tracking", &model.s_gpu_tracking);
     c.Bind("s_heist_watch", &model.s_heist_watch);
+    c.Bind("s_displays", &model.s_displays);
     c.Bind("s_startup_notice", &model.s_startup_notice);
     c.Bind("s_copy_check", &model.s_copy_check);
     c.Bind("s_scaled", &model.s_scaled);
@@ -1295,6 +1298,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
         "Prices the item displays on screen (vault reliquaries) until you leave the area",
     };
     for (int i = 0; i < SettingsPage::kActions; i++) {
+        if (!SettingsPage::shown((Action)i)) continue;
         UiHotkey h;
         h.index = i;
         h.label = SettingsPage::action_label((Action)i);
@@ -1334,6 +1338,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_auto_watch = v.auto_watch;
     m.s_gpu_tracking = v.gpu_tracking;
     m.s_heist_watch = v.heist_watch;
+    m.s_displays = !is_poe2();
     m.s_startup_notice = v.startup_notice;
     m.s_copy_check = v.copy_check;
     m.s_profile = s.map_profile();

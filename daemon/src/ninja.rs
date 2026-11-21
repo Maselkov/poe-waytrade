@@ -103,8 +103,6 @@ struct IndexState {
 #[derive(Deserialize)]
 struct League {
     name: String,
-    /// false: listed, but poe.ninja has no prices for it (yet).
-    indexed: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -287,7 +285,7 @@ fn get<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
 /// leagues first).
 pub fn leagues() -> Result<Vec<String>, String> {
     let index: IndexState = get(&format!("{}/data/index-state", base()))?;
-    Ok(index.economy_leagues.into_iter().filter(|l| l.indexed != Some(false)).map(|l| l.name).collect())
+    Ok(index.economy_leagues.into_iter().map(|l| l.name).collect())
 }
 
 /// The current challenge league, falling back to Standard; or with
@@ -416,10 +414,11 @@ pub(crate) mod tests {
     #[test]
     fn poe2_leagues() {
         let index: IndexState = serde_json::from_str(include_str!("../fixtures/poe2/ninja-index-state.json")).unwrap();
-        let names: Vec<String> =
-            index.economy_leagues.into_iter().filter(|l| l.indexed != Some(false)).map(|l| l.name).collect();
+        let names: Vec<String> = index.economy_leagues.into_iter().map(|l| l.name).collect();
         let league = pick_league(&names, false);
         assert!(!is_hardcore(&league) && league != "Standard", "picked {league} from {names:?}");
+        // Its hardcore twin is "HC <league>".
+        assert_eq!(pick_league(&names, true), format!("HC {league}"), "from {names:?}");
         let only = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
         let names = only(&["Runes of Aldur", "HC Runes of Aldur", "Standard", "Hardcore"]);
         assert_eq!(pick_league(&names, false), "Runes of Aldur");

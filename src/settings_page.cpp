@@ -1,4 +1,5 @@
 #include "settings_page.h"
+#include "game.h"
 #include "layer.h"
 #include "wl_input.h"
 
@@ -29,9 +30,20 @@ std::string scale_text(double scale) {
 
 }  // namespace
 
+// The daemon has the same defaults (settings.rs: Hotkeys::default).
 std::array<KeyCombo, SettingsPage::kActions> SettingsPage::Values::defaults() {
+    // PoE2 can move with WASD, and the game sees every key we see: Ctrl+D
+    // would walk the character away from the stash. The key under Esc
+    // isn't bound there. No map check alias or item displays in PoE2.
+    if (is_poe2())
+        return {KeyCombo{kModCtrl, KEY_GRAVE}, KeyCombo{kModCtrl | kModAlt, KEY_GRAVE}, KeyCombo{},
+                KeyCombo{kModCtrl | kModAlt, KEY_S}, KeyCombo{}};
     return {KeyCombo{kModCtrl, KEY_D}, KeyCombo{kModCtrl | kModAlt, KEY_D}, KeyCombo{kModAlt, KEY_D},
             KeyCombo{kModCtrl | kModAlt, KEY_S}, KeyCombo{kModCtrl | kModAlt, KEY_F}};
+}
+
+bool SettingsPage::shown(Action action) {
+    return !is_poe2() || (action != Action::MapAlias && action != Action::Displays);
 }
 
 const char* SettingsPage::action_label(Action action) {
@@ -151,7 +163,7 @@ std::vector<HotkeyBinding> SettingsPage::bindings() const {
                                       Hotkey::Settings, Hotkey::Displays};
     std::vector<HotkeyBinding> out;
     for (int i = 0; i < kActions; i++)
-        if (!values_.hotkeys[i].empty()) out.push_back({values_.hotkeys[i], hotkeys[i]});
+        if (shown((Action)i) && !values_.hotkeys[i].empty()) out.push_back({values_.hotkeys[i], hotkeys[i]});
     return out;
 }
 

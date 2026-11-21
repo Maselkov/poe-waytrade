@@ -21,8 +21,8 @@
    }
   ],
   "rates": {
-   "exalted": 548.6,
-   "chaos": 7.46
+   "exalted": 462.3,
+   "chaos": 11.47
   },
   "primary": "divine",
   "secondary": "chaos"
@@ -30,66 +30,73 @@
  "lines": [
   {
    "id": "alch",
-   "primaryValue": 0.0004074,
-   "volumePrimaryValue": 0.1838,
-   "maxVolumeCurrency": "exalted",
-   "maxVolumeRate": 4.47
+   "primaryValue": 0.0132,
+   "volumePrimaryValue": 50.67,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 75.77
   },
   {
    "id": "exalted",
-   "primaryValue": 0.001823,
-   "volumePrimaryValue": 52.5,
+   "primaryValue": 0.002163,
+   "volumePrimaryValue": 303.8,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 548.6
+   "maxVolumeRate": 462.3
   },
   {
    "id": "chaos",
-   "primaryValue": 0.1341,
-   "volumePrimaryValue": 819.5,
+   "primaryValue": 0.08718,
+   "volumePrimaryValue": 15858,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 7.46
+   "maxVolumeRate": 11.47
   },
   {
    "id": "divine",
    "primaryValue": 1,
-   "volumePrimaryValue": 819.5,
+   "volumePrimaryValue": 15858,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.1341
+   "maxVolumeRate": 0.08718
   },
   {
    "id": "annul",
-   "primaryValue": 0.4004,
-   "volumePrimaryValue": 164.2,
+   "primaryValue": 0.2636,
+   "volumePrimaryValue": 1679,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 2.5
+   "maxVolumeRate": 3.79
   },
   {
    "id": "aug",
-   "primaryValue": 0.0005573,
-   "volumePrimaryValue": 0.02582,
-   "maxVolumeCurrency": "exalted",
-   "maxVolumeRate": 3.27
+   "primaryValue": 0.002081,
+   "volumePrimaryValue": 4.83,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 480.5
   },
   {
    "id": "regal",
-   "primaryValue": 0.0002174,
-   "volumePrimaryValue": 0.0158,
-   "maxVolumeCurrency": "exalted",
-   "maxVolumeRate": 8.38
+   "primaryValue": 0.01017,
+   "volumePrimaryValue": 22.67,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 98.33
+  },
+  {
+   "id": "mirror",
+   "primaryValue": 5632,
+   "volumePrimaryValue": 57261,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 0.0001776
   },
   {
    "id": "transmute",
-   "primaryValue": 0.0007331,
-   "volumePrimaryValue": 0.1667,
+   "primaryValue": 0.003293,
+   "volumePrimaryValue": 11.0,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 1364
+   "maxVolumeRate": 303.7
   },
   {
    "id": "vaal",
-   "primaryValue": 0.01269,
-   "volumePrimaryValue": 9.83,
+   "primaryValue": 0.01744,
+   "volumePrimaryValue": 665.8,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 78.8
+   "maxVolumeRate": 57.33
   }
  ],
  "items": [
@@ -134,6 +141,12 @@
    "name": "Regal Orb",
    "category": "Currency",
    "detailsId": "regal-orb"
+  },
+  {
+   "id": "mirror",
+   "name": "Mirror of Kalandra",
+   "category": "Currency",
+   "detailsId": "mirror-of-kalandra"
   },
   {
    "id": "transmute",

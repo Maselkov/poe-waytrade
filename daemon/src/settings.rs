@@ -114,7 +114,20 @@ impl Default for Settings {
 }
 
 impl Default for Hotkeys {
+    /// The layer has the same defaults (settings_page.cpp).
     fn default() -> Hotkeys {
+        // PoE2 can move with WASD, and the game sees our hotkeys too: Ctrl+D
+        // would walk away from the stash. The key under Esc (41) is free
+        // there. No map check alias or item displays in PoE2.
+        if crate::game::current() == crate::game::Game::Poe2 {
+            return Hotkeys {
+                quick: "ctrl+41".to_string(),
+                locked: "ctrl+alt+41".to_string(),
+                map_alias: String::new(),
+                settings: "ctrl+alt+31".to_string(),
+                displays: String::new(),
+            };
+        }
         Hotkeys {
             quick: "ctrl+32".to_string(),
             locked: "ctrl+alt+32".to_string(),

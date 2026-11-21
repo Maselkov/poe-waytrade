@@ -172,11 +172,11 @@ def main():
 
 def main_poe2():
     index = get(f"{NINJA2}/data/index-state")
-    leagues = [{"name": lg["name"], "indexed": lg.get("indexed")} for lg in index["economyLeagues"]]
-    save("poe2/ninja-index-state.json", {"economyLeagues": leagues})
-    league = next(lg["name"] for lg in leagues
-                  if lg["indexed"] is not False and not lg["name"].startswith(("HC ", "Hardcore"))
-                  and lg["name"] != "Standard")
+    # "indexed" isn't whether a league has prices: the current league can
+    # be false.
+    leagues = [lg["name"] for lg in index["economyLeagues"]]
+    save("poe2/ninja-index-state.json", {"economyLeagues": [{"name": n} for n in leagues]})
+    league = next(n for n in leagues if not n.startswith(("HC ", "Hardcore")) and n != "Standard")
     q = urllib.parse.quote(league)
 
     ex = get(f"{NINJA2}/economy/exchange/current/overview?league={q}&type=Currency")
