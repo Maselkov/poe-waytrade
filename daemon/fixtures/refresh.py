@@ -68,8 +68,9 @@ STAT_TEXTS = {
 }
 
 # Fields the daemon doesn't read and that only make the files big.
-DROP = {"icon", "image", "sparkLine", "sparkline", "lowConfidenceSparkLine", "flavourText", "implicitModifiers",
-        "explicitModifiers", "mutatedModifiers", "tradeInfo", "tradeFilter"}
+DROP = {"icon", "image", "sparkLine", "sparkline", "lowConfidenceSparkLine", "flavourText", "tradeInfo", "tradeFilter"}
+# Mod lists: kept (as their texts) only for uniques, whose variants they tell apart.
+MODS = ("implicitModifiers", "explicitModifiers", "mutatedModifiers")
 
 
 def get(url, body=None):
@@ -86,8 +87,11 @@ def save(name, value):
     print(f"wrote {name}")
 
 
-def slim(d):
-    return {k: v for k, v in d.items() if k not in DROP}
+def slim(d, mods=False):
+    out = {k: v for k, v in d.items() if k not in DROP and k not in MODS}
+    if mods:
+        out |= {k: [{"text": m["text"]} for m in d[k]] for k in MODS if d.get(k)}
+    return out
 
 
 def main():
@@ -106,7 +110,7 @@ def main():
 
     for kind, name, keep in [
         ("UniqueArmour", "ninja-unique-armour.json",
-         lambda line: line["name"] in ("Queen of the Forest", "Foulborn Queen of the Forest")
+         lambda line: line["name"] in ("Queen of the Forest", "Foulborn Queen of the Forest", "Ralakesh's Impatience")
          or line.get("baseType") == "Spidersilk Robe"),
         ("SkillGem", "ninja-skill-gem.json", lambda line: line["name"] == "Arc"),
         ("Map", "ninja-map.json", lambda line: line["name"] == "Nightmare Map"),
@@ -117,7 +121,7 @@ def main():
          lambda line: line["name"] in ("Vaal Regalia", "Simplex Amulet")),
     ]:
         ov = get(f"{NINJA}/economy/stash/current/item/overview?league={q}&type={kind}")
-        lines = [slim(line) for line in ov["lines"] if keep(line)]
+        lines = [slim(line, mods=kind.startswith("Unique")) for line in ov["lines"] if keep(line)]
         # Viscera have a line per implicit: the most listed are enough.
         lines.sort(key=lambda line: -(line.get("listingCount") or 0))
         save(name, {"lines": lines[:12]} if kind == "Viscera" else {"lines": lines})

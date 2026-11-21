@@ -15,7 +15,7 @@
    }
   ],
   "rates": {
-   "divine": 0.004661
+   "divine": 0.004652
   },
   "primary": "chaos",
   "secondary": "divine"
@@ -24,128 +24,128 @@
   {
    "id": "chaos",
    "primaryValue": 1,
-   "volumePrimaryValue": 11406349,
+   "volumePrimaryValue": 11850308,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 214.6
-  },
-  {
-   "id": "blessed",
-   "primaryValue": 0.1858,
-   "volumePrimaryValue": 1842,
-   "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 5.38
+   "maxVolumeRate": 215.0
   },
   {
    "id": "divine",
-   "primaryValue": 214.6,
-   "volumePrimaryValue": 11406349,
+   "primaryValue": 215.0,
+   "volumePrimaryValue": 11850308,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.004661
+   "maxVolumeRate": 0.004652
+  },
+  {
+   "id": "blessed",
+   "primaryValue": 0.2147,
+   "volumePrimaryValue": 2152,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 4.66
   },
   {
    "id": "alch",
-   "primaryValue": 0.06125,
-   "volumePrimaryValue": 11563,
+   "primaryValue": 0.06364,
+   "volumePrimaryValue": 11562,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 16.33
+   "maxVolumeRate": 15.71
   },
   {
    "id": "alt",
-   "primaryValue": 0.191,
-   "volumePrimaryValue": 129917,
+   "primaryValue": 0.223,
+   "volumePrimaryValue": 149309,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 5.23
+   "maxVolumeRate": 4.49
   },
   {
    "id": "annul",
-   "primaryValue": 6.65,
-   "volumePrimaryValue": 122115,
+   "primaryValue": 6.37,
+   "volumePrimaryValue": 130126,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.1503
+   "maxVolumeRate": 0.157
   },
   {
    "id": "aug",
-   "primaryValue": 0.1686,
-   "volumePrimaryValue": 21794,
+   "primaryValue": 0.1783,
+   "volumePrimaryValue": 17370,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 5.93
+   "maxVolumeRate": 5.61
   },
   {
    "id": "chance",
-   "primaryValue": 1.43,
-   "volumePrimaryValue": 37688,
+   "primaryValue": 1.53,
+   "volumePrimaryValue": 45792,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.7003
+   "maxVolumeRate": 0.6523
   },
   {
    "id": "exalted",
-   "primaryValue": 0.7812,
-   "volumePrimaryValue": 72630,
+   "primaryValue": 0.7399,
+   "volumePrimaryValue": 66349,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 1.28
+   "maxVolumeRate": 1.35
   },
   {
    "id": "fusing",
-   "primaryValue": 0.1527,
-   "volumePrimaryValue": 87491,
+   "primaryValue": 0.1677,
+   "volumePrimaryValue": 86015,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 6.55
+   "maxVolumeRate": 5.96
   },
   {
    "id": "regal",
-   "primaryValue": 0.2723,
-   "volumePrimaryValue": 8632,
+   "primaryValue": 0.3412,
+   "volumePrimaryValue": 10063,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 3.67
+   "maxVolumeRate": 2.93
   },
   {
    "id": "regret",
-   "primaryValue": 1.52,
-   "volumePrimaryValue": 105073,
+   "primaryValue": 1.65,
+   "volumePrimaryValue": 110600,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.6575
+   "maxVolumeRate": 0.607
   },
   {
    "id": "scour",
-   "primaryValue": 0.8148,
-   "volumePrimaryValue": 132027,
+   "primaryValue": 0.8093,
+   "volumePrimaryValue": 132353,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 1.23
+   "maxVolumeRate": 1.24
   },
   {
    "id": "chrome",
-   "primaryValue": 1.46,
-   "volumePrimaryValue": 100669,
+   "primaryValue": 1.61,
+   "volumePrimaryValue": 118114,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.6843
+   "maxVolumeRate": 0.6218
   },
   {
    "id": "gcp",
-   "primaryValue": 3.42,
-   "volumePrimaryValue": 203002,
+   "primaryValue": 3.39,
+   "volumePrimaryValue": 215020,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.2921
+   "maxVolumeRate": 0.2951
   },
   {
    "id": "mirror",
-   "primaryValue": 102879,
-   "volumePrimaryValue": 4389486,
+   "primaryValue": 116206,
+   "volumePrimaryValue": 5500398,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 0.002086
+   "maxVolumeRate": 0.00185
   },
   {
    "id": "transmute",
-   "primaryValue": 0.03106,
-   "volumePrimaryValue": 4694,
+   "primaryValue": 0.03352,
+   "volumePrimaryValue": 5069,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 32.19
+   "maxVolumeRate": 29.83
   },
   {
    "id": "vaal",
-   "primaryValue": 0.6592,
-   "volumePrimaryValue": 85442,
+   "primaryValue": 0.6754,
+   "volumePrimaryValue": 96260,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 1.52
+   "maxVolumeRate": 1.48
   }
  ],
  "items": [
@@ -156,16 +156,16 @@
    "detailsId": "chaos-orb"
   },
   {
-   "id": "blessed",
-   "name": "Blessed Orb",
-   "category": "Currency",
-   "detailsId": "blessed-orb"
-  },
-  {
    "id": "divine",
    "name": "Divine Orb",
    "category": "Currency",
    "detailsId": "divine-orb"
+  },
+  {
+   "id": "blessed",
+   "name": "Blessed Orb",
+   "category": "Currency",
+   "detailsId": "blessed-orb"
   },
   {
    "id": "alch",

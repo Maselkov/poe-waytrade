@@ -114,7 +114,7 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
             Some(name) => db.items.get(name),
             None => db.uniques_by_base.get(&item.base), // unidentified
         };
-        return match lines.map(|l| unique_prices(db, l, item.links, item.name.is_none())) {
+        return match lines.map(|l| unique_prices(db, l, item, item.name.is_none())) {
             Some(prices) if !prices.is_empty() => found(title, prices),
             _ => Outcome::NotFound(format!("No poe.ninja price for {title}")),
         };
@@ -239,7 +239,7 @@ pub fn unique_prices_named(db: &PriceDb, item: &Item, names: &[String]) -> Outco
         .get(&item.base)
         .map(|lines| lines.iter().filter(|l| names.contains(&l.name)).cloned().collect())
         .unwrap_or_default();
-    let prices = unique_prices(db, &lines, item.links, names.len() > 1);
+    let prices = unique_prices(db, &lines, item, names.len() > 1);
     if prices.is_empty() {
         return Outcome::NotFound(format!("No poe.ninja price for {}", names.join(" / ")));
     }
@@ -301,15 +301,17 @@ fn line_price(db: &PriceDb, line: &ItemLine) -> Price {
 }
 
 /// poe.ninja lists 5L/6L uniques separately; anything below 5 links is the
-/// unlinked line. Variants (different rolls of one unique) are all shown.
+/// unlinked line. Of a unique's variants, those the item's mods match (see
+/// matching_variants), or all of them when its mods can't tell.
 /// `named`: label each price with its unique's name (an unidentified item,
 /// which could be any of them).
-fn unique_prices(db: &PriceDb, lines: &[ItemLine], links: u32, named: bool) -> Vec<Price> {
-    let want = if links >= 5 { Some(links) } else { None };
+fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item, named: bool) -> Vec<Price> {
+    let want = if item.links >= 5 { Some(item.links) } else { None };
     let mut matching: Vec<&ItemLine> = lines.iter().filter(|l| l.links.filter(|&n| n >= 5) == want).collect();
     if matching.is_empty() {
         matching = lines.iter().collect();
     }
+    let mut matching = matching_variants(matching, item);
     // Most-listed first: those prices are the most trustworthy.
     matching.sort_by_key(|l| std::cmp::Reverse(l.listing_count.unwrap_or(0)));
     matching
@@ -326,6 +328,149 @@ fn unique_prices(db: &PriceDb, lines: &[ItemLine], links: u32, named: bool) -> V
             price
         })
         .collect()
+}
+
+/// A unique's variants (Ralakesh's Impatience's "Power" and "Frenzy",
+/// Foulborn uniques' mutations) differ in some of their mods. Each line
+/// scores the mods that set it apart from the others: +1 for each the item
+/// has, -1 for each it lacks (so a mod poe.ninja words differently from the
+/// game costs a point, not the match). The best-scoring lines are kept; all
+/// of them when there's nothing to compare (an unidentified item, lines
+/// without mods).
+fn matching_variants<'a>(lines: Vec<&'a ItemLine>, item: &Item) -> Vec<&'a ItemLine> {
+    if lines.len() < 2 || item.mods.is_empty() {
+        return lines;
+    }
+    let have: Vec<(String, Vec<f64>)> = item
+        .mods
+        .iter()
+        .map(|m| {
+            let (template, values) = templatize(&m.text);
+            (unsigned(&template), values)
+        })
+        .collect();
+    let patterns: Vec<Vec<ModPattern>> = lines.iter().map(|l| l.mod_lines().map(mod_pattern).collect()).collect();
+    let mut any_apart = false;
+    let scores: Vec<i32> = patterns
+        .iter()
+        .enumerate()
+        .map(|(i, own)| {
+            let others: Vec<&Vec<ModPattern>> =
+                patterns.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, o)| o).collect();
+            own.iter()
+                .filter_map(|p| {
+                    let found = match p.apart(&others)? {
+                        // Only this line has the mod: any roll of it counts
+                        // (a line from few listings gives its rolls, not ranges).
+                        Apart::ByText => have.iter().any(|(t, _)| *t == p.template),
+                        // "Leftmost 3 Magic Utility Flasks" vs 4: the number counts.
+                        Apart::ByNumbers => have.iter().any(|(t, v)| p.matches(t, v)),
+                    };
+                    any_apart = true;
+                    Some(if found { 1 } else { -1 })
+                })
+                .sum()
+        })
+        .collect();
+    if !any_apart {
+        return lines;
+    }
+    let best = scores.iter().copied().max().unwrap_or(0);
+    lines.into_iter().zip(scores).filter(|&(_, s)| s == best).map(|(l, _)| l).collect()
+}
+
+/// How a mod sets its line apart from the others.
+enum Apart {
+    /// No other line has this mod.
+    ByText,
+    /// Others have it, but not every one with these numbers.
+    ByNumbers,
+}
+
+/// A mod as poe.ninja words it: its template, as unsigned() makes it ("#%
+/// to cold resistance"), and for each number the number itself, or None
+/// for a roll range ("(15-25)"), which any roll matches.
+#[derive(Debug)]
+struct ModPattern {
+    template: String,
+    values: Vec<Option<f64>>,
+}
+
+impl ModPattern {
+    fn matches(&self, template: &str, values: &[f64]) -> bool {
+        self.template == template
+            && self.values.len() == values.len()
+            && self.values.iter().zip(values).all(|(want, have)| want.is_none_or(|w| (w - have).abs() < 1e-6))
+    }
+
+    /// Whether some roll of `self` could also be `other`'s.
+    fn overlaps(&self, other: &ModPattern) -> bool {
+        self.template == other.template
+            && self.values.len() == other.values.len()
+            && self.values.iter().zip(&other.values).all(|(a, b)| match (a, b) {
+                (Some(a), Some(b)) => (a - b).abs() < 1e-6,
+                _ => true,
+            })
+    }
+
+    /// None when every other line has this mod too.
+    fn apart(&self, others: &[&Vec<ModPattern>]) -> Option<Apart> {
+        if others.iter().all(|o| o.iter().any(|p| p.overlaps(self))) {
+            None
+        } else if others.iter().all(|o| o.iter().all(|p| p.template != self.template)) {
+            Some(Apart::ByText)
+        } else {
+            Some(Apart::ByNumbers)
+        }
+    }
+}
+
+fn mod_pattern(text: &str) -> ModPattern {
+    let mut template = String::new();
+    let mut values = Vec::new();
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        if let Some(after) = rest.strip_prefix('(').and_then(roll_range) {
+            template.push('#');
+            values.push(None);
+            rest = after;
+        } else if c.is_ascii_digit() {
+            let end = rest.find(|d: char| !d.is_ascii_digit() && d != '.').unwrap_or(rest.len());
+            let (num, tail) = rest.split_at(end);
+            let (template_part, nums) = templatize(num);
+            template.push_str(&template_part);
+            values.extend(nums.into_iter().map(Some));
+            rest = tail;
+        } else {
+            template.push(c);
+            rest = &rest[c.len_utf8()..];
+        }
+    }
+    ModPattern { template: unsigned(&template), values }
+}
+
+/// A template lowercased and without the signs of its numbers: "+(-13-13)%"
+/// rolls "+5%" or "-5%", and "-(50-40)" reads "-44".
+fn unsigned(template: &str) -> String {
+    let mut out = String::new();
+    for c in template.chars() {
+        if c == '#' {
+            while out.ends_with(['+', '-']) {
+                out.pop();
+            }
+        }
+        out.extend(c.to_lowercase());
+    }
+    out
+}
+
+/// "15-25)..." (after the "(") -> what follows the ")". Either end may be
+/// negative ("-25--15)").
+fn roll_range(s: &str) -> Option<&str> {
+    let (inner, after) = s.split_once(')')?;
+    let is_num = |n: &str| n.parse::<f64>().is_ok();
+    let ok = inner.char_indices().skip(1).any(|(i, c)| c == '-' && is_num(&inner[..i]) && is_num(&inner[i + 1..]));
+    ok.then_some(after)
 }
 
 /// The line for this limb's implicits, or the most-listed ones if poe.ninja
@@ -434,6 +579,97 @@ mod tests {
         }
     }
 
+    /// A fixture line's mods as an item has them: each roll range at its
+    /// low end.
+    fn rolled_mods(l: &Value) -> Vec<String> {
+        let mut out = Vec::new();
+        for kind in ["implicitModifiers", "explicitModifiers", "mutatedModifiers"] {
+            for m in l[kind].as_array().into_iter().flatten() {
+                for text in m["text"].as_str().unwrap().lines() {
+                    let (mut line, mut rest) = (String::new(), text);
+                    while let Some(i) = rest.find('(') {
+                        line.push_str(&rest[..i]);
+                        let after = &rest[i + 1..];
+                        match roll_range(after) {
+                            Some(tail) => {
+                                let inner = &after[..after.len() - tail.len() - 1];
+                                let k = inner[1..].find('-').unwrap() + 1;
+                                line.push_str(&inner[..k]);
+                                rest = tail;
+                            }
+                            None => {
+                                line.push('(');
+                                rest = after;
+                            }
+                        }
+                    }
+                    line.push_str(rest);
+                    out.push(line);
+                }
+            }
+        }
+        out
+    }
+
+    fn unique_text(name: &str, base: &str, sockets: &str, mods: &[String]) -> String {
+        format!(
+            "Item Class: Body Armours\nRarity: Unique\n{name}\n{base}\n--------\nSockets: {sockets}\n--------\n\
+             Item Level: 84\n--------\n{}\n",
+            mods.join("\n")
+        )
+    }
+
+    #[test]
+    fn unique_variant_by_mods() {
+        // Each Foulborn mutation, and both, at every link count.
+        let lines = fixture_lines("UniqueArmour", "Foulborn Queen of the Forest");
+        assert_eq!(lines.len(), 9);
+        for l in &lines {
+            let sockets = match l["links"].as_u64() {
+                Some(5) => "G-G-G-G-G G",
+                Some(6) => "G-G-G-G-G-G",
+                _ => "G-G-G G-G G",
+            };
+            let text = unique_text("Foulborn Queen of the Forest", "Destiny Leather", sockets, &rolled_mods(l));
+            let label = l["variant"].as_str().unwrap();
+            let label = match l["links"].as_u64() {
+                Some(n) => format!("{label}, {n}L"),
+                None => label.to_string(),
+            };
+            assert_eq!(look(&text), vec![(label, chaos(l))], "{text}");
+        }
+    }
+
+    #[test]
+    fn unique_variant_with_a_missing_mod() {
+        // The game no longer shows "-1 to Maximum Power Charges", which
+        // poe.ninja still lists: the variant's other mod still picks it.
+        let power = line("UniqueArmour", "Ralakesh's Impatience", |l| l["variant"] == "Power");
+        let mods: Vec<String> = rolled_mods(&power).into_iter().filter(|m| !m.starts_with("-1 to Maximum")).collect();
+        let text = unique_text("Ralakesh's Impatience", "Riveted Boots", "B-B-B-B", &mods);
+        assert_eq!(look(&text), vec![("Power".to_string(), chaos(&power))]);
+
+        // No mods to go by: every variant.
+        let bare = unique_text("Ralakesh's Impatience", "Riveted Boots", "B-B-B-B", &[]);
+        assert_eq!(look(&bare).len(), 3);
+    }
+
+    #[test]
+    fn mod_patterns() {
+        let matches = |ninja: &str, item: &str| {
+            let (t, v) = templatize(item);
+            mod_pattern(ninja).matches(&unsigned(&t), &v)
+        };
+        assert!(matches("+(15-25)% to Cold Resistance", "+18% to Cold Resistance"));
+        assert!(matches("-(50-40) Physical Damage taken from Hits", "-44 Physical Damage taken from Hits"));
+        assert!(matches("(-25--15)% reduced Mana Cost", "-20% reduced Mana Cost"));
+        assert!(matches("+(-13-13)% to Chaos Resistance", "-5% to Chaos Resistance"));
+        assert!(matches("+(-13-13)% to Chaos Resistance", "+5% to Chaos Resistance"));
+        assert!(matches("Adds 50 to 70 Cold Damage to Spells", "Adds 50 to 70 Cold Damage to Spells"));
+        assert!(!matches("Leftmost 4 Magic Utility Flasks", "Leftmost 3 Magic Utility Flasks"));
+        assert!(!matches("+(15-25)% to Cold Resistance", "+18% to Fire Resistance"));
+    }
+
     #[test]
     fn unidentified_unique_by_art() {
         let item = parse(
@@ -460,7 +696,8 @@ mod tests {
             panic!("not found")
         };
         assert_eq!(title, "Replica Covenant");
-        assert_eq!(got.iter().map(|p| (p.label.as_str(), p.chaos)).collect::<Vec<_>>(), [("", 20.0)]);
+        let replica = line("UniqueArmour", "Replica Covenant", |l| l["links"].is_null());
+        assert_eq!(got.iter().map(|p| (p.label.as_str(), p.chaos)).collect::<Vec<_>>(), [("", chaos(&replica))]);
         assert_eq!(got[0].unique, None); // nothing left to pick
         // Several: still named.
         let Outcome::Found { title, prices: got } = unique_prices_named(&db, &item, &names("SoulMantle")) else {
@@ -469,7 +706,13 @@ mod tests {
         assert_eq!(title, "Soul Mantle / Foulborn Soul Mantle");
         assert_eq!(
             got.iter().map(|p| (p.label.as_str(), p.chaos)).collect::<Vec<_>>(),
-            [("Soul Mantle", 10.0), ("Foulborn Soul Mantle (Flamewood)", 1.0)]
+            [
+                ("Soul Mantle", chaos(&line("UniqueArmour", "Soul Mantle", |l| l["links"].is_null()))),
+                (
+                    "Foulborn Soul Mantle (Flamewood)",
+                    chaos(&line("UniqueArmour", "Foulborn Soul Mantle", |l| l["links"].is_null()))
+                )
+            ]
         );
         // Each row says which unique it is, to be picked from the panel.
         let picks: Vec<_> = got.iter().map(|p| p.unique.as_deref()).collect();

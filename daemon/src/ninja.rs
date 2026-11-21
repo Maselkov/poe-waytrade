@@ -110,6 +110,31 @@ pub struct ItemLine {
     /// The item's art on web.poecdn.com (art.rs tells unidentified uniques
     /// apart by it).
     pub icon: Option<String>,
+    /// A unique's mods as poe.ninja words them ("+(15-25)% to Cold
+    /// Resistance"): what tells its variants apart.
+    #[serde(default)]
+    pub implicit_modifiers: Vec<NinjaMod>,
+    #[serde(default)]
+    pub explicit_modifiers: Vec<NinjaMod>,
+    /// Foulborn uniques' mutated mods.
+    #[serde(default)]
+    pub mutated_modifiers: Vec<NinjaMod>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct NinjaMod {
+    pub text: String,
+}
+
+impl ItemLine {
+    /// Every mod line, implicit, explicit and mutated (a multi-line mod
+    /// split into its lines, as an item's text has them).
+    pub fn mod_lines(&self) -> impl Iterator<Item = &str> {
+        [&self.implicit_modifiers, &self.explicit_modifiers, &self.mutated_modifiers]
+            .into_iter()
+            .flatten()
+            .flat_map(|m| m.text.lines())
+    }
 }
 
 pub struct PriceDb {

@@ -7,12 +7,63 @@
    "baseType": "Spidersilk Robe",
    "itemClass": 3,
    "itemType": "Body Armour",
-   "chaosValue": 10.0,
-   "exaltedValue": 12.75,
-   "divineValue": 0.05,
+   "chaosValue": 8.0,
+   "exaltedValue": 10.87,
+   "divineValue": 0.04,
    "count": 399,
    "detailsId": "soul-mantle-spidersilk-robe",
-   "listingCount": 1593
+   "listingCount": 1752,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 20 Spell Totem Support"
+    },
+    {
+     "text": "(20-25)% increased Spell Damage"
+    },
+    {
+     "text": "(100-120)% increased Energy Shield"
+    },
+    {
+     "text": "(20-30)% increased Totem Life"
+    },
+    {
+     "text": "Inflicts a random Hex on you when your Totems die"
+    }
+   ]
+  },
+  {
+   "id": 1463,
+   "name": "The Covenant",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "itemClass": 3,
+   "statIds": [
+    "additional_intelligence"
+   ],
+   "itemType": "Body Armour",
+   "chaosValue": 128.4,
+   "exaltedValue": 174.5,
+   "divineValue": 0.59,
+   "count": 399,
+   "detailsId": "the-covenant-spidersilk-robe",
+   "listingCount": 808,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 29 Added Chaos Damage Support"
+    },
+    {
+     "text": "+(20-30) to Intelligence"
+    },
+    {
+     "text": "(210-250)% increased Energy Shield"
+    },
+    {
+     "text": "10% increased maximum Life"
+    },
+    {
+     "text": "Skills gain a Base Life Cost equal to 100% of Base Mana Cost"
+    }
+   ]
   },
   {
    "id": 992,
@@ -25,28 +76,72 @@
    ],
    "itemType": "Body Armour",
    "chaosValue": 2.0,
-   "exaltedValue": 2.55,
+   "exaltedValue": 2.72,
    "divineValue": 0.01,
    "count": 399,
    "detailsId": "queen-of-the-forest-destiny-leather",
-   "listingCount": 670
+   "listingCount": 716,
+   "explicitModifiers": [
+    {
+     "text": "(200-240)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-70) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(26-40)% to Cold Resistance"
+    },
+    {
+     "text": "+(11-25)% to Lightning Resistance"
+    },
+    {
+     "text": "25% reduced Movement Speed"
+    },
+    {
+     "text": "1% increased Movement Speed per 600 Evasion Rating, up to 75%"
+    },
+    {
+     "text": "-(50-40) Physical Damage taken from Hits by Animals"
+    }
+   ]
   },
   {
-   "id": 1463,
-   "name": "The Covenant",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
+   "id": 168286,
+   "name": "Ralakesh's Impatience",
+   "levelRequired": 36,
+   "baseType": "Riveted Boots",
+   "variant": "Frenzy",
    "itemClass": 3,
-   "statIds": [
-    "additional_intelligence"
-   ],
-   "itemType": "Body Armour",
-   "chaosValue": 199.0,
-   "exaltedValue": 253.8,
-   "divineValue": 0.92,
+   "itemType": "Boots",
+   "chaosValue": 180.0,
+   "exaltedValue": 244.6,
+   "divineValue": 0.83,
    "count": 399,
-   "detailsId": "the-covenant-spidersilk-robe",
-   "listingCount": 574
+   "detailsId": "ralakeshs-impatience-frenzy-riveted-boots",
+   "listingCount": 696,
+   "explicitModifiers": [
+    {
+     "text": "+(15-25)% to Cold Resistance"
+    },
+    {
+     "text": "+(15-25)% to Chaos Resistance"
+    },
+    {
+     "text": "(15-25)% increased Movement Speed"
+    },
+    {
+     "text": "-1 to Maximum Frenzy Charges"
+    },
+    {
+     "text": "Corrupted Blood cannot be inflicted on you"
+    },
+    {
+     "text": "Count as having maximum number of Frenzy Charges"
+    }
+   ]
   },
   {
    "id": 135186,
@@ -56,11 +151,165 @@
    "variant": "Flamewood",
    "itemClass": 3,
    "itemType": "Body Armour",
-   "chaosValue": 1.0,
-   "exaltedValue": 1.28,
+   "chaosValue": 5.0,
+   "exaltedValue": 6.79,
+   "divineValue": 0.02,
    "count": 399,
    "detailsId": "foulborn-soul-mantle-flamewood-spidersilk-robe",
-   "listingCount": 504
+   "listingCount": 608,
+   "explicitModifiers": [
+    {
+     "text": "(20-25)% increased Spell Damage"
+    },
+    {
+     "text": "(100-120)% increased Energy Shield"
+    },
+    {
+     "text": "(20-30)% increased Totem Life"
+    },
+    {
+     "text": "Inflicts a random Hex on you when your Totems die"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 20 Flamewood"
+    }
+   ]
+  },
+  {
+   "id": 168285,
+   "name": "Ralakesh's Impatience",
+   "levelRequired": 36,
+   "baseType": "Riveted Boots",
+   "variant": "Power",
+   "itemClass": 3,
+   "itemType": "Boots",
+   "chaosValue": 60.0,
+   "exaltedValue": 81.52,
+   "divineValue": 0.28,
+   "count": 399,
+   "detailsId": "ralakeshs-impatience-power-riveted-boots",
+   "listingCount": 587,
+   "explicitModifiers": [
+    {
+     "text": "+(15-25)% to Cold Resistance"
+    },
+    {
+     "text": "+(15-25)% to Chaos Resistance"
+    },
+    {
+     "text": "(15-25)% increased Movement Speed"
+    },
+    {
+     "text": "-1 to Maximum Power Charges"
+    },
+    {
+     "text": "Corrupted Blood cannot be inflicted on you"
+    },
+    {
+     "text": "Count as having maximum number of Power Charges"
+    }
+   ]
+  },
+  {
+   "id": 168288,
+   "name": "Ralakesh's Impatience",
+   "levelRequired": 36,
+   "baseType": "Riveted Boots",
+   "variant": "Endurance",
+   "itemClass": 3,
+   "itemType": "Boots",
+   "chaosValue": 1738,
+   "exaltedValue": 2361,
+   "divineValue": 8.0,
+   "count": 326,
+   "detailsId": "ralakeshs-impatience-endurance-riveted-boots",
+   "listingCount": 326,
+   "explicitModifiers": [
+    {
+     "text": "+(15-25)% to Cold Resistance"
+    },
+    {
+     "text": "+(15-25)% to Chaos Resistance"
+    },
+    {
+     "text": "(15-25)% increased Movement Speed"
+    },
+    {
+     "text": "-1 to Maximum Endurance Charges"
+    },
+    {
+     "text": "Corrupted Blood cannot be inflicted on you"
+    },
+    {
+     "text": "Count as having maximum number of Endurance Charges"
+    }
+   ]
+  },
+  {
+   "id": 1332,
+   "name": "Soul Mantle",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "links": 5,
+   "itemClass": 3,
+   "itemType": "Body Armour",
+   "chaosValue": 18.6,
+   "exaltedValue": 25.27,
+   "divineValue": 0.09,
+   "count": 232,
+   "detailsId": "soul-mantle-spidersilk-robe-5l",
+   "listingCount": 232,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 20 Spell Totem Support"
+    },
+    {
+     "text": "(20-25)% increased Spell Damage"
+    },
+    {
+     "text": "(100-120)% increased Energy Shield"
+    },
+    {
+     "text": "(20-30)% increased Totem Life"
+    },
+    {
+     "text": "Inflicts a random Hex on you when your Totems die"
+    }
+   ]
+  },
+  {
+   "id": 1333,
+   "name": "Soul Mantle",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "links": 6,
+   "itemClass": 3,
+   "itemType": "Body Armour",
+   "chaosValue": 195.0,
+   "exaltedValue": 265.0,
+   "divineValue": 0.9,
+   "count": 207,
+   "detailsId": "soul-mantle-spidersilk-robe-6l",
+   "listingCount": 207,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 20 Spell Totem Support"
+    },
+    {
+     "text": "(20-25)% increased Spell Damage"
+    },
+    {
+     "text": "(100-120)% increased Energy Shield"
+    },
+    {
+     "text": "(20-30)% increased Totem Life"
+    },
+    {
+     "text": "Inflicts a random Hex on you when your Totems die"
+    }
+   ]
   },
   {
    "id": 1465,
@@ -73,60 +322,29 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 446.1,
-   "exaltedValue": 568.9,
-   "divineValue": 2.07,
+   "chaosValue": 475.5,
+   "exaltedValue": 646.1,
+   "divineValue": 2.19,
    "count": 190,
    "detailsId": "the-covenant-spidersilk-robe-6l",
-   "listingCount": 190
-  },
-  {
-   "id": 1332,
-   "name": "Soul Mantle",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
-   "links": 5,
-   "itemClass": 3,
-   "itemType": "Body Armour",
-   "chaosValue": 25.0,
-   "exaltedValue": 31.88,
-   "divineValue": 0.12,
-   "count": 189,
-   "detailsId": "soul-mantle-spidersilk-robe-5l",
-   "listingCount": 189
-  },
-  {
-   "id": 1333,
-   "name": "Soul Mantle",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
-   "links": 6,
-   "itemClass": 3,
-   "itemType": "Body Armour",
-   "chaosValue": 200.0,
-   "exaltedValue": 255.0,
-   "divineValue": 0.93,
-   "count": 177,
-   "detailsId": "soul-mantle-spidersilk-robe-6l",
-   "listingCount": 177
-  },
-  {
-   "id": 135360,
-   "name": "Foulborn Queen of the Forest",
-   "levelRequired": 59,
-   "baseType": "Destiny Leather",
-   "variant": "Projectile Speed",
-   "itemClass": 3,
-   "statIds": [
-    "movement_velocity_+1%_per_X_evasion_rating"
-   ],
-   "itemType": "Body Armour",
-   "chaosValue": 2.0,
-   "exaltedValue": 2.55,
-   "divineValue": 0.01,
-   "count": 90,
-   "detailsId": "foulborn-queen-of-the-forest-projectile-speed-destiny-leather",
-   "listingCount": 90
+   "listingCount": 190,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 29 Added Chaos Damage Support"
+    },
+    {
+     "text": "+(20-30) to Intelligence"
+    },
+    {
+     "text": "(210-250)% increased Energy Shield"
+    },
+    {
+     "text": "10% increased maximum Life"
+    },
+    {
+     "text": "Skills gain a Base Life Cost equal to 100% of Base Mana Cost"
+    }
+   ]
   },
   {
    "id": 135094,
@@ -139,12 +357,40 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 200.0,
-   "exaltedValue": 255.0,
-   "divineValue": 0.93,
-   "count": 87,
+   "chaosValue": 75.0,
+   "exaltedValue": 101.9,
+   "divineValue": 0.35,
+   "count": 136,
    "detailsId": "foulborn-queen-of-the-forest-damage-taken-destiny-leather",
-   "listingCount": 87
+   "listingCount": 136,
+   "explicitModifiers": [
+    {
+     "text": "(200-240)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-70) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(26-40)% to Cold Resistance"
+    },
+    {
+     "text": "+(11-25)% to Lightning Resistance"
+    },
+    {
+     "text": "1% increased Movement Speed per 600 Evasion Rating, up to 75%"
+    },
+    {
+     "text": "-(50-40) Physical Damage taken from Hits by Animals"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "25% increased Damage taken"
+    }
+   ]
   },
   {
    "id": 993,
@@ -158,11 +404,83 @@
    ],
    "itemType": "Body Armour",
    "chaosValue": 10.0,
-   "exaltedValue": 12.75,
+   "exaltedValue": 13.59,
    "divineValue": 0.05,
-   "count": 86,
+   "count": 111,
    "detailsId": "queen-of-the-forest-destiny-leather-5l",
-   "listingCount": 86
+   "listingCount": 111,
+   "explicitModifiers": [
+    {
+     "text": "(200-240)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-70) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(26-40)% to Cold Resistance"
+    },
+    {
+     "text": "+(11-25)% to Lightning Resistance"
+    },
+    {
+     "text": "25% reduced Movement Speed"
+    },
+    {
+     "text": "1% increased Movement Speed per 600 Evasion Rating, up to 75%"
+    },
+    {
+     "text": "-(50-40) Physical Damage taken from Hits by Animals"
+    }
+   ]
+  },
+  {
+   "id": 135360,
+   "name": "Foulborn Queen of the Forest",
+   "levelRequired": 59,
+   "baseType": "Destiny Leather",
+   "variant": "Projectile Speed",
+   "itemClass": 3,
+   "statIds": [
+    "movement_velocity_+1%_per_X_evasion_rating"
+   ],
+   "itemType": "Body Armour",
+   "chaosValue": 2.0,
+   "exaltedValue": 2.72,
+   "divineValue": 0.01,
+   "count": 102,
+   "detailsId": "foulborn-queen-of-the-forest-projectile-speed-destiny-leather",
+   "listingCount": 102,
+   "explicitModifiers": [
+    {
+     "text": "(200-240)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-70) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(26-40)% to Cold Resistance"
+    },
+    {
+     "text": "+(11-25)% to Lightning Resistance"
+    },
+    {
+     "text": "25% reduced Movement Speed"
+    },
+    {
+     "text": "-(50-40) Physical Damage taken from Hits by Animals"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "1% increased Projectile Speed per 600 Evasion Rating, up to 75%"
+    }
+   ]
   },
   {
    "id": 994,
@@ -175,12 +493,38 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 110.0,
-   "exaltedValue": 140.3,
-   "divineValue": 0.51,
-   "count": 70,
+   "chaosValue": 60.0,
+   "exaltedValue": 81.52,
+   "divineValue": 0.28,
+   "count": 101,
    "detailsId": "queen-of-the-forest-destiny-leather-6l",
-   "listingCount": 70
+   "listingCount": 101,
+   "explicitModifiers": [
+    {
+     "text": "(200-240)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-70) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(26-40)% to Cold Resistance"
+    },
+    {
+     "text": "+(11-25)% to Lightning Resistance"
+    },
+    {
+     "text": "25% reduced Movement Speed"
+    },
+    {
+     "text": "1% increased Movement Speed per 600 Evasion Rating, up to 75%"
+    },
+    {
+     "text": "-(50-40) Physical Damage taken from Hits by Animals"
+    }
+   ]
   },
   {
    "id": 1464,
@@ -194,11 +538,28 @@
    ],
    "itemType": "Body Armour",
    "chaosValue": 200.0,
-   "exaltedValue": 255.0,
-   "divineValue": 0.93,
-   "count": 69,
+   "exaltedValue": 271.7,
+   "divineValue": 0.92,
+   "count": 93,
    "detailsId": "the-covenant-spidersilk-robe-5l",
-   "listingCount": 69
+   "listingCount": 93,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 29 Added Chaos Damage Support"
+    },
+    {
+     "text": "+(20-30) to Intelligence"
+    },
+    {
+     "text": "(210-250)% increased Energy Shield"
+    },
+    {
+     "text": "10% increased maximum Life"
+    },
+    {
+     "text": "Skills gain a Base Life Cost equal to 100% of Base Mana Cost"
+    }
+   ]
   },
   {
    "id": 109184,
@@ -210,12 +571,29 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 20.0,
-   "exaltedValue": 25.5,
-   "divineValue": 0.09,
-   "count": 50,
+   "chaosValue": 25.8,
+   "exaltedValue": 35.05,
+   "divineValue": 0.12,
+   "count": 74,
    "detailsId": "replica-covenant-spidersilk-robe",
-   "listingCount": 50
+   "listingCount": 74,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 29 Added Cold Damage Support"
+    },
+    {
+     "text": "+(20-30) to Intelligence"
+    },
+    {
+     "text": "(210-250)% increased Energy Shield"
+    },
+    {
+     "text": "10% increased maximum Life"
+    },
+    {
+     "text": "Skills gain a Base Energy Shield Cost equal to 200% of Base Mana Cost"
+    }
+   ]
   },
   {
    "id": 135494,
@@ -226,12 +604,31 @@
    "links": 5,
    "itemClass": 3,
    "itemType": "Body Armour",
-   "chaosValue": 10.0,
-   "exaltedValue": 12.75,
-   "divineValue": 0.05,
-   "count": 50,
+   "chaosValue": 9.6,
+   "exaltedValue": 13.04,
+   "divineValue": 0.04,
+   "count": 58,
    "detailsId": "foulborn-soul-mantle-flamewood-spidersilk-robe-5l",
-   "listingCount": 50
+   "listingCount": 58,
+   "explicitModifiers": [
+    {
+     "text": "(20-25)% increased Spell Damage"
+    },
+    {
+     "text": "(100-120)% increased Energy Shield"
+    },
+    {
+     "text": "(20-30)% increased Totem Life"
+    },
+    {
+     "text": "Inflicts a random Hex on you when your Totems die"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 20 Flamewood"
+    }
+   ]
   },
   {
    "id": 109712,
@@ -244,30 +641,29 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 222.7,
-   "exaltedValue": 284.0,
-   "divineValue": 1.03,
-   "count": 24,
+   "chaosValue": 217.2,
+   "exaltedValue": 295.1,
+   "divineValue": 1.0,
+   "count": 23,
    "detailsId": "replica-covenant-spidersilk-robe-6l",
-   "listingCount": 24
-  },
-  {
-   "id": 109567,
-   "name": "Replica Covenant",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
-   "links": 5,
-   "itemClass": 3,
-   "statIds": [
-    "additional_intelligence"
-   ],
-   "itemType": "Body Armour",
-   "chaosValue": 54.0,
-   "exaltedValue": 68.86,
-   "divineValue": 0.25,
-   "count": 15,
-   "detailsId": "replica-covenant-spidersilk-robe-5l",
-   "listingCount": 15
+   "listingCount": 23,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 29 Added Cold Damage Support"
+    },
+    {
+     "text": "+(20-30) to Intelligence"
+    },
+    {
+     "text": "(210-250)% increased Energy Shield"
+    },
+    {
+     "text": "10% increased maximum Life"
+    },
+    {
+     "text": "Skills gain a Base Energy Shield Cost equal to 200% of Base Mana Cost"
+    }
+   ]
   },
   {
    "id": 136065,
@@ -280,12 +676,75 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 215.3,
-   "exaltedValue": 274.6,
-   "divineValue": 1.0,
-   "count": 12,
+   "chaosValue": 144.0,
+   "exaltedValue": 195.6,
+   "divineValue": 0.66,
+   "count": 19,
    "detailsId": "foulborn-queen-of-the-forest-damage-taken-projectile-speed-destiny-leather",
-   "listingCount": 12
+   "listingCount": 19,
+   "explicitModifiers": [
+    {
+     "text": "(204-240)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-69) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(27-39)% to Cold Resistance"
+    },
+    {
+     "text": "+(11-25)% to Lightning Resistance"
+    },
+    {
+     "text": "-(50-40) Physical Damage taken from Hits by Animals"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "25% increased Damage taken"
+    },
+    {
+     "text": "1% increased Projectile Speed per 600 Evasion Rating, up to 75%"
+    }
+   ]
+  },
+  {
+   "id": 109567,
+   "name": "Replica Covenant",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "links": 5,
+   "itemClass": 3,
+   "statIds": [
+    "additional_intelligence"
+   ],
+   "itemType": "Body Armour",
+   "chaosValue": 50.0,
+   "exaltedValue": 67.93,
+   "divineValue": 0.23,
+   "count": 15,
+   "detailsId": "replica-covenant-spidersilk-robe-5l",
+   "listingCount": 15,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 29 Added Cold Damage Support"
+    },
+    {
+     "text": "+(20-30) to Intelligence"
+    },
+    {
+     "text": "(210-250)% increased Energy Shield"
+    },
+    {
+     "text": "10% increased maximum Life"
+    },
+    {
+     "text": "Skills gain a Base Energy Shield Cost equal to 200% of Base Mana Cost"
+    }
+   ]
   },
   {
    "id": 135903,
@@ -298,12 +757,31 @@
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 8827,
-   "exaltedValue": 11256,
-   "divineValue": 41.0,
-   "count": 11,
+   "chaosValue": 13075,
+   "exaltedValue": 17766,
+   "divineValue": 60.2,
+   "count": 14,
    "detailsId": "foulborn-the-covenant-blood-magic-spidersilk-robe",
-   "listingCount": 11
+   "listingCount": 14,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 29 Added Chaos Damage Support"
+    },
+    {
+     "text": "+(20-30) to Intelligence"
+    },
+    {
+     "text": "(210-250)% increased Energy Shield"
+    },
+    {
+     "text": "10% increased maximum Life"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "Blood Magic"
+    }
+   ]
   },
   {
    "id": 137339,
@@ -317,50 +795,40 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 10.0,
-   "exaltedValue": 12.75,
-   "divineValue": 0.05,
-   "count": 6,
+   "chaosValue": 22.0,
+   "exaltedValue": 29.89,
+   "divineValue": 0.1,
+   "count": 5,
    "detailsId": "foulborn-queen-of-the-forest-projectile-speed-destiny-leather-5l",
-   "listingCount": 6
-  },
-  {
-   "id": 136114,
-   "name": "Foulborn Queen of the Forest",
-   "levelRequired": 59,
-   "baseType": "Destiny Leather",
-   "variant": "Damage Taken",
-   "links": 6,
-   "itemClass": 3,
-   "statIds": [
-    "movement_velocity_+1%_per_X_evasion_rating"
+   "listingCount": 5,
+   "explicitModifiers": [
+    {
+     "text": "(203-235)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-70) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(27-39)% to Cold Resistance"
+    },
+    {
+     "text": "+(12-24)% to Lightning Resistance"
+    },
+    {
+     "text": "25% reduced Movement Speed"
+    },
+    {
+     "text": "-(49-41) Physical Damage taken from Hits by Animals"
+    }
    ],
-   "itemType": "Body Armour",
-   "chaosValue": 430.6,
-   "exaltedValue": 549.1,
-   "divineValue": 2.0,
-   "count": 4,
-   "detailsId": "foulborn-queen-of-the-forest-damage-taken-destiny-leather-6l",
-   "listingCount": 4
-  },
-  {
-   "id": 136340,
-   "name": "Foulborn The Covenant",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
-   "variant": "Blood Magic",
-   "links": 6,
-   "itemClass": 3,
-   "statIds": [
-    "additional_intelligence"
-   ],
-   "itemType": "Body Armour",
-   "chaosValue": 10765,
-   "exaltedValue": 13727,
-   "divineValue": 50.0,
-   "count": 2,
-   "detailsId": "foulborn-the-covenant-blood-magic-spidersilk-robe-6l",
-   "listingCount": 2
+   "mutatedModifiers": [
+    {
+     "text": "1% increased Projectile Speed per 600 Evasion Rating, up to 75%"
+    }
+   ]
   },
   {
    "id": 135904,
@@ -374,28 +842,40 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 3316,
-   "exaltedValue": 4228,
-   "divineValue": 15.4,
-   "count": 2,
+   "chaosValue": 477.8,
+   "exaltedValue": 649.2,
+   "divineValue": 2.2,
+   "count": 4,
    "detailsId": "foulborn-queen-of-the-forest-damage-taken-projectile-speed-destiny-leather-5l",
-   "listingCount": 2
-  },
-  {
-   "id": 135713,
-   "name": "Foulborn Soul Mantle",
-   "levelRequired": 49,
-   "baseType": "Spidersilk Robe",
-   "variant": "Flamewood",
-   "links": 6,
-   "itemClass": 3,
-   "itemType": "Body Armour",
-   "chaosValue": 1141,
-   "exaltedValue": 1455,
-   "divineValue": 5.3,
-   "count": 2,
-   "detailsId": "foulborn-soul-mantle-flamewood-spidersilk-robe-6l",
-   "listingCount": 2
+   "listingCount": 4,
+   "explicitModifiers": [
+    {
+     "text": "(228-239)% increased Evasion Rating"
+    },
+    {
+     "text": "+(61-65) to maximum Life"
+    },
+    {
+     "text": "+(7-8)% to Fire Resistance"
+    },
+    {
+     "text": "+(28-36)% to Cold Resistance"
+    },
+    {
+     "text": "+(15-21)% to Lightning Resistance"
+    },
+    {
+     "text": "-(50-45) Physical Damage taken from Hits by Animals"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "25% increased Damage taken"
+    },
+    {
+     "text": "1% increased Projectile Speed per 600 Evasion Rating, up to 75%"
+    }
+   ]
   },
   {
    "id": 136299,
@@ -409,31 +889,160 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 258.4,
-   "exaltedValue": 329.5,
-   "divineValue": 1.2,
-   "count": 2,
+   "chaosValue": 193.0,
+   "exaltedValue": 262.2,
+   "divineValue": 0.89,
+   "count": 4,
    "detailsId": "foulborn-queen-of-the-forest-damage-taken-destiny-leather-5l",
-   "listingCount": 2
+   "listingCount": 4,
+   "explicitModifiers": [
+    {
+     "text": "(202-236)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-70) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(26-40)% to Cold Resistance"
+    },
+    {
+     "text": "+(11-22)% to Lightning Resistance"
+    },
+    {
+     "text": "1% increased Movement Speed per 600 Evasion Rating, up to 75%"
+    },
+    {
+     "text": "-(50-40) Physical Damage taken from Hits by Animals"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "25% increased Damage taken"
+    }
+   ]
   },
   {
-   "id": 136485,
+   "id": 136340,
    "name": "Foulborn The Covenant",
    "levelRequired": 49,
    "baseType": "Spidersilk Robe",
    "variant": "Blood Magic",
-   "links": 5,
+   "links": 6,
    "itemClass": 3,
    "statIds": [
     "additional_intelligence"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 10334,
-   "exaltedValue": 13178,
-   "divineValue": 48.0,
-   "count": 1,
-   "detailsId": "foulborn-the-covenant-blood-magic-spidersilk-robe-5l",
-   "listingCount": 1
+   "chaosValue": 14292,
+   "exaltedValue": 19418,
+   "divineValue": 65.8,
+   "count": 3,
+   "detailsId": "foulborn-the-covenant-blood-magic-spidersilk-robe-6l",
+   "listingCount": 3,
+   "explicitModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 29 Added Chaos Damage Support"
+    },
+    {
+     "text": "+(20-30) to Intelligence"
+    },
+    {
+     "text": "(210-250)% increased Energy Shield"
+    },
+    {
+     "text": "10% increased maximum Life"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "Blood Magic"
+    }
+   ]
+  },
+  {
+   "id": 135713,
+   "name": "Foulborn Soul Mantle",
+   "levelRequired": 49,
+   "baseType": "Spidersilk Robe",
+   "variant": "Flamewood",
+   "links": 6,
+   "itemClass": 3,
+   "itemType": "Body Armour",
+   "chaosValue": 365.2,
+   "exaltedValue": 496.2,
+   "divineValue": 1.68,
+   "count": 3,
+   "detailsId": "foulborn-soul-mantle-flamewood-spidersilk-robe-6l",
+   "listingCount": 3,
+   "explicitModifiers": [
+    {
+     "text": "(20-25)% increased Spell Damage"
+    },
+    {
+     "text": "(100-119)% increased Energy Shield"
+    },
+    {
+     "text": "(21-30)% increased Totem Life"
+    },
+    {
+     "text": "Inflicts a random Hex on you when your Totems die"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "Socketed Gems are Supported by Level 20 Flamewood"
+    }
+   ]
+  },
+  {
+   "id": 136114,
+   "name": "Foulborn Queen of the Forest",
+   "levelRequired": 59,
+   "baseType": "Destiny Leather",
+   "variant": "Damage Taken",
+   "links": 6,
+   "itemClass": 3,
+   "statIds": [
+    "movement_velocity_+1%_per_X_evasion_rating"
+   ],
+   "itemType": "Body Armour",
+   "chaosValue": 1108,
+   "exaltedValue": 1505,
+   "divineValue": 5.1,
+   "count": 2,
+   "detailsId": "foulborn-queen-of-the-forest-damage-taken-destiny-leather-6l",
+   "listingCount": 2,
+   "explicitModifiers": [
+    {
+     "text": "(200-240)% increased Evasion Rating"
+    },
+    {
+     "text": "+(60-70) to maximum Life"
+    },
+    {
+     "text": "+(6-10)% to Fire Resistance"
+    },
+    {
+     "text": "+(31-39)% to Cold Resistance"
+    },
+    {
+     "text": "+(11-23)% to Lightning Resistance"
+    },
+    {
+     "text": "1% increased Movement Speed per 600 Evasion Rating, up to 75%"
+    },
+    {
+     "text": "-(50-40) Physical Damage taken from Hits by Animals"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "25% increased Damage taken"
+    }
+   ]
   },
   {
    "id": 136507,
@@ -447,12 +1056,40 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 1292,
-   "exaltedValue": 1647,
-   "divineValue": 6.0,
+   "chaosValue": 868.8,
+   "exaltedValue": 1180,
+   "divineValue": 4.0,
    "count": 1,
    "detailsId": "foulborn-queen-of-the-forest-projectile-speed-destiny-leather-6l",
-   "listingCount": 1
+   "listingCount": 1,
+   "explicitModifiers": [
+    {
+     "text": "(238-240)% increased Evasion Rating"
+    },
+    {
+     "text": "+(65-70) to maximum Life"
+    },
+    {
+     "text": "+(6-7)% to Fire Resistance"
+    },
+    {
+     "text": "+(37-40)% to Cold Resistance"
+    },
+    {
+     "text": "+(15-24)% to Lightning Resistance"
+    },
+    {
+     "text": "25% reduced Movement Speed"
+    },
+    {
+     "text": "-(45-43) Physical Damage taken from Hits by Animals"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "1% increased Projectile Speed per 600 Evasion Rating, up to 75%"
+    }
+   ]
   },
   {
    "id": 137980,
@@ -466,12 +1103,40 @@
     "movement_velocity_+1%_per_X_evasion_rating"
    ],
    "itemType": "Body Armour",
-   "chaosValue": 1292,
-   "exaltedValue": 1647,
-   "divineValue": 6.0,
+   "chaosValue": 868.8,
+   "exaltedValue": 1180,
+   "divineValue": 4.0,
    "count": 1,
    "detailsId": "foulborn-queen-of-the-forest-damage-taken-projectile-speed-destiny-leather-6l",
-   "listingCount": 1
+   "listingCount": 1,
+   "explicitModifiers": [
+    {
+     "text": "231% increased Evasion Rating"
+    },
+    {
+     "text": "+70 to maximum Life"
+    },
+    {
+     "text": "+10% to Fire Resistance"
+    },
+    {
+     "text": "+39% to Cold Resistance"
+    },
+    {
+     "text": "+18% to Lightning Resistance"
+    },
+    {
+     "text": "-44 Physical Damage taken from Hits by Animals"
+    }
+   ],
+   "mutatedModifiers": [
+    {
+     "text": "25% increased Damage taken"
+    },
+    {
+     "text": "1% increased Projectile Speed per 600 Evasion Rating, up to 75%"
+    }
+   ]
   }
  ]
 }

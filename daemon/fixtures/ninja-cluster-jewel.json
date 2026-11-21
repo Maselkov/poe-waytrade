@@ -8,12 +8,12 @@
    "variant": "8 passives",
    "itemClass": 1,
    "itemType": "Cluster Jewel",
-   "chaosValue": 150.0,
-   "exaltedValue": 192.0,
-   "divineValue": 0.7,
+   "chaosValue": 75.0,
+   "exaltedValue": 101.9,
+   "divineValue": 0.35,
    "count": 399,
    "detailsId": "minions-deal-10-increased-damage-8-passives-75",
-   "listingCount": 3630
+   "listingCount": 4206
   },
   {
    "id": 63393,
@@ -23,12 +23,12 @@
    "variant": "12 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 15.0,
-   "exaltedValue": 19.2,
-   "divineValue": 0.07,
+   "chaosValue": 10.0,
+   "exaltedValue": 13.59,
+   "divineValue": 0.05,
    "count": 399,
    "detailsId": "minions-deal-10-increased-damage-12-passives-75",
-   "listingCount": 2646
+   "listingCount": 3225
   },
   {
    "id": 63184,
@@ -39,11 +39,11 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 10.0,
-   "exaltedValue": 12.8,
+   "exaltedValue": 13.59,
    "divineValue": 0.05,
    "count": 399,
    "detailsId": "10-increased-spell-damage-8-passives-75",
-   "listingCount": 2080
+   "listingCount": 2496
   },
   {
    "id": 63374,
@@ -54,11 +54,11 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 10.0,
-   "exaltedValue": 12.8,
+   "exaltedValue": 13.59,
    "divineValue": 0.05,
    "count": 399,
    "detailsId": "minions-deal-10-increased-damage-9-passives-75",
-   "listingCount": 1479
+   "listingCount": 1679
   },
   {
    "id": 63394,
@@ -69,11 +69,11 @@
    "itemClass": 0,
    "itemType": "Cluster Jewel",
    "chaosValue": 10.0,
-   "exaltedValue": 12.8,
+   "exaltedValue": 13.59,
    "divineValue": 0.05,
    "count": 399,
    "detailsId": "minions-deal-10-increased-damage-11-passives-75",
-   "listingCount": 995
+   "listingCount": 1108
   },
   {
    "id": 63195,
@@ -84,11 +84,11 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 10.0,
-   "exaltedValue": 12.8,
+   "exaltedValue": 13.59,
    "divineValue": 0.05,
    "count": 399,
    "detailsId": "minions-deal-10-increased-damage-10-passives-75",
-   "listingCount": 879
+   "listingCount": 972
   },
   {
    "id": 63336,
@@ -99,10 +99,10 @@
    "itemClass": 0,
    "itemType": "Cluster Jewel",
    "chaosValue": 1.0,
-   "exaltedValue": 1.28,
+   "exaltedValue": 1.36,
    "count": 399,
    "detailsId": "10-increased-spell-damage-9-passives-75",
-   "listingCount": 814
+   "listingCount": 870
   },
   {
    "id": 63544,
@@ -112,12 +112,12 @@
    "variant": "12 passives",
    "itemClass": 0,
    "itemType": "Cluster Jewel",
-   "chaosValue": 3.0,
-   "exaltedValue": 3.84,
-   "divineValue": 0.01,
+   "chaosValue": 5.0,
+   "exaltedValue": 6.79,
+   "divineValue": 0.02,
    "count": 399,
    "detailsId": "10-increased-spell-damage-12-passives-75",
-   "listingCount": 727
+   "listingCount": 820
   },
   {
    "id": 63205,
@@ -128,10 +128,10 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 1.0,
-   "exaltedValue": 1.28,
+   "exaltedValue": 1.36,
    "count": 399,
    "detailsId": "10-increased-spell-damage-10-passives-75",
-   "listingCount": 713
+   "listingCount": 784
   },
   {
    "id": 63225,
@@ -142,10 +142,40 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 1.0,
-   "exaltedValue": 1.28,
+   "exaltedValue": 1.36,
    "count": 399,
    "detailsId": "10-increased-spell-damage-11-passives-75",
-   "listingCount": 691
+   "listingCount": 728
+  },
+  {
+   "id": 63515,
+   "name": "10% increased Spell Damage",
+   "levelRequired": 84,
+   "baseType": "Large Cluster Jewel",
+   "variant": "12 passives",
+   "itemClass": 1,
+   "itemType": "Cluster Jewel",
+   "chaosValue": 1086,
+   "exaltedValue": 1476,
+   "divineValue": 5.0,
+   "count": 399,
+   "detailsId": "10-increased-spell-damage-12-passives-84",
+   "listingCount": 497
+  },
+  {
+   "id": 63805,
+   "name": "Minions deal 10% increased Damage",
+   "levelRequired": 84,
+   "baseType": "Large Cluster Jewel",
+   "variant": "10 passives",
+   "itemClass": 2,
+   "itemType": "Cluster Jewel",
+   "chaosValue": 434.4,
+   "exaltedValue": 590.2,
+   "divineValue": 2.0,
+   "count": 399,
+   "detailsId": "minions-deal-10-increased-damage-10-passives-84",
+   "listingCount": 424
   },
   {
    "id": 63422,
@@ -156,10 +186,10 @@
    "itemClass": 0,
    "itemType": "Cluster Jewel",
    "chaosValue": 1.0,
-   "exaltedValue": 1.28,
+   "exaltedValue": 1.36,
    "count": 399,
    "detailsId": "10-increased-spell-damage-9-passives-68",
-   "listingCount": 409
+   "listingCount": 407
   },
   {
    "id": 63346,
@@ -170,11 +200,56 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 20.0,
-   "exaltedValue": 25.6,
+   "exaltedValue": 27.17,
    "divineValue": 0.09,
-   "count": 345,
+   "count": 367,
    "detailsId": "minions-deal-10-increased-damage-12-passives-68",
-   "listingCount": 345
+   "listingCount": 367
+  },
+  {
+   "id": 63852,
+   "name": "Minions deal 10% increased Damage",
+   "levelRequired": 84,
+   "baseType": "Large Cluster Jewel",
+   "variant": "9 passives",
+   "itemClass": 2,
+   "itemType": "Cluster Jewel",
+   "chaosValue": 304.0,
+   "exaltedValue": 413.0,
+   "divineValue": 1.4,
+   "count": 363,
+   "detailsId": "minions-deal-10-increased-damage-9-passives-84",
+   "listingCount": 363
+  },
+  {
+   "id": 64000,
+   "name": "Minions deal 10% increased Damage",
+   "levelRequired": 84,
+   "baseType": "Large Cluster Jewel",
+   "variant": "8 passives",
+   "itemClass": 1,
+   "itemType": "Cluster Jewel",
+   "chaosValue": 651.6,
+   "exaltedValue": 885.3,
+   "divineValue": 3.0,
+   "count": 360,
+   "detailsId": "minions-deal-10-increased-damage-8-passives-84",
+   "listingCount": 360
+  },
+  {
+   "id": 63212,
+   "name": "Minions deal 10% increased Damage",
+   "levelRequired": 68,
+   "baseType": "Large Cluster Jewel",
+   "variant": "9 passives",
+   "itemClass": 2,
+   "itemType": "Cluster Jewel",
+   "chaosValue": 13.1,
+   "exaltedValue": 17.8,
+   "divineValue": 0.06,
+   "count": 354,
+   "detailsId": "minions-deal-10-increased-damage-9-passives-68",
+   "listingCount": 354
   },
   {
    "id": 63547,
@@ -185,10 +260,10 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 1.0,
-   "exaltedValue": 1.28,
-   "count": 339,
+   "exaltedValue": 1.36,
+   "count": 344,
    "detailsId": "10-increased-spell-damage-10-passives-68",
-   "listingCount": 339
+   "listingCount": 344
   },
   {
    "id": 63481,
@@ -199,40 +274,10 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 1.0,
-   "exaltedValue": 1.28,
-   "count": 336,
+   "exaltedValue": 1.36,
+   "count": 341,
    "detailsId": "10-increased-spell-damage-11-passives-68",
-   "listingCount": 336
-  },
-  {
-   "id": 63515,
-   "name": "10% increased Spell Damage",
-   "levelRequired": 84,
-   "baseType": "Large Cluster Jewel",
-   "variant": "12 passives",
-   "itemClass": 1,
-   "itemType": "Cluster Jewel",
-   "chaosValue": 1717,
-   "exaltedValue": 2198,
-   "divineValue": 8.0,
-   "count": 326,
-   "detailsId": "10-increased-spell-damage-12-passives-84",
-   "listingCount": 326
-  },
-  {
-   "id": 63212,
-   "name": "Minions deal 10% increased Damage",
-   "levelRequired": 68,
-   "baseType": "Large Cluster Jewel",
-   "variant": "9 passives",
-   "itemClass": 2,
-   "itemType": "Cluster Jewel",
-   "chaosValue": 12.0,
-   "exaltedValue": 15.36,
-   "divineValue": 0.06,
-   "count": 312,
-   "detailsId": "minions-deal-10-increased-damage-9-passives-68",
-   "listingCount": 312
+   "listingCount": 341
   },
   {
    "id": 63233,
@@ -243,25 +288,40 @@
    "itemClass": 0,
    "itemType": "Cluster Jewel",
    "chaosValue": 1.0,
-   "exaltedValue": 1.28,
-   "count": 307,
+   "exaltedValue": 1.36,
+   "count": 312,
    "detailsId": "10-increased-spell-damage-12-passives-68",
-   "listingCount": 307
+   "listingCount": 312
   },
   {
-   "id": 63805,
+   "id": 63520,
+   "name": "10% increased Spell Damage",
+   "levelRequired": 84,
+   "baseType": "Large Cluster Jewel",
+   "variant": "8 passives",
+   "itemClass": 0,
+   "itemType": "Cluster Jewel",
+   "chaosValue": 18.0,
+   "exaltedValue": 24.46,
+   "divineValue": 0.08,
+   "count": 258,
+   "detailsId": "10-increased-spell-damage-8-passives-84",
+   "listingCount": 258
+  },
+  {
+   "id": 63844,
    "name": "Minions deal 10% increased Damage",
    "levelRequired": 84,
    "baseType": "Large Cluster Jewel",
-   "variant": "10 passives",
+   "variant": "11 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 858.4,
-   "exaltedValue": 1099,
-   "divineValue": 4.0,
-   "count": 247,
-   "detailsId": "minions-deal-10-increased-damage-10-passives-84",
-   "listingCount": 247
+   "chaosValue": 1520,
+   "exaltedValue": 2066,
+   "divineValue": 7.0,
+   "count": 242,
+   "detailsId": "minions-deal-10-increased-damage-11-passives-84",
+   "listingCount": 242
   },
   {
    "id": 63375,
@@ -272,56 +332,11 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 10.0,
-   "exaltedValue": 12.8,
+   "exaltedValue": 13.59,
    "divineValue": 0.05,
-   "count": 236,
+   "count": 239,
    "detailsId": "minions-deal-10-increased-damage-11-passives-68",
-   "listingCount": 236
-  },
-  {
-   "id": 63852,
-   "name": "Minions deal 10% increased Damage",
-   "levelRequired": 84,
-   "baseType": "Large Cluster Jewel",
-   "variant": "9 passives",
-   "itemClass": 2,
-   "itemType": "Cluster Jewel",
-   "chaosValue": 643.8,
-   "exaltedValue": 824.1,
-   "divineValue": 3.0,
-   "count": 232,
-   "detailsId": "minions-deal-10-increased-damage-9-passives-84",
-   "listingCount": 232
-  },
-  {
-   "id": 63520,
-   "name": "10% increased Spell Damage",
-   "levelRequired": 84,
-   "baseType": "Large Cluster Jewel",
-   "variant": "8 passives",
-   "itemClass": 0,
-   "itemType": "Cluster Jewel",
-   "chaosValue": 19.0,
-   "exaltedValue": 24.32,
-   "divineValue": 0.09,
-   "count": 212,
-   "detailsId": "10-increased-spell-damage-8-passives-84",
-   "listingCount": 212
-  },
-  {
-   "id": 64000,
-   "name": "Minions deal 10% increased Damage",
-   "levelRequired": 84,
-   "baseType": "Large Cluster Jewel",
-   "variant": "8 passives",
-   "itemClass": 1,
-   "itemType": "Cluster Jewel",
-   "chaosValue": 643.8,
-   "exaltedValue": 824.1,
-   "divineValue": 3.0,
-   "count": 207,
-   "detailsId": "minions-deal-10-increased-damage-8-passives-84",
-   "listingCount": 207
+   "listingCount": 239
   },
   {
    "id": 63939,
@@ -331,12 +346,27 @@
    "variant": "11 passives",
    "itemClass": 1,
    "itemType": "Cluster Jewel",
-   "chaosValue": 15.0,
-   "exaltedValue": 19.2,
+   "chaosValue": 15.4,
+   "exaltedValue": 20.92,
    "divineValue": 0.07,
-   "count": 203,
+   "count": 235,
    "detailsId": "10-increased-spell-damage-11-passives-84",
-   "listingCount": 203
+   "listingCount": 235
+  },
+  {
+   "id": 63539,
+   "name": "Minions deal 10% increased Damage",
+   "levelRequired": 68,
+   "baseType": "Large Cluster Jewel",
+   "variant": "8 passives",
+   "itemClass": 0,
+   "itemType": "Cluster Jewel",
+   "chaosValue": 200.0,
+   "exaltedValue": 271.7,
+   "divineValue": 0.92,
+   "count": 232,
+   "detailsId": "minions-deal-10-increased-damage-8-passives-68",
+   "listingCount": 232
   },
   {
    "id": 63189,
@@ -347,26 +377,11 @@
    "itemClass": 2,
    "itemType": "Cluster Jewel",
    "chaosValue": 10.0,
-   "exaltedValue": 12.8,
+   "exaltedValue": 13.59,
    "divineValue": 0.05,
-   "count": 202,
+   "count": 218,
    "detailsId": "minions-deal-10-increased-damage-10-passives-68",
-   "listingCount": 202
-  },
-  {
-   "id": 63539,
-   "name": "Minions deal 10% increased Damage",
-   "levelRequired": 68,
-   "baseType": "Large Cluster Jewel",
-   "variant": "8 passives",
-   "itemClass": 0,
-   "itemType": "Cluster Jewel",
-   "chaosValue": 214.6,
-   "exaltedValue": 274.7,
-   "divineValue": 1.0,
-   "count": 192,
-   "detailsId": "minions-deal-10-increased-damage-8-passives-68",
-   "listingCount": 192
+   "listingCount": 218
   },
   {
    "id": 63400,
@@ -376,27 +391,12 @@
    "variant": "8 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 59.4,
-   "exaltedValue": 76.04,
-   "divineValue": 0.28,
-   "count": 173,
+   "chaosValue": 63.0,
+   "exaltedValue": 85.6,
+   "divineValue": 0.29,
+   "count": 175,
    "detailsId": "10-increased-spell-damage-8-passives-68",
-   "listingCount": 173
-  },
-  {
-   "id": 63844,
-   "name": "Minions deal 10% increased Damage",
-   "levelRequired": 84,
-   "baseType": "Large Cluster Jewel",
-   "variant": "11 passives",
-   "itemClass": 2,
-   "itemType": "Cluster Jewel",
-   "chaosValue": 1717,
-   "exaltedValue": 2198,
-   "divineValue": 8.0,
-   "count": 160,
-   "detailsId": "minions-deal-10-increased-damage-11-passives-84",
-   "listingCount": 160
+   "listingCount": 175
   },
   {
    "id": 63971,
@@ -406,12 +406,12 @@
    "variant": "12 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 6438,
-   "exaltedValue": 8241,
-   "divineValue": 30.0,
-   "count": 78,
+   "chaosValue": 6082,
+   "exaltedValue": 8263,
+   "divineValue": 28.0,
+   "count": 123,
    "detailsId": "minions-deal-10-increased-damage-12-passives-84",
-   "listingCount": 78
+   "listingCount": 123
   },
   {
    "id": 63759,
@@ -421,12 +421,12 @@
    "variant": "10 passives",
    "itemClass": 0,
    "itemType": "Cluster Jewel",
-   "chaosValue": 17.0,
-   "exaltedValue": 21.76,
-   "divineValue": 0.08,
-   "count": 67,
+   "chaosValue": 10.0,
+   "exaltedValue": 13.59,
+   "divineValue": 0.05,
+   "count": 73,
    "detailsId": "10-increased-spell-damage-10-passives-84",
-   "listingCount": 67
+   "listingCount": 73
   },
   {
    "id": 63666,
@@ -436,12 +436,12 @@
    "variant": "9 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 13.0,
-   "exaltedValue": 16.64,
-   "divineValue": 0.06,
-   "count": 33,
+   "chaosValue": 9.0,
+   "exaltedValue": 12.23,
+   "divineValue": 0.04,
+   "count": 44,
    "detailsId": "10-increased-spell-damage-9-passives-84",
-   "listingCount": 33
+   "listingCount": 44
   },
   {
    "id": 63531,
@@ -451,12 +451,12 @@
    "variant": "8 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 139.8,
-   "exaltedValue": 179.0,
-   "divineValue": 0.65,
-   "count": 5,
+   "chaosValue": 100.0,
+   "exaltedValue": 135.9,
+   "divineValue": 0.46,
+   "count": 7,
    "detailsId": "10-increased-spell-damage-8-passives-50",
-   "listingCount": 5
+   "listingCount": 7
   },
   {
    "id": 63704,
@@ -466,26 +466,26 @@
    "variant": "12 passives",
    "itemClass": 1,
    "itemType": "Cluster Jewel",
-   "chaosValue": 729.6,
-   "exaltedValue": 934.0,
-   "divineValue": 3.4,
-   "count": 4,
+   "chaosValue": 695.0,
+   "exaltedValue": 944.4,
+   "divineValue": 3.2,
+   "count": 5,
    "detailsId": "minions-deal-10-increased-damage-12-passives-50",
-   "listingCount": 4
+   "listingCount": 5
   },
   {
-   "id": 63582,
+   "id": 63706,
    "name": "10% increased Spell Damage",
    "levelRequired": 50,
    "baseType": "Large Cluster Jewel",
-   "variant": "9 passives",
+   "variant": "12 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 110.6,
-   "exaltedValue": 141.5,
-   "divineValue": 0.52,
+   "chaosValue": 165.1,
+   "exaltedValue": 224.3,
+   "divineValue": 0.76,
    "count": 2,
-   "detailsId": "10-increased-spell-damage-9-passives-50",
+   "detailsId": "10-increased-spell-damage-12-passives-50",
    "listingCount": 2
   },
   {
@@ -496,41 +496,41 @@
    "variant": "11 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 858.4,
-   "exaltedValue": 1099,
+   "chaosValue": 868.8,
+   "exaltedValue": 1180,
    "divineValue": 4.0,
    "count": 1,
    "detailsId": "10-increased-spell-damage-11-passives-50",
    "listingCount": 1
   },
   {
-   "id": 63706,
-   "name": "10% increased Spell Damage",
-   "levelRequired": 50,
-   "baseType": "Large Cluster Jewel",
-   "variant": "12 passives",
-   "itemClass": 2,
-   "itemType": "Cluster Jewel",
-   "chaosValue": 214.6,
-   "exaltedValue": 274.7,
-   "divineValue": 1.0,
-   "count": 1,
-   "detailsId": "10-increased-spell-damage-12-passives-50",
-   "listingCount": 1
-  },
-  {
-   "id": 63533,
+   "id": 63367,
    "name": "Minions deal 10% increased Damage",
    "levelRequired": 50,
    "baseType": "Large Cluster Jewel",
-   "variant": "10 passives",
+   "variant": "9 passives",
    "itemClass": 2,
    "itemType": "Cluster Jewel",
-   "chaosValue": 30.0,
-   "exaltedValue": 38.4,
-   "divineValue": 0.14,
+   "chaosValue": 434.4,
+   "exaltedValue": 590.2,
+   "divineValue": 2.0,
    "count": 1,
-   "detailsId": "minions-deal-10-increased-damage-10-passives-50",
+   "detailsId": "minions-deal-10-increased-damage-9-passives-50",
+   "listingCount": 1
+  },
+  {
+   "id": 63582,
+   "name": "10% increased Spell Damage",
+   "levelRequired": 50,
+   "baseType": "Large Cluster Jewel",
+   "variant": "9 passives",
+   "itemClass": 2,
+   "itemType": "Cluster Jewel",
+   "chaosValue": 217.2,
+   "exaltedValue": 295.1,
+   "divineValue": 1.0,
+   "count": 1,
+   "detailsId": "10-increased-spell-damage-9-passives-50",
    "listingCount": 1
   }
  ]
