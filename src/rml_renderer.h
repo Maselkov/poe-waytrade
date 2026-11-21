@@ -15,8 +15,9 @@ public:
     ~RmlRenderer() override;
     bool ok() const { return ok_; }
 
-    // (Re)build the pipeline for this render pass/format.
-    bool set_target(VkRenderPass render_pass, VkFormat format);
+    // (Re)build the pipeline for this render pass/format, and draw for the
+    // swapchain's colour space (SDR, or HDR10/scRGB: hdr.h).
+    bool set_target(VkRenderPass render_pass, VkFormat format, VkColorSpaceKHR color_space);
     // Once per frame, after the frame's fence wait: frees resources RmlUi
     // released a few frames ago, which the GPU can no longer be using.
     void begin_frame();
@@ -27,6 +28,8 @@ public:
     // What's drawn next is the display labels: rml.vert moves each by where
     // the GPU found its tooltip this frame.
     void set_label_mode(bool on) { label_mode_ = on; }
+    // How bright white is on an HDR swapchain, in nits (hdr.h).
+    void set_paper_white(float nits) { paper_white_ = nits; }
 
     // The tracking data's descriptor set (rml.vert's set 1: the slots and
     // results buffers), for gpu_track.cpp.
@@ -91,7 +94,8 @@ private:
     VkPipeline pipeline_ = VK_NULL_HANDLE;
     VkCommandPool upload_pool_ = VK_NULL_HANDLE;
     Texture* white_ = nullptr;  // for untextured geometry
-    bool srgb_ = false;
+    int mode_ = 0;  // OutputMode (hdr.h)
+    float paper_white_ = 203.0f;
 
     // Per render
     VkCommandBuffer cmd_ = VK_NULL_HANDLE;

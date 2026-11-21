@@ -1,5 +1,6 @@
 // Draws the overlay UI into the app's swapchain images right before present.
 #include "gpu_track.h"
+#include "hdr.h"
 #include "layer.h"
 #include "price_check.h"
 #include "rml_renderer.h"
@@ -11,6 +12,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 
 struct OverlayImage {
@@ -25,6 +27,10 @@ struct OverlayImage {
 struct OverlaySwapchain {
     VkSwapchainKHR handle = VK_NULL_HANDLE;
     VkFormat format = VK_FORMAT_UNDEFINED;
+    // What its pixels are in (effective_color_space, hdr.h), and what the
+    // app asked for.
+    VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    VkColorSpaceKHR created_color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     VkExtent2D extent = {};
     uint32_t min_images = 2;
     // Set up lazily on first present, once we know which queue presents it.
@@ -50,6 +56,7 @@ struct CaptureReadback {
     VkFence fence = VK_NULL_HANDLE;
     uint64_t id = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
+    VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     int x = 0, y = 0, width = 0, height = 0;
     float cursor_x = 0, cursor_y = 0, cell = 0;
 };
@@ -66,6 +73,7 @@ struct ScanReadback {
     OverlaySwapchain* swapchain = nullptr;
     VkFence fence = VK_NULL_HANDLE;
     VkFormat format = VK_FORMAT_UNDEFINED;
+    VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     bool whole = false;  // the whole frame (width x height); else `regions`
     int width = 0, height = 0;
     std::vector<ScreenScan::Region> regions;
@@ -96,7 +104,9 @@ struct OverlayDevice {
     bool gpu_tried = false;
     VkRenderPass ui_render_pass = VK_NULL_HANDLE;
     VkFormat ui_format = VK_FORMAT_UNDEFINED;
+    VkColorSpaceKHR ui_color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     bool ui_failed = false;
+    float logged_paper_white = 0;  // the HDR overlay's white, last logged
 
     // Created with the device so the uinput keyboard has time to show up in
     // the compositor before the first hotkey.
@@ -233,8 +243,12 @@ bool setup_swapchain(DeviceData* dev, OverlaySwapchain& sc, uint32_t family) {
         VkSemaphoreCreateInfo sci = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         VK_CHECK(dev->CreateSemaphore(dev->device, &sci, nullptr, &img.done));
     }
-    poe_log("swapchain ready: %ux%u, format %d, %u images", sc.extent.width, sc.extent.height,
-            sc.format, count);
+    const char* space = sc.color_space == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR       ? "sRGB"
+                        : sc.color_space == VK_COLOR_SPACE_HDR10_ST2084_EXT         ? "HDR10 (PQ)"
+                        : sc.color_space == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT ? "scRGB (linear)"
+                                                                                    : "other, drawn as sRGB";
+    poe_log("swapchain ready: %ux%u, format %d, colour space %d, drawn as %s, %u images", sc.extent.width,
+            sc.extent.height, sc.format, sc.created_color_space, space, count);
     return true;
 }
 
@@ -258,10 +272,11 @@ bool init_ui(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, VkQueue q
             return false;
         }
     }
-    // The pipeline is tied to a render pass format; rebuild if it changed.
-    if (ov.ui_format != sc.format) {
+    // The pipeline is tied to a render pass format, and draws for a colour
+    // space; rebuild if either changed.
+    if (ov.ui_format != sc.format || ov.ui_color_space != sc.color_space) {
         VkRenderPass rp = create_render_pass(dev, sc.format);
-        if (!rp || !ov.renderer->set_target(rp, sc.format)) {
+        if (!rp || !ov.renderer->set_target(rp, sc.format, sc.color_space)) {
             if (rp) dev->DestroyRenderPass(dev->device, rp, nullptr);
             ov.ui_failed = true;
             return false;
@@ -269,6 +284,7 @@ bool init_ui(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, VkQueue q
         if (ov.ui_render_pass) dev->DestroyRenderPass(dev->device, ov.ui_render_pass, nullptr);
         ov.ui_render_pass = rp;
         ov.ui_format = sc.format;
+        ov.ui_color_space = sc.color_space;
     }
     if (!ov.ui) {
         ov.ui = std::make_unique<OverlayUi>(ov.renderer.get());
@@ -291,6 +307,9 @@ bool init_ui(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, VkQueue q
     return true;
 }
 
+// The HDR paper white (hdr.h) now, for to_rgb8 (also on the scan's threads).
+std::atomic<float> g_paper_white{kDefaultPaperWhite};
+
 void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     WaylandInput* input = dev->instance->input.get();
     auto now = std::chrono::steady_clock::now();
@@ -304,21 +323,76 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
         ov.price_check.want_icon("chaos");
         ov.price_check.want_icon("divine");
     }
+    // The HDR overlay's white: follows the compositor's, which can change
+    // with the display the game is on or the desktop's settings.
+    float compositor = input ? (float)input->reference_white() : 0.0f;
+    float white = hdr_paper_white(compositor);
+    bool hdr =
+        sc.color_space == VK_COLOR_SPACE_HDR10_ST2084_EXT || sc.color_space == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+    if (hdr && white != ov.logged_paper_white) {
+        const char* from = hdr_nits_override() ? "POE_WAYTRADE_HDR_NITS" : white == compositor ? "compositor" : "default";
+        poe_log("hdr: overlay white at %.0f nits (%s)", white, from);
+        ov.logged_paper_white = white;
+    }
+    g_paper_white.store(white, std::memory_order_relaxed);
+    ov.renderer->set_paper_white(white);
     ov.renderer->begin_frame();
     ov.ui->update(ov.price_check, ov.scan, input, sc.extent);
     if (input) input->set_input_rects(ov.ui->input_rects(), (int)sc.extent.width, (int)sc.extent.height);
 }
 
-// 8-bit RGB from a swapchain format's pixels, or false for formats we don't
-// read (HDR float formats).
-bool to_rgb8(VkFormat format, const unsigned char* px, size_t count, unsigned char* out) {
+// Tables for reading HDR10 pixels as sRGB (to_rgb8).
+struct Hdr10Tables {
+    // A 10-bit PQ value to linear light, in nits.
+    float pq[1024];
+    // Linear [0, 1] in 4096 steps to 8-bit sRGB.
+    unsigned char srgb[4096];
+
+    Hdr10Tables() {
+        const double m1 = 0.1593017578125, m2 = 78.84375, c1 = 0.8359375, c2 = 18.8515625, c3 = 18.6875;
+        for (int i = 0; i < 1024; i++) {
+            double e = pow(i / 1023.0, 1.0 / m2);
+            double y = pow(std::max(e - c1, 0.0) / (c2 - c3 * e), 1.0 / m1);
+            pq[i] = (float)(y * 10000.0);
+        }
+        for (int i = 0; i < 4096; i++) {
+            double l = i / 4095.0;
+            double s = l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4) - 0.055;
+            srgb[i] = (unsigned char)std::lround(std::clamp(s, 0.0, 1.0) * 255.0);
+        }
+    }
+};
+
+// An HDR10 pixel's 10-bit R, G, B (BT.2020, PQ) as 8-bit sRGB, what the
+// art matching expects: brighter than paper white clips.
+void hdr10_to_srgb8(uint32_t r, uint32_t g, uint32_t b, unsigned char* out) {
+    static const Hdr10Tables t;
+    float white = 1.0f / g_paper_white.load(std::memory_order_relaxed);
+    float lr = t.pq[r] * white, lg = t.pq[g] * white, lb = t.pq[b] * white;
+    // BT.2020 primaries to BT.709's.
+    float c[3] = {1.660491f * lr - 0.587641f * lg - 0.072850f * lb, -0.124550f * lr + 1.132900f * lg - 0.008349f * lb,
+                  -0.018151f * lr - 0.100579f * lg + 1.118730f * lb};
+    for (int i = 0; i < 3; i++) out[i] = t.srgb[(int)(std::clamp(c[i], 0.0f, 1.0f) * 4095.0f + 0.5f)];
+}
+
+// 8-bit sRGB from a swapchain's pixels, or false for formats we don't read
+// (float formats, such as scRGB's).
+bool to_rgb8(VkFormat format, VkColorSpaceKHR color_space, const unsigned char* px, size_t count,
+             unsigned char* out) {
     bool bgr = format == VK_FORMAT_B8G8R8A8_SRGB || format == VK_FORMAT_B8G8R8A8_UNORM;
     bool rgb = format == VK_FORMAT_R8G8B8A8_SRGB || format == VK_FORMAT_R8G8B8A8_UNORM;
     bool rgb10 = format == VK_FORMAT_A2R10G10B10_UNORM_PACK32;  // 10 bits a channel
     bool bgr10 = format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;
     if (!bgr && !rgb && !rgb10 && !bgr10) return false;
+    bool hdr10 = color_space == VK_COLOR_SPACE_HDR10_ST2084_EXT;
+    if (hdr10 && !rgb10 && !bgr10) return false;
     for (size_t i = 0; i < count; i++, px += 4, out += 3) {
-        if (rgb10 || bgr10) {
+        if (hdr10) {
+            uint32_t v;
+            memcpy(&v, px, 4);
+            uint32_t hi = (v >> 20) & 0x3FF, mid = (v >> 10) & 0x3FF, lo = v & 0x3FF;
+            hdr10_to_srgb8(rgb10 ? hi : lo, mid, rgb10 ? lo : hi, out);
+        } else if (rgb10 || bgr10) {
             uint32_t v;
             memcpy(&v, px, 4);
             unsigned char hi = (unsigned char)((v >> 22) & 0xFF), mid = (unsigned char)((v >> 12) & 0xFF),
@@ -417,7 +491,7 @@ void record_capture(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, Ov
     if (c.swapchain || !sc.can_copy) return;  // one at a time
     free_capture(dev, c);
     unsigned char probe[4] = {}, rgb[3];
-    if (!to_rgb8(sc.format, probe, 1, rgb)) return;
+    if (!to_rgb8(sc.format, sc.color_space, probe, 1, rgb)) return;
     float cell = sc.extent.height * kCellPerHeight;
     int x0 = std::max(0, (int)(cx - 2.5f * cell)), x1 = std::min((int)sc.extent.width, (int)(cx + 2.5f * cell) + 1);
     int y0 = std::max(0, (int)(cy - 4.5f * cell)), y1 = std::min((int)sc.extent.height, (int)(cy + 4.5f * cell) + 1);
@@ -439,6 +513,7 @@ void record_capture(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, Ov
     c.fence = img.fence;
     c.id = id;
     c.format = sc.format;
+    c.color_space = sc.color_space;
     c.x = x0;
     c.y = y0;
     c.width = x1 - x0;
@@ -461,7 +536,7 @@ void finish_capture(DeviceData* dev, OverlayDevice& ov, bool done = false) {
     f.cursor_x = c.cursor_x;
     f.cursor_y = c.cursor_y;
     f.cell = c.cell;
-    if (to_rgb8(c.format, (const unsigned char*)c.mapped, (size_t)c.width * c.height, f.rgb.data()))
+    if (to_rgb8(c.format, c.color_space, (const unsigned char*)c.mapped, (size_t)c.width * c.height, f.rgb.data()))
         ov.price_check.capture_taken(c.id, std::move(f));
     free_capture(dev, c);
 }
@@ -503,7 +578,7 @@ void record_scan(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, Overl
         return;
     }
     unsigned char probe[4] = {}, rgb[3];
-    bool readable = sc.can_copy && to_rgb8(sc.format, probe, 1, rgb);
+    bool readable = sc.can_copy && to_rgb8(sc.format, sc.color_space, probe, 1, rgb);
     std::vector<std::pair<VkBuffer, std::vector<VkBufferImageCopy>>> copies;
     auto now = std::chrono::steady_clock::now();
 
@@ -521,6 +596,7 @@ void record_scan(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, Overl
             f.swapchain = &sc;
             f.fence = img.fence;
             f.format = sc.format;
+            f.color_space = sc.color_space;
             f.whole = true;
             f.at = now;
             f.width = (int)sc.extent.width;
@@ -550,6 +626,7 @@ void record_scan(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, Overl
             r.swapchain = &sc;
             r.fence = img.fence;
             r.format = sc.format;
+            r.color_space = sc.color_space;
             r.whole = false;
             r.regions = std::move(regions);
             r.at = now;
@@ -567,7 +644,10 @@ void finish_scan(DeviceData* dev, OverlayDevice& ov, ScanReadback& r, bool done 
     r.swapchain = nullptr;
     const unsigned char* px = (const unsigned char*)r.mapped;
     VkFormat format = r.format;
-    auto to_rgb = [format](const uint8_t* p, size_t n, uint8_t* out) { return to_rgb8(format, p, n, out); };
+    VkColorSpaceKHR color_space = r.color_space;
+    auto to_rgb = [format, color_space](const uint8_t* p, size_t n, uint8_t* out) {
+        return to_rgb8(format, color_space, p, n, out);
+    };
     if (r.whole) {
         // Read in place by the scan's worker thread: the buffer isn't reused
         // or freed while ov.scan.frame_busy().
@@ -670,7 +750,7 @@ void save_snapshot(DeviceData* dev, OverlaySwapchain& sc, OverlayImage& img, VkQ
     void* mapped = nullptr;
     dev->MapMemory(dev->device, memory, 0, VK_WHOLE_SIZE, 0, &mapped);
     std::vector<unsigned char> rgb((size_t)sc.extent.width * sc.extent.height * 3);
-    if (!to_rgb8(sc.format, (const unsigned char*)mapped, rgb.size() / 3, rgb.data())) {
+    if (!to_rgb8(sc.format, sc.color_space, (const unsigned char*)mapped, rgb.size() / 3, rgb.data())) {
         poe_log("snapshot: can't read format %d", sc.format);
     } else if (FILE* f = fopen(path, "wb")) {
         fprintf(f, "P6\n%u %u\n255\n", sc.extent.width, sc.extent.height);
@@ -785,6 +865,8 @@ void overlay_swapchain_created(DeviceData* dev, VkSwapchainKHR handle, const VkS
     auto sc = std::make_unique<OverlaySwapchain>();
     sc->handle = handle;
     sc->format = info->imageFormat;
+    sc->created_color_space = info->imageColorSpace;
+    sc->color_space = effective_color_space(info->imageFormat, info->imageColorSpace);
     sc->extent = info->imageExtent;
     sc->min_images = info->minImageCount;
     sc->can_copy = info->imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT;

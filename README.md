@@ -397,6 +397,8 @@ Environment variables, which take precedence over the settings page:
 | `POE_LEAGUE` | League to price in |
 | `POE_WAYTRADE_UI_SCALE` | Scales the whole UI |
 | `POE_WAYTRADE_SCALE` | Overrides the pixel-per-logical-unit ratio, if clicks land in the wrong place under fractional scaling |
+| `POE_WAYTRADE_HDR_NITS` | With HDR on, how bright the overlay's white is in nits (default: the desktop's SDR white, or 203) |
+| `POE_WAYTRADE_HDR` | `hdr10`, `scrgb` or `off`: overrides HDR detection, if the overlay's colours are wrong with HDR on or off |
 
 ## Troubleshooting
 
@@ -425,8 +427,11 @@ Environment variables, which take precedence over the settings page:
 - Native Wayland only. There's no X11 or XWayland input, and none is planned:
   other price check overlays already cover X11.
 - Only one Vulkan device gets the overlay.
-- HDR (10-bit/PQ) swapchains wouldn't be colour-corrected. PoE1 has no HDR
-  mode, so this would only matter for PoE2.
+- HDR (PoE2): the overlay's white is as bright as the desktop's SDR white
+  (KDE's SDR brightness, for one), if the compositor supports
+  color-management-v1; otherwise 203 nits. Set `POE_WAYTRADE_HDR_NITS`
+  (50 to 2000) to change it. Translucent edges blend in PQ space, so they're
+  slightly off.
 - No socket colour filters in trade searches.
 - Item displays: tested on the vault reliquaries and Heist curio displays,
   at 1440p. Only English game clients are supported. Rares are priced by

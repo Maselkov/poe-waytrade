@@ -24,7 +24,10 @@ set(PROTOCOL_SOURCES)
 # the user's clipboard after our copy); wayland-protocols >= 1.39.
 # wlr-layer-shell (vendored in protocols/, wlroots' protocol): taking the
 # keyboard while typing into a panel (wl_grab.cpp); it refers to xdg-shell.
+# color-management: the HDR overlay's brightness (wl_color.cpp);
+# wayland-protocols >= 1.41.
 foreach(xml ${WAYLAND_PROTOCOLS_DIR}/staging/fractional-scale/fractional-scale-v1.xml
+            ${WAYLAND_PROTOCOLS_DIR}/staging/color-management/color-management-v1.xml
             ${WAYLAND_PROTOCOLS_DIR}/staging/ext-data-control/ext-data-control-v1.xml
             ${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml
             ${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml)
@@ -85,6 +88,7 @@ add_library(VkLayer_poe_waytrade SHARED
   src/assets.c
   src/wl_input.cpp
   src/wl_pointer.cpp
+  src/wl_color.cpp
   src/wl_grab.cpp
   src/uinput_kbd.cpp
   src/item_text.cpp

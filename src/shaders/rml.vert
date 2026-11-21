@@ -4,8 +4,9 @@ layout(push_constant) uniform Push {
     mat4 transform;
     vec2 translate;
     vec2 to_ndc;  // 2 / viewport size
-    int srgb;
+    int mode;  // OutputMode (hdr.h); used by rml.frag
     int labels;  // drawing the display labels: move each by its tracking result
+    float hdr_scale;  // rml.frag
 } pc;
 
 // The display labels' boxes and where the GPU found their tooltips this

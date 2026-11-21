@@ -1,4 +1,5 @@
 #include "rml_renderer.h"
+#include "hdr.h"
 #include "icons.h"
 
 #include <RmlUi/Core/Math.h>
@@ -29,8 +30,9 @@ struct Push {
     float transform[16];
     float translate[2];
     float to_ndc[2];
-    int32_t srgb;
+    int32_t mode;  // OutputMode (hdr.h)
     int32_t labels;
+    float hdr_scale;
 };
 // Sets of label tracking data: one per swapchain image, a few swapchains.
 constexpr uint32_t kMaxLabelSets = 32;
@@ -137,8 +139,15 @@ bool RmlRenderer::create_static_objects() {
     return dev_->CreateCommandPool(device_, &cpci, nullptr, &upload_pool_) == VK_SUCCESS;
 }
 
-bool RmlRenderer::set_target(VkRenderPass render_pass, VkFormat format) {
-    srgb_ = is_srgb(format);
+bool RmlRenderer::set_target(VkRenderPass render_pass, VkFormat format, VkColorSpaceKHR color_space) {
+    // HDR swapchains get the overlay's sRGB colours mapped to paper white
+    // (hdr.h); other colour spaces are drawn as SDR.
+    if (color_space == VK_COLOR_SPACE_HDR10_ST2084_EXT)
+        mode_ = (int)OutputMode::Hdr10;
+    else if (color_space == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT)
+        mode_ = (int)OutputMode::ScrgbLinear;
+    else
+        mode_ = (int)(is_srgb(format) ? OutputMode::Srgb : OutputMode::Unorm);
     if (pipeline_) {
         dev_->DeviceWaitIdle(device_);
         dev_->DestroyPipeline(device_, pipeline_, nullptr);
@@ -342,8 +351,11 @@ void RmlRenderer::RenderGeometry(Rml::CompiledGeometryHandle handle, Rml::Vector
     push.translate[1] = translation.y;
     push.to_ndc[0] = 2.0f / extent_.width;
     push.to_ndc[1] = 2.0f / extent_.height;
-    push.srgb = srgb_;
+    push.mode = mode_;
     push.labels = label_mode_;
+    push.hdr_scale = mode_ == (int)OutputMode::Hdr10         ? paper_white_ / 10000.0f
+                     : mode_ == (int)OutputMode::ScrgbLinear ? paper_white_ / 80.0f
+                                                             : 1.0f;
     dev_->CmdPushConstants(cmd_, layout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push),
                            &push);
     dev_->CmdBindDescriptorSets(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 1, &t->set, 0, nullptr);

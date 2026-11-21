@@ -190,6 +190,7 @@ WaylandInput::WaylandInput(wl_display* display, wl_surface* parent) : display_(d
 }
 
 WaylandInput::~WaylandInput() {
+    destroy_color_objects();
     destroy_pointer_objects();
     cancel_receive();
     clear_saved();
@@ -249,7 +250,7 @@ void WaylandInput::on_global(wl_registry* reg, uint32_t name, const char* iface,
     } else if (!control_manager_ && !strcmp(iface, ext_data_control_manager_v1_interface.name)) {
         control_manager_ = static_cast<ext_data_control_manager_v1*>(
             wl_registry_bind(reg, name, &ext_data_control_manager_v1_interface, 1));
-    } else {
+    } else if (!bind_color_globals(reg, name, iface, version)) {
         bind_pointer_globals(reg, name, iface, version);
     }
     maybe_create_data_device();

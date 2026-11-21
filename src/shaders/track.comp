@@ -54,6 +54,8 @@ float grey(vec2 p) {
     // Back to the encoded values the templates have. A square root is close
     // enough for matching (it's blind to a gentle curve) and far cheaper
     // than sRGB's pow.
+    // SDR only: on an HDR swapchain (PQ or scRGB) these values are off and
+    // matching suffers. Item displays are PoE1's, which has no HDR mode.
     if (srgb != 0) c = sqrt(c);
     return dot(c, vec3(0.299, 0.587, 0.114)) * 255.0;
 }
