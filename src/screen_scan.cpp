@@ -792,17 +792,27 @@ void ScreenScan::dedupe() {
             drop[keep_a ? j : i] = true;
         }
     }
+    // A display lost (gone off screen, say) and found again is added anew
+    // and read: once it reads as the same item, the lost one is the same
+    // display, and goes. (Kept, it would take the tag back whenever the new
+    // one missed a frame, and its tag is hidden: the tag would blink.)
+    for (size_t i = 0; i < tracked_.size(); i++) {
+        std::string k = known(tracked_[i]);
+        if (k.empty() || tracked_[i].lost == 0) continue;
+        for (size_t j = 0; j < tracked_.size(); j++)
+            if (j != i && !drop[j] && tracked_[j].lost == 0 && known(tracked_[j]) == k) drop[i] = true;
+    }
     size_t i = 0;
     std::erase_if(tracked_, [&](const Tracked&) { return drop[i++]; });
-    // One item on two displays: only the better one's tag shows (decided
-    // afresh each frame, so the other takes over if this one is lost).
+    // One item on two displays found at once: only the older one's tag
+    // shows (the same one each frame, so the tag doesn't flip between them).
     for (Tracked& t : tracked_) {
         bool was = t.duplicate;
         t.duplicate = false;
         std::string k = known(t);
         if (!k.empty())
             for (const Tracked& o : tracked_)
-                if (&o != &t && known(o) == k && better(o, t)) t.duplicate = true;
+                if (&o != &t && known(o) == k && o.id < t.id) t.duplicate = true;
         if (t.duplicate && !was) poe_log("displays: %s twice: showing one", t.reply.title.c_str());
         if (t.duplicate != was) changed();
     }
