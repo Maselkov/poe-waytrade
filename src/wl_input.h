@@ -45,6 +45,10 @@ struct wl_buffer;
 struct wl_pointer;
 struct wp_fractional_scale_manager_v1;
 struct wp_fractional_scale_v1;
+struct wp_color_manager_v1;
+struct wp_color_management_surface_feedback_v1;
+struct wp_image_description_v1;
+struct wp_image_description_info_v1;
 
 // The game sees every key too (it keeps keyboard focus), so hotkeys must be
 // combinations PoE doesn't use. That's also why there's no Esc to close.
@@ -101,6 +105,9 @@ public:
     void set_cursor(bool desktop, const std::string& name);
     // Swapchain pixels per Wayland logical unit.
     double scale() const { return scale_; }
+    // How bright SDR white is on the game's display, in nits, as the
+    // compositor says (color-management-v1); 0 if unknown. wl_color.cpp.
+    uint32_t reference_white() const { return reference_white_; }
     // The pointer over the game itself (not our panels): its position in
     // swapchain pixels, if known, and clicks the game received.
     bool game_pointer(float* x, float* y) const;
@@ -183,6 +190,12 @@ public:
     void on_control_send(ext_data_control_source_v1* source, const char* mime, int fd);
     void on_control_cancelled(ext_data_control_source_v1* source);
     void on_control_finished();
+    // wl_color.cpp
+    void request_reference_white();
+    void on_description_failed(const char* msg);
+    void on_description_ready();
+    void on_description_reference(uint32_t nits) { pending_reference_ = nits; }
+    void on_description_info_done();
 
 private:
     // wl_pointer.cpp
@@ -192,6 +205,10 @@ private:
     void apply_cursor();
     bool ensure_buffer(int w, int h);
     void destroy_pointer_objects();
+    // wl_color.cpp
+    bool bind_color_globals(wl_registry* reg, uint32_t name, const char* iface, uint32_t version);
+    void destroy_color_description();
+    void destroy_color_objects();
 
     void maybe_create_data_device();
     void destroy_offer(wl_data_offer* offer);
@@ -282,6 +299,12 @@ private:
     bool follow_fractional_scale_ = false;
     wp_fractional_scale_manager_v1* fractional_manager_ = nullptr;
     wp_fractional_scale_v1* fractional_scale_ = nullptr;
+    wp_color_manager_v1* color_manager_ = nullptr;
+    wp_color_management_surface_feedback_v1* color_feedback_ = nullptr;
+    wp_image_description_v1* color_description_ = nullptr;
+    wp_image_description_info_v1* color_info_ = nullptr;
+    uint32_t pending_reference_ = 0;
+    uint32_t reference_white_ = 0;
     std::vector<InputRect> rects_;
     bool pointer_inside_ = false;
     int buttons_held_ = 0;  // on our subsurface
