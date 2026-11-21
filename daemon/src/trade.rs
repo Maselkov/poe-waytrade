@@ -2482,6 +2482,21 @@ pub struct Choice {
     pub max: Option<f64>,
 }
 
+/// The filters to search an enchanted item (a Heist Enchanted Armament) by,
+/// from the Base item preset's: its type and its enchants, but of those
+/// only the ones with a number (the magnitude or effect, what it's worth)
+/// if it has any. "Has no Green Sockets" too would leave next to nothing.
+pub fn enchanted_choices(filters: &[Filter]) -> Vec<Choice> {
+    let enchant = |f: &Filter| matches!(&f.target, Target::Stat(id) if id.starts_with("enchant."));
+    let numbered = filters.iter().any(|f| enchant(f) && f.min.is_some());
+    filters
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.default_on && !(numbered && enchant(f) && f.min.is_none()))
+        .map(|(index, f)| Choice { index, min: f.min, max: None })
+        .collect()
+}
+
 /// Minimum and maximum of a stat or property filter.
 type Bounds = (Option<f64>, Option<f64>);
 
@@ -2763,6 +2778,16 @@ mod tests {
         assert!(enchant.is_some_and(|f| f.default_on), "{:?}", filters.iter().map(|f| &f.label).collect::<Vec<_>>());
         // Property lines aren't mods.
         assert_eq!(data.canonical_mod("PHYSICAL DAMAGE: 112-157"), None);
+        // With a socket colour enchant too, only the numbered one counts.
+        let sockets = "Has no Green Sockets";
+        data.stats.insert(("enchant".into(), sockets.into()), "enchant.stat_no_green".into());
+        let mut no_green = crate::item::mod_line(sockets);
+        no_green.kind = ModKind::Enchant;
+        let item = Item { mods: vec![item.mods[0].clone(), no_green], ..item };
+        let filters = build_filters(&item, &data, Preset::Base);
+        let chosen: Vec<&Target> = enchanted_choices(&filters).iter().map(|c| &filters[c.index].target).collect();
+        assert!(chosen.contains(&&Target::Stat("enchant.stat_3196512240".into())), "{chosen:?}");
+        assert!(!chosen.contains(&&Target::Stat("enchant.stat_no_green".into())), "{chosen:?}");
     }
 
     #[test]

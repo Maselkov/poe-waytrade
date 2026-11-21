@@ -1253,13 +1253,12 @@ fn price_screen_item(state: &State, db: &ninja::PriceDb, read: &scan::ScreenItem
             Ok(p) => p,
             Err(e) => return format!("status\terror\n{head}message\t{}\n", clean(&e)),
         };
-        let enabled: Vec<trade::Choice> = prepared
-            .filters
-            .iter()
-            .enumerate()
-            .filter(|(_, f)| if enchanted { f.default_on } else { f.min.is_some() })
-            .map(|(index, f)| trade::Choice { index, min: f.min, max: None })
-            .collect();
+        let enabled: Vec<trade::Choice> = if enchanted {
+            trade::enchanted_choices(&prepared.filters)
+        } else {
+            let numbered = prepared.filters.iter().enumerate().filter(|(_, f)| f.min.is_some());
+            numbered.map(|(index, f)| trade::Choice { index, min: f.min, max: None }).collect()
+        };
         let options = trade::SearchOptions { base_only: true, ..prepared.defaults };
         return from_trade(trade.search(item, &enabled, options, &db.league, db));
     }
@@ -1375,7 +1374,10 @@ fn scan_file(args: &[String]) -> Result<(), String> {
         println!("plate at {:.0},{:.0} ({}ms):", p.x, p.y, started.elapsed().as_millis());
         match read {
             Ok(read) => {
-                println!("  {:?} {:?} {} ({})", read.item.rarity, read.item.name, read.item.base, scan_detail(&read))
+                println!("  {:?} {:?} {} ({})", read.item.rarity, read.item.name, read.item.base, scan_detail(&read));
+                for m in &read.item.mods {
+                    println!("    {:?}: {}", m.kind, m.text);
+                }
             }
             Err(e) => println!("  {e}"),
         }
