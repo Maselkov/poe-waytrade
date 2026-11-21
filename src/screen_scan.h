@@ -162,7 +162,9 @@ private:
         // Read again after its price, to see more of it (kFollowUps).
         int follow_ups = 0;
         bool following_up = false;
+        int total_follow_ups = 0;
         size_t read_lines = 0;  // lines in the read its price is from
+        int facts = 0;          // and how much it knew of a rare
         bool was_hidden = false;  // hidden(), as last drawn
         Clock::time_point retry_at;
         // The reply is a remembered display's, by the look of its name: read

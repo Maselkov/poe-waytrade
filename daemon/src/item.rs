@@ -2,7 +2,7 @@
 //! plain, or the "advanced" copy with mod headers and roll ranges (what
 //! Ctrl+C gives now, like Ctrl+Alt+C).
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Item {
     pub class: String,
     pub rarity: String,

@@ -363,13 +363,69 @@ fn crop_sized(cx: f32, y: f32, cw: f32, ch: f32, full_width: u32, full_height: u
 // ---- reading a tooltip -------------------------------------------------------
 
 /// What a tooltip was read as.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScreenItem {
     pub item: Item,
     /// Facetor's Lens.
     pub stored_experience: Option<u64>,
     /// The lines that made it, for the log.
     pub lines: Vec<String>,
+}
+
+impl ScreenItem {
+    /// How much is known of a rare (what its price depends on): its mods,
+    /// and its item level if read. 0 for anything else.
+    pub fn facts(&self) -> usize {
+        if self.item.rarity != "Rare" {
+            return 0;
+        }
+        self.item.mods.len() + usize::from(self.item.item_level.is_some())
+    }
+}
+
+/// Whether two reads are of the same rare: the same base, and the same
+/// name give or take a letter or two OCR got wrong ("CUL REMNANT").
+pub fn same_rare(a: &Item, b: &Item) -> bool {
+    let (Some(na), Some(nb)) = (&a.name, &b.name) else { return false };
+    if a.rarity != "Rare" || b.rarity != "Rare" || a.base != b.base {
+        return false;
+    }
+    let (ka, kb) = (key(na), key(nb));
+    distance(&ka, &kb, (ka.len() / 5).max(1)).is_some()
+}
+
+/// A mod's text with its numbers taken out: the same mod read twice, a
+/// digit misread or not.
+fn mod_template(m: &crate::item::ModLine) -> (ModKind, String) {
+    let mut t = String::new();
+    for c in m.text.chars() {
+        if c.is_ascii_digit() || c == '.' {
+            if !t.ends_with('#') {
+                t.push('#');
+            }
+        } else {
+            t.push(c);
+        }
+    }
+    (m.kind, t)
+}
+
+/// Adds what `read` saw of a rare to what earlier reads saw (`into`):
+/// another tooltip covers different lines each time, and one read misses
+/// lines another gets. A mod's first reading stays.
+pub fn gather(into: &mut ScreenItem, read: &ScreenItem) {
+    let known: std::collections::HashSet<_> = into.item.mods.iter().map(mod_template).collect();
+    for m in &read.item.mods {
+        if !known.contains(&mod_template(m)) {
+            into.item.mods.push(m.clone());
+        }
+    }
+    let item = &mut into.item;
+    item.item_level = item.item_level.or(read.item.item_level);
+    item.corrupted |= read.item.corrupted;
+    item.mirrored |= read.item.mirrored;
+    item.quality = item.quality.max(read.item.quality);
+    into.lines = read.lines.clone();
 }
 
 /// Names normalised for matching: OCR reads small caps as capitals and loses
@@ -864,6 +920,35 @@ mod tests {
             read(&["REPLICA GRIP OF THE COUNCL", "ARCANIST GLOVES"]).as_deref(),
             Some("Replica Grip of the Council")
         );
+    }
+
+    #[test]
+    fn gathers_a_rare_over_reads() {
+        let v = vocabulary();
+        let canonical = |t: &str| match t {
+            "+30 TO STRENGTH" | "+3O TO STRENGTH" => Some((ModKind::Explicit, "+30 to Strength".to_string())),
+            "+42 TO MAXIMUM LIFE" => Some((ModKind::Explicit, "+42 to maximum Life".to_string())),
+            "+39% TO FIRE RESISTANCE" => Some((ModKind::Explicit, "+39% to Fire Resistance".to_string())),
+            _ => None,
+        };
+        let read = |ls: &[&str]| {
+            let mut ls = lines(ls);
+            ls[0].color = [255, 255, 119];
+            read_item(&ls, &v, canonical).unwrap()
+        };
+        // Two reads, each with part of it covered, and a name misread.
+        let mut first = read(&["WRATH FANG", "TENDERIZER", "+30 TO STRENGTH", "+42 TO MAXIMUM LIFE"]);
+        let second = read(&["WRATH FANC", "TENDERIZER", "+42 TO MAXIMUM LIFE", "+39% TO FIRE RESISTANCE", "CORRUPTED"]);
+        assert!(same_rare(&first.item, &second.item));
+        assert_eq!(first.facts(), 2);
+        gather(&mut first, &second);
+        let mods: Vec<&str> = first.item.mods.iter().map(|m| m.text.as_str()).collect();
+        assert_eq!(mods, ["+30 to Strength", "+42 to maximum Life", "+39% to Fire Resistance"]);
+        assert!(first.item.corrupted);
+        assert_eq!(first.facts(), 3);
+        // Another rare on the same base isn't the same one.
+        let other = read(&["DOOM BITE", "TENDERIZER", "+30 TO STRENGTH"]);
+        assert!(!same_rare(&first.item, &other.item));
     }
 
     #[test]

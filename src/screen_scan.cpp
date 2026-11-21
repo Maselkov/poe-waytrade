@@ -42,8 +42,10 @@ constexpr auto kStopLooking = std::chrono::seconds(1);
 constexpr int kMaxRereads = 4;
 // A display read and priced is read again this many times, this far apart,
 // in case another tooltip covered part of it the first time: the read with
-// the most lines wins.
+// the most lines wins. A rare's reads add up (the daemon gathers its mods):
+// it's read again while they still add something, up to kMaxFollowUps.
 constexpr int kFollowUps = 2;
+constexpr int kMaxFollowUps = 8;
 constexpr auto kFollowUpGap = std::chrono::milliseconds(1500);
 // The daemon is still loading prices or names: ask again after this.
 constexpr auto kRetryLoading = std::chrono::seconds(2);
@@ -388,8 +390,20 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
                 t.request.clear();
                 size_t n = reply.lines.size();
                 bool priced = reply.status == "ok" || reply.status == "not_found";
-                if (!priced || n <= t.read_lines) continue;
-                poe_log("displays: read more of %s (%zu lines, was %zu)", reply.title.c_str(), n, t.read_lines);
+                bool more = reply.facts > t.facts || (reply.facts == t.facts && n > t.read_lines);
+                if (!priced || !more) {
+                    // Nothing new this time: the next look, if any left.
+                    if (t.follow_ups < kFollowUps && t.total_follow_ups < kMaxFollowUps) {
+                        t.follow_ups++;
+                        t.total_follow_ups++;
+                        t.reread_at = now + kFollowUpGap;
+                    }
+                    continue;
+                }
+                poe_log("displays: read more of %s (%zu lines, %d facts; was %zu, %d)", reply.title.c_str(), n,
+                        reply.facts, t.read_lines, t.facts);
+                // Still learning: more looks.
+                if (reply.facts > t.facts && t.total_follow_ups < kMaxFollowUps) t.follow_ups = 0;
             }
             bool gave_up = false;
             // Not an item, says the first read: one more look from a later
@@ -411,9 +425,12 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
                     reply.detail.c_str(), reply.value_text.c_str(), reply.message.empty() ? "" : ": ",
                     reply.message.c_str(), lines.c_str());
             t.read_lines = reply.lines.size();
+            t.facts = reply.facts;
             reply.lines.clear();
-            if ((reply.status == "ok" || reply.status == "not_found") && t.follow_ups < kFollowUps) {
+            if ((reply.status == "ok" || reply.status == "not_found") && t.follow_ups < kFollowUps &&
+                t.total_follow_ups < kMaxFollowUps) {
                 t.follow_ups++;
+                t.total_follow_ups++;
                 t.reread_at = now + kFollowUpGap;
             }
             // (Not one that only stayed hidden: it may be read when seen again.)

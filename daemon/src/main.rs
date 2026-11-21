@@ -50,6 +50,8 @@
 //!     value    <chaos> <divine> <short text, "3.2 div"> <ninja|trade>
 //!              (status ok)
 //!     message  <text>
+//!     facts    <how much is known of a rare: mods, and item level if read;
+//!              its reads are gathered, so a later read may know more>
 //!     line     <a line read off the tooltip>   (0+, for the log)
 //!
 //!   request:  "AREA\n" + where the layer sees the game's Client.txt (its
@@ -205,6 +207,9 @@ struct State {
     /// Item displays already priced: (what was read) -> (when, the reply),
     /// so a display seen again costs no lookup or trade search.
     scanned: Mutex<std::collections::HashMap<String, (Instant, String)>>,
+    /// Rares read lately, each with what all its reads saw (scan::gather):
+    /// priced on that rather than on one read's share of it.
+    rares: Mutex<Vec<(Instant, scan::ScreenItem)>>,
     /// The names screen reads are matched against, and when they were got.
     vocabulary: Mutex<Option<(Instant, Arc<scan::Vocabulary>)>>,
 }
@@ -251,6 +256,7 @@ fn main() {
         refresh_now: (Mutex::new(false), Condvar::new()),
         socket_activated: systemd.is_some(),
         scanned: Mutex::new(std::collections::HashMap::new()),
+        rares: Mutex::new(Vec::new()),
         vocabulary: Mutex::new(None),
     });
 
@@ -970,6 +976,8 @@ const SCAN_REUSE: Duration = Duration::from_secs(10 * 60);
 /// ...and a failed lookup (a trade search over the rate limit, say): not
 /// tried again each time the display comes back into view.
 const SCAN_RETRY: Duration = Duration::from_secs(30);
+/// A rare's reads are gathered for this long after its last one.
+const RARE_KEEP: Duration = Duration::from_secs(30 * 60);
 /// How long the trade site's names are used before they're asked for again
 /// (they're cached on disk for a day anyway).
 const VOCABULARY_AGE: Duration = Duration::from_secs(60 * 60);
@@ -1092,6 +1100,7 @@ fn scan_item(state: &State, request: &str) -> String {
             return out;
         }
     };
+    let read = gather_rare(state, read);
     if scan::partly_hidden(&read) {
         eprintln!("scan: partly hidden: {} ({}ms)", read.lines.join(" | "), started.elapsed().as_millis());
         return "status\tunreadable\nmessage\tPartly hidden\n".to_string();
@@ -1118,10 +1127,36 @@ fn scan_item(state: &State, request: &str) -> String {
         }
     };
     eprintln!("scan: {title} ({detail}) in {}ms", started.elapsed().as_millis());
+    let _ = writeln!(out, "facts\t{}", read.facts());
     for l in &read.lines {
         let _ = writeln!(out, "line\t{}", clean(l));
     }
     out
+}
+
+/// A rare's read, with what earlier reads of it saw added: the same rare
+/// read again (by name and base) adds its mods to what's known.
+fn gather_rare(state: &State, read: scan::ScreenItem) -> scan::ScreenItem {
+    if read.item.rarity != "Rare" || read.item.name.is_none() {
+        return read;
+    }
+    let mut rares = state.rares.lock().unwrap();
+    rares.retain(|(at, _)| at.elapsed() < RARE_KEEP);
+    match rares.iter_mut().find(|(_, r)| scan::same_rare(&r.item, &read.item)) {
+        Some((at, known)) => {
+            let before = known.facts();
+            scan::gather(known, &read);
+            *at = Instant::now();
+            if known.facts() > before {
+                eprintln!("scan: {}: {} facts, was {before}", read.item.name.as_deref().unwrap_or(""), known.facts());
+            }
+            known.clone()
+        }
+        None => {
+            rares.push((Instant::now(), read.clone()));
+            read
+        }
+    }
 }
 
 /// What was read besides the name, as the label shows it.
