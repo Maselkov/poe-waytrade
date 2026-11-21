@@ -43,6 +43,8 @@ pub struct Item {
     pub advanced: bool,
     /// Map-ish properties in display order, e.g. ("Item Quantity", "+85%").
     pub map_props: Vec<(String, String)>,
+    /// "Reward: Foil Mageblood" on a Valdo map.
+    pub reward: Option<String>,
     /// Weapon properties: average damage per hit by type, attacks per second.
     pub physical_damage: Option<f64>,
     pub elemental_damage: f64,
@@ -525,6 +527,8 @@ pub fn parse(text: &str) -> Option<Item> {
             item.critical_chance = v.trim_end_matches(" (augmented)").trim_end_matches('%').parse().ok();
         } else if let Some(v) = line.strip_prefix("Spirit: ") {
             item.spirit = property_number(v);
+        } else if let Some(v) = line.strip_prefix("Reward: ") {
+            item.reward = Some(v.to_string());
         }
         if let Some((label, value)) = line.split_once(": ")
             && MAP_PROPS.contains(&label)

@@ -6,12 +6,12 @@
    "variant": "Gain #% of Physical Damage as Extra Cold Damage",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 215.0,
-   "exaltedValue": 290.6,
+   "chaosValue": 212.2,
+   "exaltedValue": 260.9,
    "divineValue": 1.0,
    "count": 399,
    "detailsId": "coven-queens-crown-gain-of-physical-damage-as-extra-cold-damage",
-   "listingCount": 1150
+   "listingCount": 1346
   },
   {
    "id": 173557,
@@ -19,12 +19,12 @@
    "variant": "Gain #% of Physical Damage as Extra Lightning Damage",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 215.0,
-   "exaltedValue": 290.6,
+   "chaosValue": 212.2,
+   "exaltedValue": 260.9,
    "divineValue": 1.0,
    "count": 399,
    "detailsId": "coven-queens-crown-gain-of-physical-damage-as-extra-lightning-damage",
-   "listingCount": 939
+   "listingCount": 1088
   },
   {
    "id": 173666,
@@ -32,12 +32,12 @@
    "variant": "Gain #% of Physical Damage as Extra Fire Damage",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 215.0,
-   "exaltedValue": 290.6,
+   "chaosValue": 212.2,
+   "exaltedValue": 260.9,
    "divineValue": 1.0,
    "count": 399,
    "detailsId": "coven-queens-crown-gain-of-physical-damage-as-extra-fire-damage",
-   "listingCount": 840
+   "listingCount": 975
   },
   {
    "id": 173659,
@@ -46,11 +46,11 @@
    "itemClass": 15,
    "itemType": "Head",
    "chaosValue": 100.0,
-   "exaltedValue": 135.2,
+   "exaltedValue": 123.0,
    "divineValue": 0.47,
    "count": 399,
    "detailsId": "coven-queens-crown-chance-to-avoid-elemental-ailments",
-   "listingCount": 797
+   "listingCount": 957
   },
   {
    "id": 173606,
@@ -58,12 +58,12 @@
    "variant": "#% increased Damage if you have Consumed a corpse Recently",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 99.4,
-   "exaltedValue": 134.3,
-   "divineValue": 0.46,
+   "chaosValue": 93.0,
+   "exaltedValue": 114.4,
+   "divineValue": 0.44,
    "count": 399,
    "detailsId": "coven-queens-crown-increased-damage-if-you-have-consumed-a-corpse-recently",
-   "listingCount": 684
+   "listingCount": 863
   },
   {
    "id": 173795,
@@ -72,12 +72,12 @@
    "variant": "#% increased Intelligence",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 215.0,
-   "exaltedValue": 290.6,
-   "divineValue": 1.0,
+   "chaosValue": 109.9,
+   "exaltedValue": 135.1,
+   "divineValue": 0.52,
    "count": 399,
    "detailsId": "coven-queens-crown-increased-intelligence",
-   "listingCount": 519
+   "listingCount": 629
   },
   {
    "id": 173843,
@@ -86,12 +86,12 @@
    "variant": "You and Allies within # metres deal # to # additional Cold Damage",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 215.0,
-   "exaltedValue": 290.6,
+   "chaosValue": 212.2,
+   "exaltedValue": 260.9,
    "divineValue": 1.0,
    "count": 399,
    "detailsId": "coven-queens-crown-you-and-allies-within-metres-deal-to-additional-cold-damage",
-   "listingCount": 506
+   "listingCount": 608
   },
   {
    "id": 173870,
@@ -99,12 +99,12 @@
    "variant": "+#% chance to Suppress Spell Damage",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 215.0,
-   "exaltedValue": 290.6,
+   "chaosValue": 212.2,
+   "exaltedValue": 260.9,
    "divineValue": 1.0,
    "count": 399,
    "detailsId": "coven-queens-crown-chance-to-suppress-spell-damage",
-   "listingCount": 494
+   "listingCount": 583
   },
   {
    "id": 173959,
@@ -112,25 +112,12 @@
    "variant": "#% increased Dexterity",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 129.0,
-   "exaltedValue": 174.4,
-   "divineValue": 0.6,
+   "chaosValue": 100.0,
+   "exaltedValue": 123.0,
+   "divineValue": 0.47,
    "count": 399,
    "detailsId": "coven-queens-crown-increased-dexterity",
-   "listingCount": 475
-  },
-  {
-   "id": 173802,
-   "name": "Coven Queen's Crown",
-   "variant": "Projectiles Pierce # additional Targets",
-   "itemClass": 15,
-   "itemType": "Head",
-   "chaosValue": 215.0,
-   "exaltedValue": 290.6,
-   "divineValue": 1.0,
-   "count": 399,
-   "detailsId": "coven-queens-crown-projectiles-pierce-additional-targets",
-   "listingCount": 468
+   "listingCount": 560
   },
   {
    "id": 173473,
@@ -139,11 +126,11 @@
    "itemClass": 15,
    "itemType": "Head",
    "chaosValue": 100.0,
-   "exaltedValue": 135.2,
+   "exaltedValue": 123.0,
    "divineValue": 0.47,
    "count": 399,
    "detailsId": "coven-queens-crown-to-maximum-cold-resistance",
-   "listingCount": 466
+   "listingCount": 544
   },
   {
    "id": 173709,
@@ -151,12 +138,25 @@
    "variant": "#% of Cold Damage from Hits taken as Fire Damage",
    "itemClass": 15,
    "itemType": "Head",
-   "chaosValue": 215.0,
-   "exaltedValue": 290.6,
+   "chaosValue": 212.2,
+   "exaltedValue": 260.9,
    "divineValue": 1.0,
    "count": 399,
    "detailsId": "coven-queens-crown-of-cold-damage-from-hits-taken-as-fire-damage",
-   "listingCount": 458
+   "listingCount": 542
+  },
+  {
+   "id": 173668,
+   "name": "Coven Queen's Crown",
+   "variant": "#% of Fire Damage from Hits taken as Cold Damage",
+   "itemClass": 15,
+   "itemType": "Head",
+   "chaosValue": 100.0,
+   "exaltedValue": 123.0,
+   "divineValue": 0.47,
+   "count": 399,
+   "detailsId": "coven-queens-crown-of-fire-damage-from-hits-taken-as-cold-damage",
+   "listingCount": 536
   }
  ]
 }

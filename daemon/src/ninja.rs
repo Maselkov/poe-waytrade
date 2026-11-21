@@ -38,6 +38,7 @@ const EXCHANGE_TYPES: &[&str] = &[
     "Runegraft",
     "AllflameEmber",
     "Astrolabe",
+    "Thread",
 ];
 
 /// PoE2's exchange categories.
@@ -56,6 +57,7 @@ const POE2_EXCHANGE_TYPES: &[&str] = &[
     "Breach",
     "Verisium",
     "Ultimatum",
+    "SoulCores",
 ];
 
 fn exchange_types() -> &'static [&'static str] {
@@ -101,6 +103,8 @@ const ITEM_TYPES: &[&str] = &[
     "Viscera",
     "ClusterJewel",
     "BaseType",
+    "Wombgift",
+    "ValdoMap",
 ];
 
 #[derive(Deserialize)]
@@ -159,8 +163,8 @@ pub struct ItemLine {
     pub gem_level: Option<u32>,
     pub gem_quality: Option<u32>,
     pub corrupted: Option<bool>,
-    /// Item level for base types (82-86, 86 meaning 86+) and cluster
-    /// jewels (the bracket: 1, 50, 68, 75 or 84).
+    /// Item level for base types (82-86, 86 meaning 86+), cluster jewels
+    /// (the bracket: 1, 50, 68, 75 or 84) and Wombgifts (40, 68, 75 or 84).
     pub level_required: Option<u32>,
     /// In the game's small unit (PoE2's lines have only `primary_value`,
     /// turned into this when read).
@@ -218,6 +222,9 @@ pub struct PriceDb {
     /// Cluster jewels by base type; the name is the enchant ("10% increased
     /// Spell Damage") and the variant the passive count ("8 passives").
     pub clusters: HashMap<String, Vec<ItemLine>>,
+    /// Valdo maps by reward ("Foil Mageblood"), one line per map listed: the
+    /// name is the map's own, and its mods make its price.
+    pub valdo: HashMap<String, Vec<ItemLine>>,
 }
 
 impl PriceDb {
@@ -231,6 +238,7 @@ impl PriceDb {
             uniques_by_base: HashMap::new(),
             bases: HashMap::new(),
             clusters: HashMap::new(),
+            valdo: HashMap::new(),
         }
     }
 
@@ -300,6 +308,14 @@ impl PriceDb {
             "ClusterJewel" => Some(&mut self.clusters),
             _ => None,
         };
+        if kind == "ValdoMap" {
+            for line in ov.lines {
+                if let Some(reward) = line.variant.clone() {
+                    self.valdo.entry(reward).or_default().push(line);
+                }
+            }
+            return;
+        }
         if let Some(map) = by_base {
             for line in ov.lines {
                 let base = line.base_type.clone().unwrap_or_else(|| line.name.clone());
@@ -436,6 +452,8 @@ pub(crate) mod tests {
         ("Viscera", include_str!("../fixtures/ninja-viscera.json")),
         ("ClusterJewel", include_str!("../fixtures/ninja-cluster-jewel.json")),
         ("BaseType", include_str!("../fixtures/ninja-base-type.json")),
+        ("Wombgift", include_str!("../fixtures/ninja-wombgift.json")),
+        ("ValdoMap", include_str!("../fixtures/ninja-valdo-map.json")),
     ];
 
     /// A price list built from the fixtures the way `fetch` builds it.
@@ -561,7 +579,11 @@ pub(crate) mod tests {
                 serde_json::from_str::<serde_json::Value>(json).unwrap()["lines"].as_array().unwrap().len()
             })
             .sum();
-        let kept = [&db.items, &db.bases, &db.clusters].iter().flat_map(|m| m.values()).map(Vec::len).sum::<usize>();
+        let kept = [&db.items, &db.bases, &db.clusters, &db.valdo]
+            .iter()
+            .flat_map(|m| m.values())
+            .map(Vec::len)
+            .sum::<usize>();
         assert_eq!(kept, sent);
         let gem = &db.items["Arc"];
         assert!(gem.iter().all(|l| l.gem_level.is_some()), "gem lines without a level");

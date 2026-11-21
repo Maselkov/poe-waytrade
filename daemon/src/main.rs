@@ -638,14 +638,16 @@ fn map_check(state: &State, text: &str) -> String {
     }
     let _ = writeln!(out, "profile\t{}", marks.profile);
     drop(marks);
-    // Its poe.ninja price, when it has one (by name, or by base: for a rare
-    // or magic map that's only what it's worth unrolled, labelled so).
+    // Its poe.ninja price, when it has one (by name, by reward for a Valdo
+    // map, or by base: for a rare or magic map that's only what it's worth
+    // unrolled, labelled so).
     let db = state.db.read().unwrap().clone();
     if let Some(db) = db
         && let lookup::Outcome::Found { mut prices, .. } = lookup::lookup(&db, &item)
     {
         prices.truncate(1);
-        if item.rarity != "Normal" && item.name.as_ref().is_none_or(|n| !db.items.contains_key(n)) {
+        let by_name = item.name.as_ref().is_some_and(|n| db.items.contains_key(n));
+        if item.rarity != "Normal" && !by_name && !lookup::is_valdo_map(&item) {
             for p in &mut prices {
                 p.label = "white map".to_string();
             }
@@ -799,9 +801,11 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
         return "status\tbad_request\nmessage\tNot PoE item text\n".to_string();
     };
     let db = state.db.read().unwrap().clone();
-    // Rares never have a poe.ninja price, and the base item preset doesn't
-    // use one: show their filters right away, even while poe.ninja loads.
-    if trade_search.is_none() && trade::searchable(&item) && (item.rarity == "Rare" || preset == trade::Preset::Base) {
+    // Rares never have a poe.ninja price (but Valdo maps, by their reward),
+    // and the base item preset doesn't use one: show their filters right
+    // away, even while poe.ninja loads.
+    let rare = item.rarity == "Rare" && !lookup::is_valdo_map(&item);
+    if trade_search.is_none() && trade::searchable(&item) && (rare || preset == trade::Preset::Base) {
         let mut out = trade_response(state, &item, None, preset, db.as_deref());
         if let Some(db) = &db {
             write_base_prices(&mut out, db, &item);

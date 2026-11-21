@@ -126,6 +126,24 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
         return Outcome::Unsupported("Priced by stored experience on the trade site".into());
     }
 
+    if is_valdo_map(item) {
+        return match item.reward.as_ref().and_then(|r| db.valdo.get(r)) {
+            Some(lines) => found(title, valdo_prices(db, lines, item)),
+            None => Outcome::NotFound(match &item.reward {
+                Some(reward) => format!("No poe.ninja price for a Valdo map with {reward}"),
+                None => "No reward read on this Valdo map".into(),
+            }),
+        };
+    }
+
+    // Wombgifts: a line per item level bracket.
+    if item.class == "Wombgifts" {
+        return match db.items.get(&item.base).map(|lines| wombgift_prices(db, lines, item)) {
+            Some(prices) if !prices.is_empty() => found(title, prices),
+            _ => Outcome::NotFound(format!("No poe.ninja price for {title}")),
+        };
+    }
+
     // Currency, fragments, essences, divination cards, omens, ...
     if let Some(&chaos) = db.exchange.get(&item.base) {
         let mut prices =
@@ -197,6 +215,52 @@ pub fn base_prices(db: &PriceDb, item: &Item) -> Vec<Price> {
     })
     .into_iter()
     .collect()
+}
+
+/// A Valdo map: a rare map that's worth its reward ("Foil Mageblood"), not
+/// its mods. poe.ninja has it by reward, not as a rare.
+pub fn is_valdo_map(item: &Item) -> bool {
+    item.base == "Valdo Map"
+}
+
+/// poe.ninja lists each Valdo map for sale on its own line, its price set by
+/// how hard its mods are as much as by its reward. The map itself when it's
+/// listed, then the median, lowest and highest of the maps with its reward.
+fn valdo_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
+    let mut sorted: Vec<&ItemLine> = lines.iter().collect();
+    sorted.sort_by(|a, b| a.chaos_value.total_cmp(&b.chaos_value));
+    let priced = |line: &ItemLine, label: String| Price { label, ..line_price(db, line) };
+    let mut prices = Vec::new();
+    if let Some(own) = sorted.iter().find(|l| item.name.as_ref() == Some(&l.name)) {
+        prices.push(priced(own, "this map".into()));
+    }
+    let n = sorted.len();
+    match n {
+        0 => {}
+        1 => prices.push(priced(sorted[0], "the only one listed".into())),
+        _ => {
+            if n >= 3 {
+                prices.push(priced(sorted[(n - 1) / 2], format!("median of {n}")));
+            }
+            prices.push(priced(sorted[0], "lowest".into()));
+            prices.push(priced(sorted[n - 1], "highest".into()));
+        }
+    }
+    prices
+}
+
+/// A Wombgift's line for its item level: the highest bracket at or below it.
+/// Without an item level, every bracket's.
+fn wombgift_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
+    let mut sorted: Vec<&ItemLine> = lines.iter().collect();
+    sorted.sort_by_key(|l| l.level_required.unwrap_or(1));
+    let label = |l: &ItemLine| Price { label: format!("ilvl {}+", l.level_required.unwrap_or(1)), ..line_price(db, l) };
+    match item.item_level {
+        Some(ilvl) => {
+            sorted.iter().rev().find(|l| l.level_required.unwrap_or(1) <= ilvl).map(|l| label(l)).into_iter().collect()
+        }
+        None => sorted.into_iter().map(label).collect(),
+    }
 }
 
 /// "Adds 8 Passive Skills" and "Added Small Passive Skills grant: ..."
@@ -553,6 +617,58 @@ mod tests {
             "Item Class: Body Armours\nRarity: Unique\nQueen of the Forest\nDestiny Leather\n--------\n\
              Evasion Rating: 1200\n--------\nSockets: {sockets}\n--------\nItem Level: 84\n"
         )
+    }
+
+    fn wombgift(ilvl: u32) -> String {
+        format!(
+            "Item Class: Wombgifts\nRarity: Currency\nAncient Wombgift\n--------\nItem Level: {ilvl}\n\
+             Requires 137 Hiveblood\n--------\nCan grow into a Unique item on the Genesis Tree\n"
+        )
+    }
+
+    #[test]
+    fn wombgifts_by_item_level() {
+        let at = |level: u64| chaos(&line("Wombgift", "Ancient Wombgift", |l| l["levelRequired"] == level));
+        assert_eq!(look(&wombgift(51)), vec![("ilvl 40+".to_string(), at(40))]);
+        assert_eq!(look(&wombgift(75)), vec![("ilvl 75+".to_string(), at(75))]);
+        assert_eq!(look(&wombgift(100)), vec![("ilvl 84+".to_string(), at(84))]);
+        assert!(matches!(lookup(&fixture_db(), &parse(&wombgift(20)).unwrap()), Outcome::NotFound(_)));
+    }
+
+    fn valdo_map(name: &str, reward: &str) -> String {
+        format!(
+            "Item Class: Maps\nRarity: Rare\n{name}\nValdo Map\n--------\nMap Area: Malformation\n\
+             Reward: {reward}\nAtlas Drops: +116% (augmented)\nItem Rarity: +26% (augmented)\n--------\n\
+             Item Level: 100\n--------\nMonster Level: 84\n--------\nArea contains a Blight Encounter\n\
+             Players in Area are 100% Delirious\n--------\nUnmodifiable\n"
+        )
+    }
+
+    #[test]
+    fn valdo_maps_by_reward() {
+        let json: Value = serde_json::from_str(include_str!("../fixtures/ninja-valdo-map.json")).unwrap();
+        let lines = json["lines"].as_array().unwrap();
+        let reward = lines[0]["variant"].as_str().unwrap();
+        let mut values: Vec<f64> = lines.iter().map(chaos).collect();
+        values.sort_by(f64::total_cmp);
+        let n = values.len();
+        assert!(n >= 3, "the fixture keeps the reward with the most maps");
+        let spread = vec![
+            (format!("median of {n}"), values[(n - 1) / 2]),
+            ("lowest".to_string(), values[0]),
+            ("highest".to_string(), values[n - 1]),
+        ];
+
+        // Another map with that reward: what maps with it sell for.
+        assert_eq!(look(&valdo_map("Nowhere Special", reward)), spread);
+        // A listed one: its own price first.
+        let own = &lines[n / 2];
+        let mut want = vec![("this map".to_string(), chaos(own))];
+        want.extend(spread);
+        assert_eq!(look(&valdo_map(own["name"].as_str().unwrap(), reward)), want);
+
+        let unknown = parse(&valdo_map("Nowhere Special", "Foil Nothing")).unwrap();
+        assert!(matches!(lookup(&fixture_db(), &unknown), Outcome::NotFound(_)));
     }
 
     #[test]

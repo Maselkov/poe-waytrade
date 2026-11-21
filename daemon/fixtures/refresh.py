@@ -142,12 +142,19 @@ def main():
          lambda line: line["name"] in ("10% increased Spell Damage", "Minions deal 10% increased Damage")),
         ("BaseType", "ninja-base-type.json",
          lambda line: line["name"] in ("Vaal Regalia", "Simplex Amulet")),
+        ("Wombgift", "ninja-wombgift.json", lambda line: line["name"] == "Ancient Wombgift"),
     ]:
         ov = get(f"{NINJA}/economy/stash/current/item/overview?league={q}&type={kind}")
         lines = [slim(line, mods=kind.startswith("Unique")) for line in ov["lines"] if keep(line)]
         # Viscera have a line per implicit: the most listed are enough.
         lines.sort(key=lambda line: -(line.get("listingCount") or 0))
         save(name, {"lines": lines[:12]} if kind == "Viscera" else {"lines": lines})
+
+    # Valdo maps: a line per map listed. Those of the reward with the most.
+    ov = get(f"{NINJA}/economy/stash/current/item/overview?league={q}&type=ValdoMap")
+    rewards = [line["variant"] for line in ov["lines"]]
+    reward = max(set(rewards), key=rewards.count)
+    save("ninja-valdo-map.json", {"lines": [slim(line) for line in ov["lines"] if line["variant"] == reward]})
 
     stats = get(f"{TRADE}/data/stats")
     save("trade-stats.json", {"result": [

@@ -1,9 +1,9 @@
 {
  "result": [
   {
-   "id": "68d72a8af99b4f22e30ec48019634e96a04464a91f03ff24bf41dc5b7c7df508",
+   "id": "fa2671239e9a3bc6dd3ad96d31dfbc7048f0e293ad879b3d53ccc19d2bb53ee1",
    "listing": {
-    "indexed": "2026-11-21T08:17:00Z",
+    "indexed": "2026-11-21T16:33:41Z",
     "price": {
      "type": "~b/o",
      "amount": 1,
@@ -15,12 +15,12 @@
     "w": 1,
     "h": 1,
     "league": "Covens",
-    "id": "68d72a8af99b4f22e30ec48019634e96a04464a91f03ff24bf41dc5b7c7df508",
-    "name": "Dusk Circle",
+    "id": "fa2671239e9a3bc6dd3ad96d31dfbc7048f0e293ad879b3d53ccc19d2bb53ee1",
+    "name": "Havoc Hold",
     "typeLine": "Sapphire Ring",
     "baseType": "Sapphire Ring",
     "rarity": "Rare",
-    "ilvl": 50,
+    "ilvl": 51,
     "identified": true,
     "note": "~b/o 1 alch",
     "requirements": [
@@ -38,7 +38,7 @@
     ],
     "implicitMods": [
      {
-      "description": "+20% to Cold Resistance",
+      "description": "+28% to Cold Resistance",
       "domain": "implicit",
       "hash": "stat.implicit.stat_4220027924",
       "mods": [
@@ -56,25 +56,65 @@
     ],
     "explicitMods": [
      {
-      "description": "+31 to Strength",
+      "description": "+27 to Dexterity",
       "domain": "explicit",
-      "hash": "stat.explicit.stat_4080418644",
+      "hash": "stat.explicit.stat_3261801346",
       "mods": [
        {
-        "name": "of the Gorilla",
-        "tier": "S5",
-        "level": 44,
+        "name": "of the Falcon",
+        "tier": "S6",
+        "level": 33,
         "magnitudes": [
          {
-          "min": "28",
-          "max": "32"
+          "min": "23",
+          "max": "27"
          }
         ]
        }
       ]
      },
      {
-      "description": "+67 to maximum Life",
+      "description": "Adds 1 to 2 Physical Damage to Attacks",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3032590688",
+      "mods": [
+       {
+        "name": "Glinting",
+        "tier": "P6",
+        "level": 5,
+        "magnitudes": [
+         {
+          "min": "1",
+          "max": "1"
+         },
+         {
+          "min": "2",
+          "max": "2"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+3 to maximum Energy Shield",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3489782002",
+      "mods": [
+       {
+        "name": "Shining",
+        "tier": "P11",
+        "level": 3,
+        "magnitudes": [
+         {
+          "min": "1",
+          "max": "3"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+60 to maximum Life",
       "domain": "explicit",
       "hash": "stat.explicit.stat_3299347043",
       "mods": [
@@ -92,43 +132,7 @@
       ]
      },
      {
-      "description": "+42 to maximum Mana",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_1050105434",
-      "mods": [
-       {
-        "name": "Aqua",
-        "tier": "P8",
-        "level": 35,
-        "magnitudes": [
-         {
-          "min": "40",
-          "max": "44"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "48% increased Mana Regeneration Rate",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_789117908",
-      "mods": [
-       {
-        "name": "of Bliss",
-        "tier": "S3",
-        "level": 42,
-        "magnitudes": [
-         {
-          "min": "40",
-          "max": "49"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "0.22% of Physical Attack Damage Leeched as Mana",
+      "description": "0.33% of Physical Attack Damage Leeched as Mana",
       "domain": "explicit",
       "hash": "stat.explicit.stat_3237948413",
       "mods": [
@@ -152,9 +156,21 @@
      "hashes": {
       "explicit": [
        [
-        "explicit.stat_4080418644",
+        "explicit.stat_3261801346",
+        [
+         1
+        ]
+       ],
+       [
+        "explicit.stat_3032590688",
         [
          2
+        ]
+       ],
+       [
+        "explicit.stat_3489782002",
+        [
+         4
         ]
        ],
        [
@@ -164,21 +180,9 @@
         ]
        ],
        [
-        "explicit.stat_1050105434",
-        [
-         4
-        ]
-       ],
-       [
-        "explicit.stat_789117908",
-        [
-         0
-        ]
-       ],
-       [
         "explicit.stat_3237948413",
         [
-         1
+         0
         ]
        ]
       ],
@@ -195,7 +199,7 @@
     },
     "pseudoMods": [
      {
-      "description": "+82.5 total maximum Life",
+      "description": "+60 total maximum Life",
       "domain": "pseudo",
       "hash": "stat.pseudo.pseudo_total_life"
      }
@@ -205,7 +209,7 @@
   {
    "id": "8cad15649542b89a32d0df3755faa7cc009a080b166429eb2384be7050645d68",
    "listing": {
-    "indexed": "2026-11-21T07:08:24Z",
+    "indexed": "2026-11-21T19:51:23Z",
     "price": {
      "type": "~b/o",
      "amount": 1,
@@ -373,594 +377,6 @@
     "pseudoMods": [
      {
       "description": "+98 total maximum Life",
-      "domain": "pseudo",
-      "hash": "stat.pseudo.pseudo_total_life"
-     }
-    ]
-   }
-  },
-  {
-   "id": "8bf18a9bfb087f8d5d2bb4a620a4d99a8e429e8ac5c7a763bbf6069d9082c516",
-   "listing": {
-    "indexed": "2026-11-20T22:54:46Z",
-    "price": {
-     "type": "~b/o",
-     "amount": 1,
-     "currency": "alch"
-    }
-   },
-   "item": {
-    "verified": true,
-    "w": 1,
-    "h": 1,
-    "league": "Covens",
-    "id": "8bf18a9bfb087f8d5d2bb4a620a4d99a8e429e8ac5c7a763bbf6069d9082c516",
-    "name": "Viper Whorl",
-    "typeLine": "Sapphire Ring",
-    "baseType": "Sapphire Ring",
-    "rarity": "Rare",
-    "ilvl": 80,
-    "identified": true,
-    "note": "~b/o 1 alch",
-    "requirements": [
-     {
-      "name": "Level",
-      "values": [
-       [
-        "63",
-        0
-       ]
-      ],
-      "displayMode": 0,
-      "type": 62
-     }
-    ],
-    "implicitMods": [
-     {
-      "description": "+21% to Cold Resistance",
-      "domain": "implicit",
-      "hash": "stat.implicit.stat_4220027924",
-      "mods": [
-       {
-        "level": 10,
-        "magnitudes": [
-         {
-          "min": "20",
-          "max": "30"
-         }
-        ]
-       }
-      ]
-     }
-    ],
-    "explicitMods": [
-     {
-      "description": "+40 to Strength",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_4080418644",
-      "mods": [
-       {
-        "name": "of the Leviathan",
-        "tier": "S3",
-        "level": 66,
-        "magnitudes": [
-         {
-          "min": "38",
-          "max": "42"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "+17 to maximum Energy Shield",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_3489782002",
-      "mods": [
-       {
-        "name": "Radiating",
-        "tier": "P7",
-        "level": 29,
-        "magnitudes": [
-         {
-          "min": "16",
-          "max": "19"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "+55 to maximum Life",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_3299347043",
-      "mods": [
-       {
-        "name": "Stout",
-        "tier": "P4",
-        "level": 24,
-        "magnitudes": [
-         {
-          "min": "55",
-          "max": "69"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "69% increased Mana Regeneration Rate",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_789117908",
-      "mods": [
-       {
-        "name": "of Nirvana",
-        "tier": "S1",
-        "level": 79,
-        "magnitudes": [
-         {
-          "min": "60",
-          "max": "69"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "+20% to [PlayerItemRarity|Item Rarity]",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_3917489142",
-      "mods": [
-       {
-        "name": "of Archaeology",
-        "tier": "S2",
-        "level": 53,
-        "magnitudes": [
-         {
-          "min": "15",
-          "max": "20"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "34% increased Elemental Damage with Attack Skills",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_387439868",
-      "mods": [
-       {
-        "name": "Unleashed",
-        "tier": "P2",
-        "level": 60,
-        "magnitudes": [
-         {
-          "min": "31",
-          "max": "36"
-         }
-        ]
-       }
-      ]
-     }
-    ],
-    "frameType": 2,
-    "frameTypeId": "Rare",
-    "extended": {
-     "hashes": {
-      "explicit": [
-       [
-        "explicit.stat_4080418644",
-        [
-         2
-        ]
-       ],
-       [
-        "explicit.stat_3489782002",
-        [
-         4
-        ]
-       ],
-       [
-        "explicit.stat_3299347043",
-        [
-         5
-        ]
-       ],
-       [
-        "explicit.stat_789117908",
-        [
-         1
-        ]
-       ],
-       [
-        "explicit.stat_3917489142",
-        [
-         0
-        ]
-       ],
-       [
-        "explicit.stat_387439868",
-        [
-         3
-        ]
-       ]
-      ],
-      "implicit": [
-       [
-        "implicit.stat_4220027924",
-        [
-         0
-        ]
-       ]
-      ],
-      "pseudo": []
-     }
-    },
-    "pseudoMods": [
-     {
-      "description": "+75 total maximum Life",
-      "domain": "pseudo",
-      "hash": "stat.pseudo.pseudo_total_life"
-     }
-    ]
-   }
-  },
-  {
-   "id": "159c40a88d3797799274ffb20b4b071106c601e5c60639a8753bee8a0333c25b",
-   "listing": {
-    "indexed": "2026-11-16T20:18:12Z",
-    "price": {
-     "type": "~b/o",
-     "amount": 2,
-     "currency": "alch"
-    }
-   },
-   "item": {
-    "verified": true,
-    "w": 1,
-    "h": 1,
-    "league": "Covens",
-    "id": "159c40a88d3797799274ffb20b4b071106c601e5c60639a8753bee8a0333c25b",
-    "name": "Foe Coil",
-    "typeLine": "Sapphire Ring",
-    "baseType": "Sapphire Ring",
-    "rarity": "Rare",
-    "ilvl": 48,
-    "identified": true,
-    "note": "~b/o 2 alch",
-    "requirements": [
-     {
-      "name": "Level",
-      "values": [
-       [
-        "24",
-        0
-       ]
-      ],
-      "displayMode": 0,
-      "type": 62
-     }
-    ],
-    "implicitMods": [
-     {
-      "description": "+21% to Cold Resistance",
-      "domain": "implicit",
-      "hash": "stat.implicit.stat_4220027924",
-      "mods": [
-       {
-        "level": 10,
-        "magnitudes": [
-         {
-          "min": "20",
-          "max": "30"
-         }
-        ]
-       }
-      ]
-     }
-    ],
-    "explicitMods": [
-     {
-      "description": "Adds 5 to 11 Fire Damage to Attacks",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_1573130764",
-      "mods": [
-       {
-        "name": "Smoking",
-        "tier": "P7",
-        "level": 20,
-        "magnitudes": [
-         {
-          "min": "5",
-          "max": "7"
-         },
-         {
-          "min": "11",
-          "max": "13"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "Adds 1 to 2 Cold Damage to Attacks",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_4067062424",
-      "mods": [
-       {
-        "name": "Frosted",
-        "tier": "P9",
-        "level": 2,
-        "magnitudes": [
-         {
-          "min": "1",
-          "max": "1"
-         },
-         {
-          "min": "2",
-          "max": "2"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "+81 to maximum Life",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_3299347043",
-      "mods": [
-       {
-        "name": "Robust",
-        "tier": "P3",
-        "level": 30,
-        "magnitudes": [
-         {
-          "min": "70",
-          "max": "84"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "Gain 8 Life per Enemy Killed",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_3695891184",
-      "mods": [
-       {
-        "name": "of Success",
-        "tier": "S6",
-        "magnitudes": [
-         {
-          "min": "7",
-          "max": "10"
-         }
-        ]
-       }
-      ]
-     }
-    ],
-    "frameType": 2,
-    "frameTypeId": "Rare",
-    "extended": {
-     "hashes": {
-      "explicit": [
-       [
-        "explicit.stat_1573130764",
-        [
-         1
-        ]
-       ],
-       [
-        "explicit.stat_4067062424",
-        [
-         0
-        ]
-       ],
-       [
-        "explicit.stat_3299347043",
-        [
-         3
-        ]
-       ],
-       [
-        "explicit.stat_3695891184",
-        [
-         2
-        ]
-       ]
-      ],
-      "implicit": [
-       [
-        "implicit.stat_4220027924",
-        [
-         0
-        ]
-       ]
-      ],
-      "pseudo": []
-     }
-    },
-    "pseudoMods": [
-     {
-      "description": "+81 total maximum Life",
-      "domain": "pseudo",
-      "hash": "stat.pseudo.pseudo_total_life"
-     }
-    ]
-   }
-  },
-  {
-   "id": "ccf61183e43b9d627948638db67204afca6cbd47d089e3aa27e050c342868f2e",
-   "listing": {
-    "indexed": "2026-11-17T14:54:24Z",
-    "price": {
-     "type": "~b/o",
-     "amount": 1,
-     "currency": "alt"
-    }
-   },
-   "item": {
-    "verified": true,
-    "w": 1,
-    "h": 1,
-    "league": "Covens",
-    "id": "ccf61183e43b9d627948638db67204afca6cbd47d089e3aa27e050c342868f2e",
-    "name": "Agony Hold",
-    "typeLine": "Sapphire Ring",
-    "baseType": "Sapphire Ring",
-    "rarity": "Rare",
-    "ilvl": 33,
-    "identified": true,
-    "note": "~b/o 1 alt",
-    "requirements": [
-     {
-      "name": "Level",
-      "values": [
-       [
-        "19",
-        0
-       ]
-      ],
-      "displayMode": 0,
-      "type": 62
-     }
-    ],
-    "implicitMods": [
-     {
-      "description": "+25% to Cold Resistance",
-      "domain": "implicit",
-      "hash": "stat.implicit.stat_4220027924",
-      "mods": [
-       {
-        "level": 10,
-        "magnitudes": [
-         {
-          "min": "20",
-          "max": "30"
-         }
-        ]
-       }
-      ]
-     }
-    ],
-    "explicitMods": [
-     {
-      "description": "15% increased Fire Damage",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_3962278098",
-      "mods": [
-       {
-        "name": "of Coals",
-        "tier": "S3",
-        "level": 22,
-        "magnitudes": [
-         {
-          "min": "13",
-          "max": "15"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "+9 to Evasion Rating",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_2144192055",
-      "mods": [
-       {
-        "name": "Agile",
-        "tier": "P7",
-        "magnitudes": [
-         {
-          "min": "3",
-          "max": "10"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "+63 to maximum Life",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_3299347043",
-      "mods": [
-       {
-        "name": "Stout",
-        "tier": "P4",
-        "level": 24,
-        "magnitudes": [
-         {
-          "min": "55",
-          "max": "69"
-         }
-        ]
-       }
-      ]
-     },
-     {
-      "description": "+27 to maximum Mana",
-      "domain": "explicit",
-      "hash": "stat.explicit.stat_1050105434",
-      "mods": [
-       {
-        "name": "Azure",
-        "tier": "P11",
-        "level": 17,
-        "magnitudes": [
-         {
-          "min": "25",
-          "max": "29"
-         }
-        ]
-       }
-      ]
-     }
-    ],
-    "frameType": 2,
-    "frameTypeId": "Rare",
-    "extended": {
-     "hashes": {
-      "explicit": [
-       [
-        "explicit.stat_3962278098",
-        [
-         0
-        ]
-       ],
-       [
-        "explicit.stat_2144192055",
-        [
-         1
-        ]
-       ],
-       [
-        "explicit.stat_3299347043",
-        [
-         2
-        ]
-       ],
-       [
-        "explicit.stat_1050105434",
-        [
-         3
-        ]
-       ]
-      ],
-      "implicit": [
-       [
-        "implicit.stat_4220027924",
-        [
-         0
-        ]
-       ]
-      ],
-      "pseudo": []
-     }
-    },
-    "pseudoMods": [
-     {
-      "description": "+63 total maximum Life",
       "domain": "pseudo",
       "hash": "stat.pseudo.pseudo_total_life"
      }
@@ -1582,6 +998,207 @@
    }
   },
   {
+   "id": "69ffdf667a222747dafac03971d5d758bd16b3b535064d12ab4dcda6f1c2bf10",
+   "listing": {
+    "indexed": "2026-11-21T17:57:21Z",
+    "price": {
+     "type": "~b/o",
+     "amount": 19,
+     "currency": "alch"
+    }
+   },
+   "item": {
+    "verified": true,
+    "w": 1,
+    "h": 1,
+    "league": "Covens",
+    "id": "69ffdf667a222747dafac03971d5d758bd16b3b535064d12ab4dcda6f1c2bf10",
+    "name": "Corpse Grip",
+    "typeLine": "Sapphire Ring",
+    "baseType": "Sapphire Ring",
+    "rarity": "Rare",
+    "ilvl": 73,
+    "identified": true,
+    "note": "~b/o 19 alch",
+    "requirements": [
+     {
+      "name": "Level",
+      "values": [
+       [
+        "40",
+        0
+       ]
+      ],
+      "displayMode": 0,
+      "type": 62
+     }
+    ],
+    "implicitMods": [
+     {
+      "description": "+26% to Cold Resistance",
+      "domain": "implicit",
+      "hash": "stat.implicit.stat_4220027924",
+      "mods": [
+       {
+        "level": 10,
+        "magnitudes": [
+         {
+          "min": "20",
+          "max": "30"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "explicitMods": [
+     {
+      "description": "+15 to Dexterity",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3261801346",
+      "mods": [
+       {
+        "name": "of the Lynx",
+        "tier": "S8",
+        "level": 11,
+        "magnitudes": [
+         {
+          "min": "13",
+          "max": "17"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "22% increased Fire Damage",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3962278098",
+      "mods": [
+       {
+        "name": "of Flames",
+        "tier": "S1",
+        "level": 50,
+        "magnitudes": [
+         {
+          "min": "19",
+          "max": "22"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+201 to Accuracy Rating",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_803737631",
+      "mods": [
+       {
+        "name": "of the Sniper",
+        "tier": "S3",
+        "level": 40,
+        "magnitudes": [
+         {
+          "min": "166",
+          "max": "250"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+3 to Evasion Rating",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_2144192055",
+      "mods": [
+       {
+        "name": "Agile",
+        "tier": "P7",
+        "magnitudes": [
+         {
+          "min": "3",
+          "max": "10"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+99 to maximum Life",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3299347043",
+      "mods": [
+       {
+        "name": "Rotund",
+        "tier": "P2",
+        "level": 36,
+        "magnitudes": [
+         {
+          "min": "85",
+          "max": "99"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "frameType": 2,
+    "frameTypeId": "Rare",
+    "extended": {
+     "hashes": {
+      "explicit": [
+       [
+        "explicit.stat_3261801346",
+        [
+         0
+        ]
+       ],
+       [
+        "explicit.stat_3962278098",
+        [
+         3
+        ]
+       ],
+       [
+        "explicit.stat_803737631",
+        [
+         1
+        ]
+       ],
+       [
+        "explicit.stat_2144192055",
+        [
+         2
+        ]
+       ],
+       [
+        "explicit.stat_3299347043",
+        [
+         4
+        ]
+       ]
+      ],
+      "implicit": [
+       [
+        "implicit.stat_4220027924",
+        [
+         0
+        ]
+       ]
+      ],
+      "pseudo": []
+     }
+    },
+    "pseudoMods": [
+     {
+      "description": "+99 total maximum Life",
+      "domain": "pseudo",
+      "hash": "stat.pseudo.pseudo_total_life"
+     }
+    ]
+   }
+  },
+  {
    "id": "7f6482650c059b49d59d898b9b1934b5d58a009db21b697ac9a8ffda05919153",
    "listing": {
     "indexed": "2026-11-21T00:19:21Z",
@@ -1938,6 +1555,417 @@
     "pseudoMods": [
      {
       "description": "+66 total maximum Life",
+      "domain": "pseudo",
+      "hash": "stat.pseudo.pseudo_total_life"
+     }
+    ]
+   }
+  },
+  {
+   "id": "1f6a08d5eae7976810f471dbe720c1704fe00d3c8d8130b526b99156b6d22aa5",
+   "listing": {
+    "indexed": "2026-11-14T04:19:42Z",
+    "price": {
+     "type": "~b/o",
+     "amount": 1,
+     "currency": "vaal"
+    }
+   },
+   "item": {
+    "verified": true,
+    "w": 1,
+    "h": 1,
+    "league": "Covens",
+    "id": "1f6a08d5eae7976810f471dbe720c1704fe00d3c8d8130b526b99156b6d22aa5",
+    "name": "Golem Coil",
+    "typeLine": "Sapphire Ring",
+    "baseType": "Sapphire Ring",
+    "rarity": "Rare",
+    "ilvl": 47,
+    "identified": true,
+    "note": "~b/o 1 vaal",
+    "requirements": [
+     {
+      "name": "Level",
+      "values": [
+       [
+        "28",
+        0
+       ]
+      ],
+      "displayMode": 0,
+      "type": 62
+     }
+    ],
+    "implicitMods": [
+     {
+      "description": "+22% to Cold Resistance",
+      "domain": "implicit",
+      "hash": "stat.implicit.stat_4220027924",
+      "mods": [
+       {
+        "level": 10,
+        "magnitudes": [
+         {
+          "min": "20",
+          "max": "30"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "explicitMods": [
+     {
+      "description": "Adds 12 to 20 Fire Damage to Attacks",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_1573130764",
+      "mods": [
+       {
+        "name": "Flaming",
+        "tier": "P5",
+        "level": 35,
+        "magnitudes": [
+         {
+          "min": "9",
+          "max": "12"
+         },
+         {
+          "min": "19",
+          "max": "22"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "13% increased Cast Speed",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_2891184298",
+      "mods": [
+       {
+        "name": "of Expertise",
+        "tier": "S1",
+        "level": 30,
+        "magnitudes": [
+         {
+          "min": "13",
+          "max": "16"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+74 to maximum Life",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3299347043",
+      "mods": [
+       {
+        "name": "Robust",
+        "tier": "P3",
+        "level": 30,
+        "magnitudes": [
+         {
+          "min": "70",
+          "max": "84"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "Gain 15 Life per Enemy Killed",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3695891184",
+      "mods": [
+       {
+        "name": "of Victory",
+        "tier": "S5",
+        "level": 23,
+        "magnitudes": [
+         {
+          "min": "12",
+          "max": "18"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "frameType": 2,
+    "frameTypeId": "Rare",
+    "extended": {
+     "hashes": {
+      "explicit": [
+       [
+        "explicit.stat_1573130764",
+        [
+         2
+        ]
+       ],
+       [
+        "explicit.stat_2891184298",
+        [
+         0
+        ]
+       ],
+       [
+        "explicit.stat_3299347043",
+        [
+         3
+        ]
+       ],
+       [
+        "explicit.stat_3695891184",
+        [
+         1
+        ]
+       ]
+      ],
+      "implicit": [
+       [
+        "implicit.stat_4220027924",
+        [
+         0
+        ]
+       ]
+      ],
+      "pseudo": []
+     }
+    },
+    "pseudoMods": [
+     {
+      "description": "+74 total maximum Life",
+      "domain": "pseudo",
+      "hash": "stat.pseudo.pseudo_total_life"
+     }
+    ]
+   }
+  },
+  {
+   "id": "3b195605e71e787a165221c381b451e0ffcd2708a7ddf700630dc63e7b5843cf",
+   "listing": {
+    "indexed": "2026-11-21T17:15:46Z",
+    "price": {
+     "type": "~b/o",
+     "amount": 1,
+     "currency": "vaal"
+    }
+   },
+   "item": {
+    "verified": true,
+    "w": 1,
+    "h": 1,
+    "league": "Covens",
+    "id": "3b195605e71e787a165221c381b451e0ffcd2708a7ddf700630dc63e7b5843cf",
+    "name": "Rapture Gyre",
+    "typeLine": "Sapphire Ring",
+    "baseType": "Sapphire Ring",
+    "rarity": "Rare",
+    "ilvl": 85,
+    "identified": true,
+    "note": "~b/o 1 vaal",
+    "requirements": [
+     {
+      "name": "Level",
+      "values": [
+       [
+        "28",
+        0
+       ]
+      ],
+      "displayMode": 0,
+      "type": 62
+     }
+    ],
+    "implicitMods": [
+     {
+      "description": "+23% to Cold Resistance",
+      "domain": "implicit",
+      "hash": "stat.implicit.stat_4220027924",
+      "mods": [
+       {
+        "level": 10,
+        "magnitudes": [
+         {
+          "min": "20",
+          "max": "30"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "explicitMods": [
+     {
+      "description": "+3 to all Attributes",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_1379411836",
+      "mods": [
+       {
+        "name": "of the Clouds",
+        "tier": "S4",
+        "magnitudes": [
+         {
+          "min": "1",
+          "max": "4"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "Adds 6 to 12 Physical Damage to Attacks",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3032590688",
+      "mods": [
+       {
+        "name": "Gleaming",
+        "tier": "P2",
+        "level": 35,
+        "magnitudes": [
+         {
+          "min": "5",
+          "max": "7"
+         },
+         {
+          "min": "11",
+          "max": "12"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "16% increased Fire Damage",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3962278098",
+      "mods": [
+       {
+        "name": "of Cinders",
+        "tier": "S2",
+        "level": 36,
+        "magnitudes": [
+         {
+          "min": "16",
+          "max": "18"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+4 to maximum Energy Shield",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3489782002",
+      "mods": [
+       {
+        "name": "Glimmering",
+        "tier": "P10",
+        "level": 11,
+        "magnitudes": [
+         {
+          "min": "4",
+          "max": "8"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+72 to maximum Life",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3299347043",
+      "mods": [
+       {
+        "name": "Robust",
+        "tier": "P3",
+        "level": 30,
+        "magnitudes": [
+         {
+          "min": "70",
+          "max": "84"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "description": "+19% to Fire Resistance",
+      "domain": "explicit",
+      "hash": "stat.explicit.stat_3372524247",
+      "mods": [
+       {
+        "name": "of the Drake",
+        "tier": "S6",
+        "level": 24,
+        "magnitudes": [
+         {
+          "min": "18",
+          "max": "23"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "frameType": 2,
+    "frameTypeId": "Rare",
+    "extended": {
+     "hashes": {
+      "explicit": [
+       [
+        "explicit.stat_1379411836",
+        [
+         2
+        ]
+       ],
+       [
+        "explicit.stat_3032590688",
+        [
+         4
+        ]
+       ],
+       [
+        "explicit.stat_3962278098",
+        [
+         3
+        ]
+       ],
+       [
+        "explicit.stat_3489782002",
+        [
+         5
+        ]
+       ],
+       [
+        "explicit.stat_3299347043",
+        [
+         0
+        ]
+       ],
+       [
+        "explicit.stat_3372524247",
+        [
+         1
+        ]
+       ]
+      ],
+      "implicit": [
+       [
+        "implicit.stat_4220027924",
+        [
+         0
+        ]
+       ]
+      ],
+      "pseudo": []
+     }
+    },
+    "pseudoMods": [
+     {
+      "description": "+73.5 total maximum Life",
       "domain": "pseudo",
       "hash": "stat.pseudo.pseudo_total_life"
      }
