@@ -101,7 +101,7 @@ Hover an item and press **Ctrl+D**. Open the settings with **Ctrl+Alt+S**.
 | **Ctrl+Alt+D** | A locked panel that stays open until you click its × or click anywhere in the game. |
 | **Ctrl+C** | Your own copy of an item opens a quick look too. |
 | **Ctrl+Alt+S** | Settings. Also the gear at the top left of a panel. |
-| **Ctrl+Alt+F** | Item displays: prices every vault display on screen until you leave the area (see below). Press again to stop. Can be turned off. |
+| **Ctrl+Alt+F** | Item displays: prices every display on screen (vault reliquaries, Heist curios) until you leave the area (see below). It starts by itself in vaults and Heist; this starts it anywhere else, or stops it. Can be turned off. |
 | **Alt+D** | The old map check key; now the same as Ctrl+Alt+D. Can be turned off. |
 | **Ctrl + mouse wheel** | Stash scroll: switches stash tabs with the cursor anywhere in the game. |
 
@@ -159,8 +159,7 @@ tooltip as you move. The most valuable one in sight gets a gold border.
 
 - It starts by itself when you enter one of those vaults, and stops when you
   leave. It knows from the game's log (`logs/Client.txt` in the game's
-  folder). **Ctrl+Alt+F** starts or stops it anywhere else, such as in a
-  Heist.
+  folder). **Ctrl+Alt+F** stops it, or starts it anywhere else.
 - Displays are found by the stone pillars on either side of their title
   plate ("Forbidden Reliquary"). The text is read with
   [ocrs](https://github.com/robertknight/ocrs), and names are matched
@@ -169,6 +168,11 @@ tooltip as you move. The most valuable one in sight gets a gold border.
 - Uniques, currency, gems (by level, quality and corruption) and bases are
   priced from poe.ninja. Facetor's Lens is priced with a trade search for its
   stored experience. Rare Thief's Trinkets get a trade search with their mods.
+- A tooltip partly covered by another one is read again from later frames
+  until its name and enough of the rest show, and every display is read a
+  couple more times after it's priced, in case the first look missed part
+  of it. A tag hides while its tooltip is fully covered and comes back with
+  it.
 - The OCR models (about 12 MB, CC BY-SA 4.0) come with the package, in
   `/usr/share/poe-waytrade/ocrs/`. A build without them downloads them on
   first use to `~/.cache/poe-waytrade/ocrs/`. Set `POE_WAYTRADE_OCR_MODELS`
@@ -200,10 +204,17 @@ minutes get their price back at once.
 - It knows it's in Heist from the game's own id for the area (Client.txt's
   "Generating level ... area" line), so the Laboratory and Mansion maps don't
   count. Turn it off with "Price them in Heist" (Hotkeys tab).
+- Curio displays are found by their "Curio Display" title plate.
 - How rares are priced: a Thief's Trinket by its mods; an experimented base
   by its poe.ninja base price (by item level when the tooltip shows it); a
-  rare with a Heist enchant by its type and enchant (the Base item preset);
-  any other rare by its mods.
+  rare with a Heist enchant by its type and the enchants that have a number
+  ("8% increased Explicit Mana Modifier magnitudes", not "Has no Green
+  Sockets"); any other rare by its mods.
+- A rare is remembered by its name and base for the area: each read adds the
+  mods it saw (other tooltips cover different lines each time), and the
+  price is for everything seen so far, so it can only get more exact.
+- Hold Alt over the displays (advanced mod descriptions) for the item level,
+  which experimented bases are priced by.
 - If a display isn't tagged, set `POE_WAYTRADE_SCAN_SAVE=<folder>` in the
   launch options: then Ctrl+Alt+F saves the next frame there (instead of
   turning the check off). A frame with the display on screen is what's needed
@@ -351,6 +362,9 @@ Environment variables, which take precedence over the settings page:
   `waytrade` in the launch options for the overlay's log. Add
   `POE_WAYTRADE_DEBUG=1` for a debug window showing focus, the last key and
   the clipboard state.
+- **Item display tags jump or go missing.** Add `POE_WAYTRADE_TRACK_LOG=1`
+  too: the log then has every tracking step and the GPU's timings. A short
+  recording of the moment and that log are what's needed to look into it.
 
 ## Known limitations
 
@@ -361,9 +375,10 @@ Environment variables, which take precedence over the settings page:
 - HDR (10-bit/PQ) swapchains wouldn't be colour-corrected. PoE1 has no HDR
   mode, so this would only matter for PoE2.
 - No socket colour filters in trade searches.
-- Item displays: only tested on the vault reliquaries' tooltips. Other
-  displays, such as Heist curios, may have a different title plate and not
-  be found. Only English game clients are supported.
+- Item displays: tested on the vault reliquaries and Heist curio displays,
+  at 1440p. Only English game clients are supported. Rares are priced by
+  what's listed: an unusual enchant or a long list of mods often has no
+  listings, and its tag shows "?".
 - With fractional scaling, the game's cursor grows over the panels. Wine
   sizes its cursor for scale 1 on surfaces that aren't its own windows.
   Setting the cursor to "Desktop" (Hotkeys tab) avoids it, at the cost of
