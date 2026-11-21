@@ -133,7 +133,7 @@ struct PriceReply {
     std::string value_text;    // "3.2 div"
     std::string value_source;  // ninja | trade
     std::vector<std::string> lines;  // what was read, for the log
-    int facts = 0;                   // how much is known of a rare (SCANITEM)
+    int facts = 0;                   // how much of the price was read (SCANITEM)
     // AREA
     std::string area;
     long long entered = -1;  // a new number: a new area

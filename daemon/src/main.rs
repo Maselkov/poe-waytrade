@@ -50,8 +50,9 @@
 //!     value    <chaos> <divine> <short text, "3.2 div"> <ninja|trade>
 //!              (status ok)
 //!     message  <text>
-//!     facts    <how much is known of a rare: mods, and item level if read;
-//!              its reads are gathered, so a later read may know more>
+//!     facts    <how much of what the price depends on was read: corrupted
+//!              and mirrored, and a rare's mods and item level (a rare's
+//!              reads are gathered); a reply with more is the better read>
 //!     line     <a line read off the tooltip>   (0+, for the log)
 //!
 //!   request:  "AREA\n" + where the layer sees the game's Client.txt (its
