@@ -3,7 +3,7 @@
 pkgname=poe-waytrade
 pkgver=0.22.0
 pkgrel=1
-pkgdesc="In-game Vulkan price-check overlay for Path of Exile on Wayland"
+pkgdesc="In-game Vulkan price-check overlay for Path of Exile and Path of Exile 2 on Wayland"
 arch=('x86_64')
 # The OCR models (item displays) are CC BY-SA 4.0: see ocrs-models-NOTICE.md.
 license=('GPL-3.0-or-later' 'CC-BY-SA-4.0')
