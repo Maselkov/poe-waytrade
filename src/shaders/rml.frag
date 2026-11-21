@@ -5,6 +5,7 @@ layout(push_constant) uniform Push {
     vec2 translate;
     vec2 to_ndc;
     int srgb;
+    int labels;
 } pc;
 
 layout(set = 0, binding = 0) uniform sampler2D tex;

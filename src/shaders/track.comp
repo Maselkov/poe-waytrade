@@ -1,0 +1,158 @@
+#version 450
+// Finds each display label's title plate in the frame being drawn, so the
+// label can be drawn on it with no delay (gpu_track.h). Normalized
+// cross-correlation of the plate (grey, as the CPU first saw it) around
+// where the CPU expects it, in three dispatches:
+//   stage 0: every 4 pixels within the radius, the quarter-size plate;
+//   stage 1: every pixel within 2 of the best, the half-size plate;
+//   stage 2: the best, as the label's move.
+// Stages 0 and 1 run a workgroup per (label, position), so the whole GPU
+// shares the work; each keeps its best with an atomic max.
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Push { int stage; } pc;
+
+// The swapchain image, sampled bilinearly: a sample on the corner of four
+// pixels is their average, which is how the templates were shrunk.
+layout(set = 0, binding = 0) uniform sampler2D frame;
+
+struct Slot {
+    vec2 center;  // where the CPU expects the plate's top-left (full-size pixels)
+    vec2 laid;    // where the label was laid out for
+    vec4 rect;    // the label's box (for rml.vert): x0, y0, x1, y1
+    int tw2, th2, offset2;  // half-size template: size, start in templ
+    float norm2;            // its (zero-mean) length
+    int tw4, th4, offset4;  // quarter-size template
+    float norm4;
+    vec2 fallback;  // the move to make if it isn't found (its last one)
+    vec2 pad;
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer Slots {
+    int count;
+    int srgb;  // the image is sRGB: samples come back linear
+    int width, height;
+    int radius;  // full-size pixels to search around center (a multiple of 4, <= 96)
+    int pad0, pad1, pad2;
+    Slot slots[];
+};
+layout(std430, set = 0, binding = 2) readonly buffer Templates { float templ[]; };
+// Per slot: x, y (full-size pixels to move the label by), score, and 1 if
+// found, 0.75 if not (moved by its fallback).
+layout(std430, set = 0, binding = 3) writeonly buffer Results { vec4 result[]; };
+// Per slot: the best of stage 0, then of stage 1, as score (high 20 bits)
+// and position (low 12 bits): atomicMax keeps the best. Zeroed by stage 2.
+layout(std430, set = 0, binding = 4) coherent buffer Best { uint best[]; };
+
+// Sums over the template's samples on screen: image, image², template,
+// template², image x template, count.
+shared float s_v[64], s_vv[64], s_t[64], s_tt[64], s_vt[64], s_n[64];
+
+float grey(vec2 p) {
+    vec3 c = texture(frame, p / vec2(width, height)).rgb;
+    // Back to the encoded values the templates have. A square root is close
+    // enough for matching (it's blind to a gentle curve) and far cheaper
+    // than sRGB's pow.
+    if (srgb != 0) c = sqrt(c);
+    return dot(c, vec3(0.299, 0.587, 0.114)) * 255.0;
+}
+
+uint pack_best(float score, int index) {
+    uint q = uint(clamp((score + 1.0) * 0.5, 0.0, 1.0) * 1048575.0);  // 20 bits
+    return (q << 12) | uint(index);
+}
+float best_score(uint b) { return float(b >> 12) / 1048575.0 * 2.0 - 1.0; }
+int best_index(uint b) { return int(b & 4095u); }
+
+// This workgroup's NCC of a template (step: its pixel in frame pixels) at
+// `at`, on every `rows`-th row of it, over its samples on screen (a tooltip
+// partly off the edge is matched on what's left; under 35% of it on
+// screen scores -1); every invocation gets the result.
+float ncc(int offset, int tw, int th, int step_, int rows, vec2 at) {
+    uint lid = gl_LocalInvocationID.x;
+    float sv = 0.0, svv = 0.0, st = 0.0, stt = 0.0, svt = 0.0, n = 0.0;
+    int used = (th + rows - 1) / rows;
+    vec2 size = vec2(width, height);
+    for (int k = int(lid); k < tw * used; k += 64) {
+        int i = (k / tw) * rows * tw + k % tw;  // template index
+        vec2 p = at + vec2(i % tw, i / tw) * float(step_);
+        // The template pixel's frame pixels must all be on screen.
+        if (p.x < 0.0 || p.y < 0.0 || p.x + float(step_) > size.x || p.y + float(step_) > size.y) continue;
+        float v = step_ == 2 ? grey(p + 1.0)
+                             : 0.25 * (grey(p + vec2(1, 1)) + grey(p + vec2(3, 1)) + grey(p + vec2(1, 3)) +
+                                       grey(p + vec2(3, 3)));
+        float t = templ[offset + i];
+        sv += v;
+        svv += v * v;
+        st += t;
+        stt += t * t;
+        svt += v * t;
+        n += 1.0;
+    }
+    s_v[lid] = sv;
+    s_vv[lid] = svv;
+    s_t[lid] = st;
+    s_tt[lid] = stt;
+    s_vt[lid] = svt;
+    s_n[lid] = n;
+    for (uint s = 32; s > 0; s >>= 1) {
+        barrier();
+        if (lid < s) {
+            s_v[lid] += s_v[lid + s];
+            s_vv[lid] += s_vv[lid + s];
+            s_t[lid] += s_t[lid + s];
+            s_tt[lid] += s_tt[lid + s];
+            s_vt[lid] += s_vt[lid + s];
+            s_n[lid] += s_n[lid + s];
+        }
+    }
+    barrier();
+    float total = s_n[0];
+    if (total < 0.35 * float(tw * used)) return -1.0;
+    float vv = s_vv[0] - s_v[0] * s_v[0] / total;
+    float tt = s_tt[0] - s_t[0] * s_t[0] / total;
+    if (vv < 1.0 || tt < 1e-6) return -1.0;
+    return (s_vt[0] - s_v[0] * s_t[0] / total) / sqrt(vv * tt);
+}
+
+void main() {
+    uint slot = gl_WorkGroupID.x;
+    int pos = int(gl_WorkGroupID.y);
+    if (int(slot) >= count) return;
+    Slot s = slots[slot];
+    vec2 base = floor(s.center);
+    int side0 = radius / 2 + 1;  // stage 0 positions per row: -radius..radius step 4
+
+    if (pc.stage == 0) {
+        if (pos >= side0 * side0) return;
+        vec2 at = base + vec2(pos % side0, pos / side0) * 4.0 - float(radius);
+        // Every other row: the coarse pass only has to land within 2 pixels.
+        float score = ncc(s.offset4, s.tw4, s.th4, 4, 2, at);
+        if (gl_LocalInvocationID.x == 0) atomicMax(best[slot * 2], pack_best(score, pos));
+    } else if (pc.stage == 1) {
+        if (pos >= 25) return;
+        int coarse = best_index(best[slot * 2]);
+        vec2 found = base + vec2(coarse % side0, coarse / side0) * 4.0 - float(radius);
+        vec2 at = found + vec2(pos % 5 - 2, pos / 5 - 2);
+        float score = ncc(s.offset2, s.tw2, s.th2, 2, 1, at);
+        if (gl_LocalInvocationID.x == 0) atomicMax(best[slot * 2 + 1], pack_best(score, pos));
+    } else {
+        if (gl_LocalInvocationID.x != 0 || pos != 0) return;
+        uint b0 = best[slot * 2], b1 = best[slot * 2 + 1];
+        int coarse = best_index(b0);
+        vec2 found = base + vec2(coarse % side0, coarse / side0) * 4.0 - float(radius);
+        int fine = best_index(b1);
+        vec2 at = found + vec2(fine % 5 - 2, fine / 5 - 2);
+        float score = best_score(b1);
+        // A clear match anywhere in the window; a weaker one (a dip: smoke,
+        // a covering label) only right where the CPU expects it, since two
+        // displays' plates can look nearly alike (two trinkets: 0.69) but
+        // aren't that close together. Else the label stays where the CPU
+        // put it.
+        bool found_it = b1 != 0u && (score >= 0.7 || (score >= 0.55 && length(at - s.laid) < 12.0));
+        result[slot] = found_it ? vec4(at - s.laid, score, 1.0) : vec4(s.fallback, score, 0.75);
+        best[slot * 2] = 0u;
+        best[slot * 2 + 1] = 0u;
+    }
+}

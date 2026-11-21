@@ -1,11 +1,14 @@
 // Draws the overlay UI into the app's swapchain images right before present.
+#include "gpu_track.h"
 #include "layer.h"
 #include "price_check.h"
 #include "rml_renderer.h"
+#include "screen_scan.h"
 #include "ui.h"
 #include "wl_input.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -28,6 +31,8 @@ struct OverlaySwapchain {
     bool ready = false;
     bool unsupported = false;
     bool can_copy = false;  // created with TRANSFER_SRC (layer.cpp)
+    // Created with SAMPLED, in a format that filters: GPU label tracking.
+    bool can_sample = false;
     VkRenderPass render_pass = VK_NULL_HANDLE;
     VkCommandPool pool = VK_NULL_HANDLE;
     std::vector<OverlayImage> images;
@@ -49,15 +54,46 @@ struct CaptureReadback {
     float cursor_x = 0, cursor_y = 0, cell = 0;
 };
 
+// Copies for the display scan (screen_scan.h): now and then the whole frame,
+// and each frame small regions around the tooltips it tracks. Like the
+// capture above, but the buffer stays (grown as needed) while scanning.
+struct ScanReadback {
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    void* mapped = nullptr;
+    VkDeviceSize capacity = 0;
+    // Pending while set, like CaptureReadback's.
+    OverlaySwapchain* swapchain = nullptr;
+    VkFence fence = VK_NULL_HANDLE;
+    VkFormat format = VK_FORMAT_UNDEFINED;
+    bool whole = false;  // the whole frame (width x height); else `regions`
+    int width = 0, height = 0;
+    std::vector<ScreenScan::Region> regions;
+    std::chrono::steady_clock::time_point at;  // when its frame was presented
+    uint64_t seq = 0;
+};
+
+// Tracking copies on their way at once: one a frame, each back a frame or
+// two later (the swapchain's images).
+constexpr int kRegionCopies = 3;
+
 struct OverlayDevice {
     std::mutex lock;
     CaptureReadback capture;
+    ScreenScan scan;
+    ScanReadback scan_frame;
+    std::array<ScanReadback, kRegionCopies> scan_regions;
+    uint64_t region_seq = 0;
     std::vector<std::unique_ptr<OverlaySwapchain>> swapchains;
 
     // The UI is created on first present, once a queue and format are known.
     // ui is destroyed before renderer: shutting RmlUi down releases textures.
     std::unique_ptr<RmlRenderer> renderer;
     std::unique_ptr<OverlayUi> ui;
+    // Display labels tracked on the GPU (gpu_track.h); null if the queue
+    // can't compute or it couldn't be set up. Goes before the renderer.
+    std::unique_ptr<GpuTracker> gpu;
+    bool gpu_tried = false;
     VkRenderPass ui_render_pass = VK_NULL_HANDLE;
     VkFormat ui_format = VK_FORMAT_UNDEFINED;
     bool ui_failed = false;
@@ -70,6 +106,13 @@ struct OverlayDevice {
     // image, game plus overlay) a few seconds in, for checking the UI.
     const char* snapshot_path = getenv("POE_WAYTRADE_SNAPSHOT");
     int frames = 0;
+
+    // POE_WAYTRADE_TRACK_LOG: how long our part of each present takes (the
+    // CPU time the game waits for us), logged every couple of seconds.
+    bool time_log = getenv("POE_WAYTRADE_TRACK_LOG") != nullptr;
+    std::chrono::steady_clock::time_point time_since{};
+    double time_sum = 0, time_max = 0;
+    int time_frames = 0;
 };
 
 namespace {
@@ -136,6 +179,7 @@ void destroy_swapchain_resources(DeviceData* dev, OverlaySwapchain& sc) {
     }
     dev->DestroyCommandPool(dev->device, sc.pool, nullptr);
     dev->DestroyRenderPass(dev->device, sc.render_pass, nullptr);
+    if (dev->overlay && dev->overlay->gpu) dev->overlay->gpu->remove_swapchain(&sc);
     sc.images.clear();
     sc.ready = false;
 }
@@ -195,6 +239,7 @@ bool setup_swapchain(DeviceData* dev, OverlaySwapchain& sc, uint32_t family) {
 }
 
 void shutdown_ui(DeviceData* dev, OverlayDevice& ov) {
+    ov.gpu.reset();
     ov.ui.reset();
     ov.renderer.reset();  // waits for the device to go idle
     if (ov.ui_render_pass) dev->DestroyRenderPass(dev->device, ov.ui_render_pass, nullptr);
@@ -234,17 +279,33 @@ bool init_ui(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, VkQueue q
         }
         poe_log("ui: ready");
     }
+    // GPU label tracking, if the presenting queue can run compute shaders.
+    if (!ov.gpu_tried) {
+        ov.gpu_tried = true;
+        if (dev->families[family].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+            ov.gpu = std::make_unique<GpuTracker>(dev, ov.renderer.get());
+            if (!ov.gpu->ok()) ov.gpu.reset();
+        }
+        poe_log("gpu tracking: %s", ov.gpu ? "ready" : "unavailable (labels use CPU tracking)");
+    }
     return true;
 }
 
 void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     WaylandInput* input = dev->instance->input.get();
+    auto now = std::chrono::steady_clock::now();
     if (input) {
         input->poll();
-        ov.price_check.update(*input, std::chrono::steady_clock::now(), (int)sc.extent.height);
+        ov.price_check.update(*input, now, (int)sc.extent.height);
+    }
+    ov.scan.set_extent((int)sc.extent.width, (int)sc.extent.height);
+    ov.scan.update(now, ov.price_check.take_displays_toggles());
+    if (ov.scan.active()) {
+        ov.price_check.want_icon("chaos");
+        ov.price_check.want_icon("divine");
     }
     ov.renderer->begin_frame();
-    ov.ui->update(ov.price_check, input, sc.extent);
+    ov.ui->update(ov.price_check, ov.scan, input, sc.extent);
     if (input) input->set_input_rects(ov.ui->input_rects(), (int)sc.extent.width, (int)sc.extent.height);
 }
 
@@ -309,9 +370,44 @@ void free_capture(DeviceData* dev, CaptureReadback& c) {
     c = CaptureReadback{};
 }
 
-// Records copying the cursor's surroundings out of `img` (in PRESENT_SRC,
-// as the game left it) before the overlay draws over it. Big enough for
-// any item under the cursor: 2x4 cells.
+// Records copies out of `img` (in PRESENT_SRC, as the game left it) into
+// buffers, before the overlay draws over it.
+void record_copies(DeviceData* dev, OverlayImage& img,
+                   const std::vector<std::pair<VkBuffer, std::vector<VkBufferImageCopy>>>& copies) {
+    VkImageMemoryBarrier barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = img.image;
+    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    // From COLOR_ATTACHMENT_OUTPUT: the stage the game's semaphores are waited at.
+    dev->CmdPipelineBarrier(img.cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                            0, nullptr, 0, nullptr, 1, &barrier);
+    std::vector<VkBufferMemoryBarrier> hosts;
+    for (const auto& [buffer, regions] : copies) {
+        dev->CmdCopyImageToBuffer(img.cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer,
+                                  (uint32_t)regions.size(), regions.data());
+        VkBufferMemoryBarrier host = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+        host.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        host.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        host.srcQueueFamilyIndex = host.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        host.buffer = buffer;
+        host.size = VK_WHOLE_SIZE;
+        hosts.push_back(host);
+    }
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dev->CmdPipelineBarrier(img.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr,
+                            (uint32_t)hosts.size(), hosts.data(), 1, &barrier);
+}
+
+// Records copying the cursor's surroundings out of `img` before the overlay
+// draws over it. Big enough for any item under the cursor: 2x4 cells.
 void record_capture(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, OverlayImage& img) {
     uint64_t id;
     float cx, cy;
@@ -333,35 +429,11 @@ void record_capture(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, Ov
         return;
     }
 
-    VkImageMemoryBarrier barrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = img.image;
-    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    // From COLOR_ATTACHMENT_OUTPUT: the stage the game's semaphores are waited at.
-    dev->CmdPipelineBarrier(img.cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-                            0, nullptr, 0, nullptr, 1, &barrier);
     VkBufferImageCopy copy = {};
     copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     copy.imageOffset = {x0, y0, 0};
     copy.imageExtent = {(uint32_t)(x1 - x0), (uint32_t)(y1 - y0), 1};
-    dev->CmdCopyImageToBuffer(img.cmd, img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, c.buffer, 1, &copy);
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    VkBufferMemoryBarrier host = {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-    host.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    host.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-    host.srcQueueFamilyIndex = host.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    host.buffer = c.buffer;
-    host.size = VK_WHOLE_SIZE;
-    dev->CmdPipelineBarrier(img.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr,
-                            1, &host, 1, &barrier);
+    record_copies(dev, img, {{c.buffer, {copy}}});
 
     c.swapchain = &sc;
     c.fence = img.fence;
@@ -399,6 +471,139 @@ void finish_capture_on(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc)
     if (ov.capture.swapchain != &sc) return;
     if (sc.ready) dev->WaitForFences(dev->device, 1, &ov.capture.fence, VK_TRUE, UINT64_MAX);
     finish_capture(dev, ov, true);
+}
+
+void free_scan(DeviceData* dev, ScanReadback& r) {
+    if (r.buffer) dev->DestroyBuffer(dev->device, r.buffer, nullptr);
+    if (r.memory) dev->FreeMemory(dev->device, r.memory, nullptr);
+    r = ScanReadback{};
+}
+
+// A mapped buffer of at least `size` bytes.
+bool scan_buffer(DeviceData* dev, ScanReadback& r, VkDeviceSize size) {
+    if (r.capacity >= size) return true;
+    free_scan(dev, r);
+    if (!create_readback_buffer(dev, size, &r.buffer, &r.memory) ||
+        dev->MapMemory(dev->device, r.memory, 0, VK_WHOLE_SIZE, 0, &r.mapped) != VK_SUCCESS) {
+        free_scan(dev, r);
+        return false;
+    }
+    r.capacity = size;
+    return true;
+}
+
+// The display scan's copies for this frame: the whole frame when it wants
+// one, and its tracking regions (each only while the last isn't pending).
+void record_scan(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc, OverlayImage& img) {
+    if (!ov.scan.active()) {
+        // Off: give the memory back (the whole frame's is big).
+        if (!ov.scan_frame.swapchain && ov.scan_frame.buffer && !ov.scan.frame_busy()) free_scan(dev, ov.scan_frame);
+        for (ScanReadback& r : ov.scan_regions)
+            if (!r.swapchain && r.buffer) free_scan(dev, r);
+        return;
+    }
+    unsigned char probe[4] = {}, rgb[3];
+    bool readable = sc.can_copy && to_rgb8(sc.format, probe, 1, rgb);
+    std::vector<std::pair<VkBuffer, std::vector<VkBufferImageCopy>>> copies;
+    auto now = std::chrono::steady_clock::now();
+
+    ScanReadback& f = ov.scan_frame;
+    if (!f.swapchain && ov.scan.frame_wanted(now)) {
+        ov.scan.frame_started();
+        VkDeviceSize size = (VkDeviceSize)sc.extent.width * sc.extent.height * 4;
+        if (!readable || !scan_buffer(dev, f, size)) {
+            ov.scan.frame_taken(0, 0, nullptr, nullptr, now);
+        } else {
+            VkBufferImageCopy copy = {};
+            copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copy.imageExtent = {sc.extent.width, sc.extent.height, 1};
+            copies.push_back({f.buffer, {copy}});
+            f.swapchain = &sc;
+            f.fence = img.fence;
+            f.format = sc.format;
+            f.whole = true;
+            f.at = now;
+            f.width = (int)sc.extent.width;
+            f.height = (int)sc.extent.height;
+        }
+    }
+
+    ScanReadback* free_slot = nullptr;
+    for (ScanReadback& slot : ov.scan_regions)
+        if (!slot.swapchain && !free_slot) free_slot = &slot;
+    if (free_slot && readable) {
+        ScanReadback& r = *free_slot;
+        std::vector<ScreenScan::Region> regions = ov.scan.regions_wanted();
+        VkDeviceSize size = 0;
+        std::vector<VkBufferImageCopy> region_copies;
+        for (const auto& reg : regions) {
+            VkBufferImageCopy copy = {};
+            copy.bufferOffset = size;
+            copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copy.imageOffset = {reg.x, reg.y, 0};
+            copy.imageExtent = {(uint32_t)reg.w, (uint32_t)reg.h, 1};
+            region_copies.push_back(copy);
+            size += (VkDeviceSize)reg.w * reg.h * 4;
+        }
+        if (!regions.empty() && scan_buffer(dev, r, size)) {
+            copies.push_back({r.buffer, region_copies});
+            r.swapchain = &sc;
+            r.fence = img.fence;
+            r.format = sc.format;
+            r.whole = false;
+            r.regions = std::move(regions);
+            r.at = now;
+            r.seq = ++ov.region_seq;
+        }
+    }
+    if (!copies.empty()) record_copies(dev, img, copies);
+}
+
+// Hands a finished scan copy over. `done`: its fence is known to have
+// signaled (else it's asked).
+void finish_scan(DeviceData* dev, OverlayDevice& ov, ScanReadback& r, bool done = false) {
+    if (!r.swapchain) return;
+    if (!done && dev->GetFenceStatus(dev->device, r.fence) != VK_SUCCESS) return;
+    r.swapchain = nullptr;
+    const unsigned char* px = (const unsigned char*)r.mapped;
+    VkFormat format = r.format;
+    auto to_rgb = [format](const uint8_t* p, size_t n, uint8_t* out) { return to_rgb8(format, p, n, out); };
+    if (r.whole) {
+        // Read in place by the scan's worker thread: the buffer isn't reused
+        // or freed while ov.scan.frame_busy().
+        ov.scan.frame_taken(r.width, r.height, px, to_rgb, r.at);
+        return;
+    }
+    // Small: copied out, and matched on the tracking thread.
+    std::vector<std::vector<uint8_t>> raws;
+    size_t offset = 0;
+    for (const auto& reg : r.regions) {
+        size_t n = (size_t)reg.w * reg.h * 4;
+        raws.emplace_back(px + offset, px + offset + n);
+        offset += n;
+    }
+    ov.scan.regions_taken(std::move(r.regions), std::move(raws), to_rgb, r.at, r.seq);
+    r.regions.clear();
+}
+
+void finish_scans(DeviceData* dev, OverlayDevice& ov) {
+    finish_scan(dev, ov, ov.scan_frame);
+    // Oldest first, so motion is measured in order.
+    std::array<ScanReadback*, kRegionCopies> slots;
+    for (int i = 0; i < kRegionCopies; i++) slots[i] = &ov.scan_regions[i];
+    std::sort(slots.begin(), slots.end(), [](auto* a, auto* b) { return a->seq < b->seq; });
+    for (ScanReadback* r : slots) finish_scan(dev, ov, *r);
+}
+
+// Before a swapchain's fences go: like finish_capture_on.
+void finish_scans_on(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc) {
+    std::vector<ScanReadback*> all = {&ov.scan_frame};
+    for (ScanReadback& r : ov.scan_regions) all.push_back(&r);
+    for (ScanReadback* r : all) {
+        if (r->swapchain != &sc) continue;
+        if (sc.ready) dev->WaitForFences(dev->device, 1, &r->fence, VK_TRUE, UINT64_MAX);
+        finish_scan(dev, ov, *r, true);
+    }
 }
 
 // Copies a presentable image (in PRESENT_SRC layout) to a PPM file.
@@ -482,6 +687,9 @@ bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc,
     OverlayImage& img = sc.images[index];
     VK_CHECK(dev->WaitForFences(dev->device, 1, &img.fence, VK_TRUE, UINT64_MAX));
     if (ov.capture.fence == img.fence) finish_capture(dev, ov, true);  // before the fence is reused
+    if (ov.scan_frame.fence == img.fence) finish_scan(dev, ov, ov.scan_frame, true);
+    for (ScanReadback& r : ov.scan_regions)
+        if (r.fence == img.fence) finish_scan(dev, ov, r, true);
     VK_CHECK(dev->ResetFences(dev->device, 1, &img.fence));
     VK_CHECK(dev->ResetCommandBuffer(img.cmd, 0));
 
@@ -490,14 +698,36 @@ bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc,
     VK_CHECK(dev->BeginCommandBuffer(img.cmd, &bi));
     // Only the first swapchain presented gets it: capture_started() clears the request.
     record_capture(dev, ov, sc, img);
+    record_scan(dev, ov, sc, img);
 
     VkRenderPassBeginInfo rbi = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     rbi.renderPass = sc.render_pass;
     rbi.framebuffer = img.framebuffer;
     rbi.renderArea.extent = sc.extent;
     dev->CmdBeginRenderPass(img.cmd, &rbi, VK_SUBPASS_CONTENTS_INLINE);
-    ov.renderer->begin_render(img.cmd, sc.extent);
-    ov.ui->render();
+    // The display labels, moved on the GPU to where their tooltips are in
+    // this very frame (gpu_track.h); else where the CPU tracking puts them.
+    VkDescriptorSet labels = VK_NULL_HANDLE;
+    if (ov.gpu && sc.can_sample && ov.scan.tracking() && ov.price_check.settings().values().gpu_tracking) {
+        if (!ov.gpu->has_swapchain(&sc)) {
+            std::vector<VkImageView> views;
+            for (auto& i : sc.images) views.push_back(i.view);
+            if (!ov.gpu->add_swapchain(&sc, views, sc.format, sc.extent)) sc.can_sample = false;
+        }
+        std::vector<ScreenScan::Label> ls = ov.scan.labels();
+        std::vector<std::array<float, 4>> rects = ov.ui->scan_label_rects();
+        if (sc.can_sample && ls.size() == rects.size()) {
+            std::vector<GpuLabel> gpu_labels;
+            for (size_t i = 0; i < ls.size(); i++)
+                if (ls[i].plate)
+                    gpu_labels.push_back(
+                        {ls[i].id, ls[i].plate_x, ls[i].plate_y, ls[i].seen_x, ls[i].seen_y, ls[i].vx, ls[i].vy,
+                         rects[i], ls[i].plate});
+            labels = ov.gpu->record(&sc, index, img.cmd, img.image, gpu_labels);
+        }
+    }
+    ov.renderer->begin_render(img.cmd, sc.extent, labels);
+    ov.ui->render(labels != VK_NULL_HANDLE);
     dev->CmdEndRenderPass(img.cmd);
     VK_CHECK(dev->EndCommandBuffer(img.cmd));
 
@@ -558,6 +788,10 @@ void overlay_swapchain_created(DeviceData* dev, VkSwapchainKHR handle, const VkS
     sc->extent = info->imageExtent;
     sc->min_images = info->minImageCount;
     sc->can_copy = info->imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    VkFormatProperties fp = {};
+    dev->instance->GetPhysicalDeviceFormatProperties(dev->physical_device, info->imageFormat, &fp);
+    VkFormatFeatureFlags want = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    sc->can_sample = (info->imageUsage & VK_IMAGE_USAGE_SAMPLED_BIT) && (fp.optimalTilingFeatures & want) == want;
     dev->overlay->swapchains.push_back(std::move(sc));
 }
 
@@ -568,6 +802,7 @@ void overlay_swapchain_destroyed(DeviceData* dev, VkSwapchainKHR handle) {
     for (auto it = ov.swapchains.begin(); it != ov.swapchains.end(); ++it) {
         if ((*it)->handle != handle) continue;
         finish_capture_on(dev, ov, **it);
+        finish_scans_on(dev, ov, **it);
         destroy_swapchain_resources(dev, **it);
         ov.swapchains.erase(it);
         return;
@@ -578,6 +813,7 @@ VkResult overlay_present(DeviceData* dev, VkQueue queue, const VkPresentInfoKHR*
     if (!dev->overlay) return dev->QueuePresentKHR(queue, info);
     OverlayDevice& ov = *dev->overlay;
     std::lock_guard lk(ov.lock);
+    auto started = std::chrono::steady_clock::now();
 
     uint32_t family;
     {
@@ -596,6 +832,7 @@ VkResult overlay_present(DeviceData* dev, VkQueue queue, const VkPresentInfoKHR*
         if (!sc || sc->unsupported) continue;
         if (!sc->ready && !setup_swapchain(dev, *sc, family)) {
             finish_capture_on(dev, ov, *sc);
+            finish_scans_on(dev, ov, *sc);
             destroy_swapchain_resources(dev, *sc);
             sc->unsupported = true;
             continue;
@@ -607,6 +844,7 @@ VkResult overlay_present(DeviceData* dev, VkQueue queue, const VkPresentInfoKHR*
 
     // Pass 2: build one UI frame, draw it into each image, chain semaphores.
     finish_capture(dev, ov);
+    finish_scans(dev, ov);
     build_ui(dev, ov, *targets[0].first);
 
     std::vector<VkSemaphore> signals;
@@ -623,6 +861,21 @@ VkResult overlay_present(DeviceData* dev, VkQueue queue, const VkPresentInfoKHR*
     VkPresentInfoKHR patched = *info;
     patched.waitSemaphoreCount = (uint32_t)signals.size();
     patched.pWaitSemaphores = signals.data();
+    if (ov.time_log) {
+        auto end = std::chrono::steady_clock::now();
+        double ms = std::chrono::duration<double, std::milli>(end - started).count();
+        ov.time_sum += ms;
+        ov.time_max = std::max(ov.time_max, ms);
+        ov.time_frames++;
+        if (end - ov.time_since > std::chrono::seconds(2)) {
+            if (ov.time_frames)
+                poe_log("present: %d frames, ours %.2f ms average, %.2f ms worst", ov.time_frames,
+                        ov.time_sum / ov.time_frames, ov.time_max);
+            ov.time_since = end;
+            ov.time_sum = ov.time_max = 0;
+            ov.time_frames = 0;
+        }
+    }
     return dev->QueuePresentKHR(queue, &patched);
 }
 
@@ -633,9 +886,13 @@ void overlay_device_destroyed(DeviceData* dev) {
         std::lock_guard lk(ov.lock);
         for (auto& sc : ov.swapchains) {
             finish_capture_on(dev, ov, *sc);
+            finish_scans_on(dev, ov, *sc);
             destroy_swapchain_resources(dev, *sc);
         }
         free_capture(dev, ov.capture);
+        ov.scan.wait_frame();
+        free_scan(dev, ov.scan_frame);
+        for (ScanReadback& r : ov.scan_regions) free_scan(dev, r);
         ov.swapchains.clear();
         shutdown_ui(dev, ov);
     }

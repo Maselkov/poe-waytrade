@@ -27,6 +27,9 @@ static const unsigned char settings_rml[] = {
 static const unsigned char toast_rml[] = {
 #embed "ui/toast.rml"
 };
+static const unsigned char scan_labels_rml[] = {
+#embed "ui/scan_labels.rml"
+};
 static const unsigned char gear_png[] = {
 #embed "ui/gear.png"
 };
@@ -41,6 +44,7 @@ const struct EmbeddedFile embedded_files[] = {
     {"ui/debug.rml", debug_rml, sizeof debug_rml},
     {"ui/settings.rml", settings_rml, sizeof settings_rml},
     {"ui/toast.rml", toast_rml, sizeof toast_rml},
+    {"ui/scan_labels.rml", scan_labels_rml, sizeof scan_labels_rml},
     {"ui/gear.png", gear_png, sizeof gear_png},
 };
 const size_t embedded_file_count = sizeof embedded_files / sizeof embedded_files[0];

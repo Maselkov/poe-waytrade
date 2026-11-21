@@ -101,6 +101,7 @@ Hover an item and press **Ctrl+D**. Open the settings with **Ctrl+Alt+S**.
 | **Ctrl+Alt+D** | A locked panel that stays open until you click its × or click anywhere in the game. |
 | **Ctrl+C** | Your own copy of an item opens a quick look too. |
 | **Ctrl+Alt+S** | Settings. Also the gear at the top left of a panel. |
+| **Ctrl+Alt+F** | Item displays: prices every display on screen (vault reliquaries, Heist curios) until you leave the area (see below). It starts by itself in vaults and Heist; this starts it anywhere else, or stops it. Can be turned off. |
 | **Alt+D** | The old map check key; now the same as Ctrl+Alt+D. Can be turned off. |
 | **Ctrl + mouse wheel** | Stash scroll: switches stash tabs with the cursor anywhere in the game. |
 
@@ -148,6 +149,76 @@ With a trade search (see below):
 - Identified uniques, alongside their poe.ninja price, since that price
   ignores rolls.
 - Skill gems, alongside their poe.ninja price.
+
+### Item displays (vaults)
+
+The displays in Zealot's, Arkhon's, Scholar's and Machinist's Vaults show
+items in tooltips that can't be copied with Ctrl+C. Waytrade reads them off
+the screen instead and puts a price tag above each one, which follows the
+tooltip as you move. The most valuable one in sight gets a gold border.
+
+- It starts by itself when you enter one of those vaults, and stops when you
+  leave. It knows from the game's log (`logs/Client.txt` in the game's
+  folder). **Ctrl+Alt+F** stops it, or starts it anywhere else.
+- Displays are found by the stone pillars on either side of their title
+  plate ("Forbidden Reliquary"). The text is read with
+  [ocrs](https://github.com/robertknight/ocrs), and names are matched
+  against every item the trade site knows, so a misread letter doesn't
+  matter.
+- Uniques, currency, gems (by level, quality and corruption) and bases are
+  priced from poe.ninja. Facetor's Lens is priced with a trade search for its
+  stored experience. Rare Thief's Trinkets get a trade search with their mods.
+- A tooltip partly covered by another one is read again from later frames
+  until its name and enough of the rest show, and every display is read a
+  couple more times after it's priced, in case the first look missed part
+  of it. A tag hides while its tooltip is fully covered and comes back with
+  it.
+- The OCR models (about 12 MB, CC BY-SA 4.0) come with the package, in
+  `/usr/share/poe-waytrade/ocrs/`. A build without them downloads them on
+  first use to `~/.cache/poe-waytrade/ocrs/`. Set `POE_WAYTRADE_OCR_MODELS`
+  to a folder that has `text-detection.onnx` and `text-recognition.onnx` to
+  use your own.
+- Price tags follow their tooltips exactly: each frame, before it's shown,
+  the GPU finds every tooltip in it (a compute shader, about 0.15 ms of GPU
+  time) and the tag is drawn there. Setting "Price tags follow by" to CPU
+  (Hotkeys tab) uses the older tracking instead: no GPU work, but tags trail
+  a frame or two and overshoot on sudden turns. Without GPU support for it,
+  CPU tracking is used anyway.
+- The vault list, the automatic start and the log's path are under
+  `auto_watch_areas`, `auto_watch` and `client_log` in
+  `~/.config/poe-waytrade/settings.json`. Automatic start is also on the
+  Hotkeys tab.
+
+`poe-waytrade-daemon scan <screenshot.png>` reads the displays in a
+screenshot without the game, which is handy if a display isn't recognised.
+
+### Item displays (Heist)
+
+Heist's Curio Displays (the reward rooms of contracts and Grand Heist wings)
+are priced the same way, but Heist maps are long and mostly combat, so there
+it starts **idle**: it looks for a display once a second and tracks
+nothing. As soon as one is in view it runs at full speed, and 5 seconds after
+the last one leaves the screen it's idle again. Displays seen in the last 10
+minutes get their price back at once.
+
+- It knows it's in Heist from the game's own id for the area (Client.txt's
+  "Generating level ... area" line), so the Laboratory and Mansion maps don't
+  count. Turn it off with "Price them in Heist" (Hotkeys tab).
+- Curio displays are found by their "Curio Display" title plate.
+- How rares are priced: a Thief's Trinket by its mods; an experimented base
+  by its poe.ninja base price (by item level when the tooltip shows it); a
+  rare with a Heist enchant by its type and the enchants that have a number
+  ("8% increased Explicit Mana Modifier magnitudes", not "Has no Green
+  Sockets"); any other rare by its mods.
+- A rare is remembered by its name and base for the area: each read adds the
+  mods it saw (other tooltips cover different lines each time), and the
+  price is for everything seen so far, so it can only get more exact.
+- Hold Alt over the displays (advanced mod descriptions) for the item level,
+  which experimented bases are priced by.
+- If a display isn't tagged, set `POE_WAYTRADE_SCAN_SAVE=<folder>` in the
+  launch options: then Ctrl+Alt+F saves the next frame there (instead of
+  turning the check off). A frame with the display on screen is what's needed
+  to teach it a new kind of display.
 
 ### Map check
 
@@ -291,6 +362,9 @@ Environment variables, which take precedence over the settings page:
   `waytrade` in the launch options for the overlay's log. Add
   `POE_WAYTRADE_DEBUG=1` for a debug window showing focus, the last key and
   the clipboard state.
+- **Item display tags jump or go missing.** Add `POE_WAYTRADE_TRACK_LOG=1`
+  too: the log then has every tracking step and the GPU's timings. A short
+  recording of the moment and that log are what's needed to look into it.
 
 ## Known limitations
 
@@ -301,6 +375,10 @@ Environment variables, which take precedence over the settings page:
 - HDR (10-bit/PQ) swapchains wouldn't be colour-corrected. PoE1 has no HDR
   mode, so this would only matter for PoE2.
 - No socket colour filters in trade searches.
+- Item displays: tested on the vault reliquaries and Heist curio displays,
+  at 1440p. Only English game clients are supported. Rares are priced by
+  what's listed: an unusual enchant or a long list of mods often has no
+  listings, and its tag shows "?".
 - With fractional scaling, the game's cursor grows over the panels. Wine
   sizes its cursor for scale 1 on surfaces that aren't its own windows.
   Setting the cursor to "Desktop" (Hotkeys tab) avoids it, at the cost of
@@ -325,3 +403,8 @@ Bundled third-party code keeps its own license:
   protocol, under its own permissive licence (in the file).
 - `assets/fonts` has Inter and Cinzel, both under the SIL Open Font License
   (licence files alongside).
+- The daemon uses [ocrs](https://github.com/robertknight/ocrs) (MIT or
+  Apache-2.0). Its pre-trained models, which the package ships, are under CC
+  BY-SA 4.0: Ocrs models (https://github.com/robertknight/ocrs-models),
+  trained on the HierText dataset by Google Research
+  ([packaging/ocrs-models-NOTICE.md](packaging/ocrs-models-NOTICE.md)).

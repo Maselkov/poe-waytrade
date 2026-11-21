@@ -2,7 +2,7 @@
 //! plain, or the "advanced" copy with mod headers and roll ranges (what
 //! Ctrl+C gives now, like Ctrl+Alt+C).
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Item {
     pub class: String,
     pub rarity: String,
@@ -157,7 +157,7 @@ fn kind_from_header(header: &str) -> Option<ModKind> {
     }
 }
 
-fn mod_line(line: &str) -> ModLine {
+pub(crate) fn mod_line(line: &str) -> ModLine {
     const MARKERS: &[(&str, ModKind)] = &[
         (" (implicit)", ModKind::Implicit),
         (" (crafted)", ModKind::Crafted),

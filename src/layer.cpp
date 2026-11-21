@@ -224,6 +224,9 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateSwapchainKHR(VkDevice device, const VkSwapc
             VK_SUCCESS &&
         (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
         patched.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    // And sample them: the display labels' tracking finds their tooltips in
+    // the frame on the GPU (gpu_track.h).
+    if (caps.supportedUsageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) patched.imageUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
     VkResult res = data->CreateSwapchainKHR(device, &patched, alloc, out);
     if (res == VK_SUCCESS) overlay_swapchain_created(data, *out, &patched);
     return res;

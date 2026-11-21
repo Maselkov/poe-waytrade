@@ -113,7 +113,8 @@ def main():
         ("Viscera", "ninja-viscera.json", lambda line: line["name"] == "Coven Queen's Crown"),
         ("ClusterJewel", "ninja-cluster-jewel.json",
          lambda line: line["name"] in ("10% increased Spell Damage", "Minions deal 10% increased Damage")),
-        ("BaseType", "ninja-base-type.json", lambda line: line["name"] == "Vaal Regalia"),
+        ("BaseType", "ninja-base-type.json",
+         lambda line: line["name"] in ("Vaal Regalia", "Simplex Amulet")),
     ]:
         ov = get(f"{NINJA}/economy/stash/current/item/overview?league={q}&type={kind}")
         lines = [slim(line) for line in ov["lines"] if keep(line)]

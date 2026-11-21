@@ -3,3 +3,5 @@
 /packaging/arch/pkg/
 /packaging/arch/*.pkg.tar.*
 /daemon/target/
+# Sources makepkg downloads (the OCR models).
+/packaging/arch/*.onnx

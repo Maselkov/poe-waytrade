@@ -7,7 +7,26 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 libc = "0.2"
+ocrs = { version = "0.14", default-features = false, features = ["onnx"] }
 png = "0.18"
+rten = { version = "0.28", default-features = false, features = ["onnx_format"] }
+rten-tensor = "0.28"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ureq = { version = "2", features = ["json"] }
+
+# OCR is unbearably slow unoptimized; tests run it too.
+[profile.dev.package.rten]
+opt-level = 3
+[profile.dev.package.rten-gemm]
+opt-level = 3
+[profile.dev.package.rten-vecmath]
+opt-level = 3
+[profile.dev.package.rten-simd]
+opt-level = 3
+[profile.dev.package.rten-tensor]
+opt-level = 3
+[profile.dev.package.rten-imageproc]
+opt-level = 3
+[profile.dev.package.ocrs]
+opt-level = 3

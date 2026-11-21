@@ -16,6 +16,7 @@ const char* const kHotkeyKeys[SettingsPage::kActions] = {
     "hotkey.locked",
     "hotkey.map_alias",
     "hotkey.settings",
+    "hotkey.displays",
 };
 
 int index(SettingsPage::Action a) { return (int)a; }
@@ -30,7 +31,7 @@ std::string scale_text(double scale) {
 
 std::array<KeyCombo, SettingsPage::kActions> SettingsPage::Values::defaults() {
     return {KeyCombo{kModCtrl, KEY_D}, KeyCombo{kModCtrl | kModAlt, KEY_D}, KeyCombo{kModAlt, KEY_D},
-            KeyCombo{kModCtrl | kModAlt, KEY_S}};
+            KeyCombo{kModCtrl | kModAlt, KEY_S}, KeyCombo{kModCtrl | kModAlt, KEY_F}};
 }
 
 const char* SettingsPage::action_label(Action action) {
@@ -39,6 +40,7 @@ const char* SettingsPage::action_label(Action action) {
     case Action::Locked: return "Locked panel";
     case Action::MapAlias: return "Locked panel, again";
     case Action::Settings: return "Open settings";
+    case Action::Displays: return "Price displays";
     }
     return "";
 }
@@ -121,6 +123,9 @@ void SettingsPage::apply_reply(const PriceReply& reply) {
         else if (key == "ui_scale") v.ui_scale = atof(value.c_str());
         else if (key == "stash_scroll") v.stash_scroll = value != "off";
         else if (key == "cursor") v.desktop_cursor = value == "desktop";
+        else if (key == "auto_watch") v.auto_watch = value != "off";
+        else if (key == "tracking") v.gpu_tracking = value != "cpu";
+        else if (key == "heist_watch") v.heist_watch = value != "off";
         for (int i = 0; i < kActions; i++)
             if (key == kHotkeyKeys[i]) v.hotkeys[i] = parse_combo(value);
     }
@@ -141,7 +146,7 @@ void SettingsPage::apply_reply(const PriceReply& reply) {
 
 std::vector<HotkeyBinding> SettingsPage::bindings() const {
     const Hotkey hotkeys[kActions] = {Hotkey::PriceCheck, Hotkey::PriceCheckLocked, Hotkey::MapCheck,
-                                      Hotkey::Settings};
+                                      Hotkey::Settings, Hotkey::Displays};
     std::vector<HotkeyBinding> out;
     for (int i = 0; i < kActions; i++)
         if (!values_.hotkeys[i].empty()) out.push_back({values_.hotkeys[i], hotkeys[i]});
@@ -226,9 +231,9 @@ void SettingsPage::assign(Action action, KeyCombo combo) {
     std::string note;
     for (int j = 0; j < kActions; j++) {
         if (j == i || values_.hotkeys[j] != combo) continue;
-        // Only the map alias may be left without a key.
+        // Only some actions may be left without a key.
         KeyCombo moved = old;
-        if (moved.empty() && (Action)j != Action::MapAlias) continue;
+        if (moved.empty() && !can_be_off((Action)j)) continue;
         values_.hotkeys[j] = moved;
         body += "\n" + std::string(kHotkeyKeys[j]) + "\t" + format_combo(moved);
         note = std::string(action_label((Action)j)) + (moved.empty() ? " is off now" : " moved to " + combo_label(moved));
@@ -240,7 +245,7 @@ void SettingsPage::assign(Action action, KeyCombo combo) {
 }
 
 void SettingsPage::clear_hotkey(Action action) {
-    if (action != Action::MapAlias) return;
+    if (!can_be_off(action)) return;
     cancel_capture();
     values_.hotkeys[index(action)] = {};
     bindings_dirty_ = true;
@@ -252,6 +257,27 @@ void SettingsPage::set_stash_scroll(bool on) {
     if (on == values_.stash_scroll) return;
     values_.stash_scroll = on;
     set("stash_scroll", on ? "on" : "off");
+    set_note("");
+}
+
+void SettingsPage::set_auto_watch(bool on) {
+    if (on == values_.auto_watch) return;
+    values_.auto_watch = on;
+    set("auto_watch", on ? "on" : "off");
+    set_note("");
+}
+
+void SettingsPage::set_heist_watch(bool on) {
+    if (on == values_.heist_watch) return;
+    values_.heist_watch = on;
+    set("heist_watch", on ? "on" : "off");
+    set_note("");
+}
+
+void SettingsPage::set_gpu_tracking(bool on) {
+    if (on == values_.gpu_tracking) return;
+    values_.gpu_tracking = on;
+    set("tracking", on ? "gpu" : "cpu");
     set_note("");
 }
 

@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 use std::io::Read;
 use std::path::PathBuf;
-use std::sync::{Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
 /// Stat/currency reference data is refetched after this long.
@@ -396,6 +396,23 @@ struct TradeData {
     /// Transfigured gems: name ("Arc of Oscillating") -> the base gem
     /// ("Arc") and the trade site's discriminator ("alt_y").
     transfigured: HashMap<String, (String, String)>,
+    /// Every item the trade site knows by name, for reading names off the
+    /// screen.
+    names: Arc<Vec<NamedItem>>,
+    /// (stat group, lowercase text template) -> the template as the trade
+    /// site writes it: text read off the screen comes in small caps.
+    lower_stats: HashMap<(String, String), String>,
+}
+
+/// An item name from the trade site's item list (/api/trade/data/items).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NamedItem {
+    /// A unique's name; `None` for everything else.
+    pub name: Option<String>,
+    /// The base type, a gem's name (a transfigured one's own), a currency's.
+    pub base: String,
+    /// The list's group: "accessory", "armour", "currency", "gem", "card"...
+    pub group: String,
 }
 
 /// Weapon-local stats the trade site lists with the same text as the global
@@ -421,7 +438,25 @@ impl TradeData {
             currencies: HashMap::new(),
             images: HashMap::new(),
             transfigured: HashMap::new(),
+            names: Arc::new(Vec::new()),
+            lower_stats: HashMap::new(),
         };
+        let mut names = Vec::new();
+        for group in items["result"].as_array().into_iter().flatten() {
+            let group_id = group["id"].as_str().unwrap_or("");
+            for e in group["entries"].as_array().into_iter().flatten() {
+                let Some(base) = e["type"].as_str() else { continue };
+                let unique = e["flags"]["unique"].as_bool() == Some(true);
+                let (name, base) = match (unique, e["name"].as_str(), e["text"].as_str()) {
+                    (true, Some(name), _) => (Some(name.to_string()), base.to_string()),
+                    // A transfigured gem's own name.
+                    (false, _, Some(text)) if group_id == "gem" => (None, text.to_string()),
+                    _ => (None, base.to_string()),
+                };
+                names.push(NamedItem { name, base, group: group_id.to_string() });
+            }
+        }
+        data.names = Arc::new(names);
         for group in items["result"].as_array().into_iter().flatten().filter(|g| g["id"] == "gem") {
             for e in group["entries"].as_array().into_iter().flatten() {
                 if let (Some(base), Some(text), Some(disc)) =
@@ -440,6 +475,7 @@ impl TradeData {
                         _ => text.to_string(),
                     };
                     let key = (group_id.to_string(), text);
+                    data.lower_stats.entry((key.0.clone(), key.1.to_lowercase())).or_insert_with(|| key.1.clone());
                     match data.stats.get(&key) {
                         None => {
                             let (template, slots) = number_slots(&key.1);
@@ -469,6 +505,31 @@ impl TradeData {
             }
         }
         data
+    }
+
+    /// See Trade::canonical_mod.
+    fn canonical_mod(&self, line: &str) -> Option<(ModKind, String)> {
+        let (template, values) = templatize(line.trim());
+        let lower = template.to_lowercase();
+        for (group, kind) in
+            [("explicit", ModKind::Explicit), ("implicit", ModKind::Implicit), ("enchant", ModKind::Enchant)]
+        {
+            let Some(text) = self.lower_stats.get(&(group.to_string(), lower.clone())) else { continue };
+            let mut values = values.iter();
+            let line = text
+                .split('#')
+                .enumerate()
+                .map(|(i, part)| {
+                    if i == 0 {
+                        part.to_string()
+                    } else {
+                        format!("{}{part}", values.next().map_or("#".into(), |v| trim_number(*v)))
+                    }
+                })
+                .collect();
+            return Some((kind, line));
+        }
+        None
     }
 
     /// Every id with a text in a group, the first listed first.
@@ -532,6 +593,64 @@ impl Trade {
             eprintln!("trade: closing idle browser");
             self.browser = None;
         }
+    }
+
+    /// Every item name the trade site knows (cached on disk for a day).
+    pub fn item_names(&mut self) -> Result<Arc<Vec<NamedItem>>, String> {
+        self.ensure_data()?;
+        Ok(self.data.as_ref().unwrap().0.names.clone())
+    }
+
+    /// A mod line read off the screen ("+23% TO COLD RESISTANCE"), as the
+    /// game writes it ("+23% to Cold Resistance"), with its kind, if the
+    /// trade site has the stat as an explicit, implicit or enchant (Heist's
+    /// "#% increased Explicit Chaos Modifier magnitudes").
+    pub fn canonical_mod(&mut self, line: &str) -> Option<(ModKind, String)> {
+        self.ensure_data().ok()?;
+        self.data.as_ref().unwrap().0.canonical_mod(line)
+    }
+
+    /// Searches one base type ("Facetor's Lens") for listings with at least
+    /// `min` of an item property, e.g. ("misc_filters", "stored_experience").
+    pub fn search_property(
+        &mut self,
+        base: &str,
+        property: (&'static str, &'static str),
+        min: f64,
+        league: &str,
+        prices: &PriceDb,
+    ) -> Result<TradeResult, String> {
+        self.last_used = Instant::now();
+        self.ensure_data()?;
+        let item = Item { rarity: "Currency".into(), base: base.to_string(), ..Default::default() };
+        let filter = Filter::new(
+            property.1.to_string(),
+            Target::Property(property.0, property.1),
+            min,
+            None,
+            true,
+            Section::Base,
+        );
+        let options = SearchOptions {
+            base_only: true,
+            corrupted: Corrupted::Any,
+            preset: Preset::Normal,
+            status: crate::settings::default_status(),
+            six_link: false,
+            unidentified: false,
+        };
+        let body = query(&item, &[filter], &[Some((Some(min), None))], options).to_string();
+        let league_path = ninja::encode(league);
+        let resp = self.request("search", "POST", &format!("/api/trade/search/{league_path}"), Some(&body))?;
+        let (id, total, hashes) = parse_search(&resp.body)?;
+        let mut singles = Vec::new();
+        if !hashes.is_empty() {
+            let path = format!("/api/trade/fetch/{}?query={id}", hashes.join(","));
+            let resp = self.request("fetch", "GET", &path, None)?;
+            let data = &self.data.as_ref().unwrap().0;
+            singles = parse_fetch(&resp.body, data, prices, unix_now(), &[])?;
+        }
+        Ok(trade_result(singles, total, &id, &league_path))
     }
 
     /// The filters and options for an item, without searching. Needs only
@@ -908,7 +1027,7 @@ fn download_image(url: &str, path: &std::path::Path) -> Result<Vec<u8>, String> 
     Ok(bytes)
 }
 
-fn cache_dir() -> PathBuf {
+pub(crate) fn cache_dir() -> PathBuf {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".cache"));
@@ -2363,6 +2482,21 @@ pub struct Choice {
     pub max: Option<f64>,
 }
 
+/// The filters to search an enchanted item (a Heist Enchanted Armament) by,
+/// from the Base item preset's: its type and its enchants, but of those
+/// only the ones with a number (the magnitude or effect, what it's worth)
+/// if it has any. "Has no Green Sockets" too would leave next to nothing.
+pub fn enchanted_choices(filters: &[Filter]) -> Vec<Choice> {
+    let enchant = |f: &Filter| matches!(&f.target, Target::Stat(id) if id.starts_with("enchant."));
+    let numbered = filters.iter().any(|f| enchant(f) && f.min.is_some());
+    filters
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.default_on && !(numbered && enchant(f) && f.min.is_none()))
+        .map(|(index, f)| Choice { index, min: f.min, max: None })
+        .collect()
+}
+
 /// Minimum and maximum of a stat or property filter.
 type Bounds = (Option<f64>, Option<f64>);
 
@@ -2609,6 +2743,8 @@ mod tests {
             currencies: HashMap::new(),
             images: HashMap::new(),
             transfigured,
+            names: Arc::new(Vec::new()),
+            lower_stats: HashMap::new(),
         }
     }
 
@@ -2617,6 +2753,42 @@ mod tests {
                         +30% to Fire Resistance\n+20 to Dexterity and Intelligence\n\
                         12% increased Rarity of Items found\n+12% to Cold Resistance (crafted)\n\
                         8% increased Rarity of Items found (crafted)\n";
+
+    #[test]
+    fn heist_enchant_read_off_screen() {
+        let mut data = test_data();
+        let text = "#% increased Explicit Chaos Modifier magnitudes";
+        data.stats.insert(("enchant".into(), text.into()), "enchant.stat_3196512240".into());
+        data.lower_stats.insert(("enchant".into(), text.to_lowercase()), text.into());
+        let (kind, line) = data.canonical_mod("8% INCREASED EXPLICIT CHAOS MODIFIER MAGNITUDES").unwrap();
+        assert_eq!(kind, ModKind::Enchant);
+        assert_eq!(line, "8% increased Explicit Chaos Modifier magnitudes");
+        // The Base item preset searches the type with the enchant ticked.
+        let mut m = crate::item::mod_line(&line);
+        m.kind = kind;
+        let item = Item {
+            rarity: "Rare".into(),
+            name: Some("Damnation Bane".into()),
+            base: "Tenderizer".into(),
+            mods: vec![m],
+            ..Default::default()
+        };
+        let filters = build_filters(&item, &data, Preset::Base);
+        let enchant = filters.iter().find(|f| f.target == Target::Stat("enchant.stat_3196512240".into()));
+        assert!(enchant.is_some_and(|f| f.default_on), "{:?}", filters.iter().map(|f| &f.label).collect::<Vec<_>>());
+        // Property lines aren't mods.
+        assert_eq!(data.canonical_mod("PHYSICAL DAMAGE: 112-157"), None);
+        // With a socket colour enchant too, only the numbered one counts.
+        let sockets = "Has no Green Sockets";
+        data.stats.insert(("enchant".into(), sockets.into()), "enchant.stat_no_green".into());
+        let mut no_green = crate::item::mod_line(sockets);
+        no_green.kind = ModKind::Enchant;
+        let item = Item { mods: vec![item.mods[0].clone(), no_green], ..item };
+        let filters = build_filters(&item, &data, Preset::Base);
+        let chosen: Vec<&Target> = enchanted_choices(&filters).iter().map(|c| &filters[c.index].target).collect();
+        assert!(chosen.contains(&&Target::Stat("enchant.stat_3196512240".into())), "{chosen:?}");
+        assert!(!chosen.contains(&&Target::Stat("enchant.stat_no_green".into())), "{chosen:?}");
+    }
 
     #[test]
     fn corruption_defaults() {

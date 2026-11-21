@@ -23,8 +23,8 @@ public:
 
     enum class Tab { Hotkeys, Price, Map, About };
     // The rebindable hotkeys, in the order shown.
-    enum class Action { Quick, Locked, MapAlias, Settings };
-    static constexpr int kActions = 4;
+    enum class Action { Quick, Locked, MapAlias, Settings, Displays };
+    static constexpr int kActions = 5;
 
     struct Values {
         std::string league = "auto";
@@ -34,6 +34,9 @@ public:
         std::array<KeyCombo, kActions> hotkeys = defaults();
         bool stash_scroll = true;     // Ctrl + wheel switches stash tabs
         bool desktop_cursor = false;  // over the panels; else the game's
+        bool auto_watch = true;       // price displays on entering a vault
+        bool gpu_tracking = true;     // display labels placed by the GPU (gpu_track.h)
+        bool heist_watch = true;      // watch for curio displays in Heist
         static std::array<KeyCombo, kActions> defaults();
     };
 
@@ -86,10 +89,14 @@ public:
     void warning_retry();   // press another
     void warning_accept();  // use it anyway
     void warning_keep();    // keep the old one
-    void clear_hotkey(Action action);  // only MapAlias can be off
+    void clear_hotkey(Action action);  // only MapAlias and Displays can be off
+    static bool can_be_off(Action action) { return action == Action::MapAlias || action == Action::Displays; }
     static const char* action_label(Action action);
     void set_stash_scroll(bool on);
     void set_desktop_cursor(bool on);
+    void set_auto_watch(bool on);
+    void set_gpu_tracking(bool on);
+    void set_heist_watch(bool on);
 
     // Price check
     void set_league(const std::string& league);

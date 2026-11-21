@@ -19,6 +19,8 @@ struct OverlayDevice;
     X(GetPhysicalDeviceQueueFamilyProperties) \
     X(GetPhysicalDeviceMemoryProperties)      \
     X(GetPhysicalDeviceSurfaceCapabilitiesKHR) \
+    X(GetPhysicalDeviceFormatProperties)      \
+    X(GetPhysicalDeviceProperties)            \
     X(CreateWaylandSurfaceKHR)                \
     X(DestroySurfaceKHR)
 
@@ -51,7 +53,10 @@ struct OverlayDevice;
     X(CmdBindPipeline) X(CmdBindVertexBuffers) X(CmdBindIndexBuffer)               \
     X(CmdBindDescriptorSets) X(CmdPushConstants) X(CmdSetViewport)                 \
     X(CmdSetScissor) X(CmdDrawIndexed) X(CmdCopyBufferToImage)                     \
-    X(CmdPipelineBarrier) X(CmdCopyImageToBuffer)
+    X(CmdPipelineBarrier) X(CmdCopyImageToBuffer)                                 \
+    X(CreateComputePipelines) X(CmdDispatch)                                       \
+    X(CreateQueryPool) X(DestroyQueryPool) X(CmdResetQueryPool) X(CmdWriteTimestamp) \
+    X(GetQueryPoolResults)
 
 struct InstanceData {
     VkInstance instance = VK_NULL_HANDLE;

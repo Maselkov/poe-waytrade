@@ -108,6 +108,21 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "map_profile") reply.profile = atoi(f[1].c_str());
         else if (f[0] == "version") reply.version = f[1];
         else if (f[0] == "log") reply.log = f[1];
+        else if (f[0] == "plate" && f.size() >= 9) {
+            std::array<float, 8> p;
+            for (int i = 0; i < 8; i++) p[i] = strtof(f[i + 1].c_str(), nullptr);
+            reply.plates.push_back(p);
+        } else if (f[0] == "detail") reply.detail = f[1];
+        else if (f[0] == "value" && f.size() >= 5) {
+            reply.value_chaos = strtod(f[1].c_str(), nullptr);
+            reply.value_divine = strtod(f[2].c_str(), nullptr);
+            reply.value_text = f[3];
+            reply.value_source = f[4];
+        } else if (f[0] == "line") reply.lines.push_back(f[1]);
+        else if (f[0] == "facts") reply.facts = atoi(f[1].c_str());
+        else if (f[0] == "area") reply.area = f[1];
+        else if (f[0] == "entered") reply.entered = atoll(f[1].c_str());
+        else if (f[0] == "watch") reply.watch = f[1];
     }
     return reply;
 }
