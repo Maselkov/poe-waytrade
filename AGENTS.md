@@ -58,6 +58,13 @@ PKGBUILD's `pkgver` from the tag for its build, builds and makes the GitHub
 release. No version bump is committed. Tags are `vX.Y.Z` (pacman's `pkgver`
 can't have `-`).
 
+After the release, its `aur` job updates the AUR package from
+`packaging/aur/PKGBUILD` (`.github/scripts/aur-update.sh` sets the version and
+the tarball's checksum), builds it, and pushes it. `packaging/aur/PKGBUILD` is
+the same build as `packaging/arch/PKGBUILD` but from the tag's tarball, so
+change both when the build, dependencies or installed files change. The tag
+must contain everything the PKGBUILD installs.
+
 The committed `pkgver` and `daemon/Cargo.toml`'s `version` are only the
 fallback for builds without git; the `lint` job checks they're equal. They
 don't need to change for a release.

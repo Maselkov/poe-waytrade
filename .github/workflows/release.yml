@@ -78,3 +78,65 @@ jobs:
           # so gh can't find the repository on its own.
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
             --title "Waytrade $VERSION" --notes-file notes.md --generate-notes
+
+  # Updates the AUR package (aur.archlinux.org/packages/poe-waytrade) to the
+  # release, from packaging/aur: builds it first, so a PKGBUILD that doesn't
+  # build from the tag is never pushed. Needs two repository secrets:
+  #   AUR_SSH_KEY   a private key whose public half is on the AUR account
+  #   AUR_HOST_KEY  `ssh-keyscan -t ed25519 aur.archlinux.org`, checked
+  # Without them (forks), it's skipped.
+  aur:
+    needs: release
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    env:
+      AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+      AUR_HOST_KEY: ${{ secrets.AUR_HOST_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        if: env.AUR_SSH_KEY != ''
+        run: |
+          .github/scripts/arch-setup.sh
+          pacman -S --noconfirm --needed openssh
+
+      # Named explicitly to ssh: it looks for ~/.ssh in root's passwd entry,
+      # not the container's $HOME.
+      - name: SSH to the AUR
+        if: env.AUR_SSH_KEY != ''
+        run: |
+          install -d -m 700 /root/.aur-ssh
+          printf '%s\n' "$AUR_SSH_KEY" > /root/.aur-ssh/key
+          chmod 600 /root/.aur-ssh/key
+          printf '%s\n' "$AUR_HOST_KEY" > /root/.aur-ssh/known_hosts
+          echo "GIT_SSH_COMMAND=ssh -F none -i /root/.aur-ssh/key -o IdentitiesOnly=yes -o UserKnownHostsFile=/root/.aur-ssh/known_hosts -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+
+      - name: Update the PKGBUILD
+        if: env.AUR_SSH_KEY != ''
+        run: |
+          git clone ssh://aur@aur.archlinux.org/poe-waytrade.git aur
+          chown -R builder aur
+          # makepkg (for .SRCINFO) refuses to run as root.
+          su builder -c ".github/scripts/aur-update.sh '${GITHUB_REF_NAME#v}' aur"
+
+      # --nocheck because the release job has run the daemon's tests.
+      - name: Build it
+        if: env.AUR_SSH_KEY != ''
+        working-directory: aur
+        run: su builder -c 'makepkg --noconfirm --nocheck'
+
+      - name: Push to the AUR
+        if: env.AUR_SSH_KEY != ''
+        working-directory: aur
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git config user.name FishfulThinking
+          git config user.email 25772111+Maselkov@users.noreply.github.com
+          git add PKGBUILD .SRCINFO poe-waytrade.install
+          if git diff --cached --quiet; then
+            echo "The AUR package is already at $GITHUB_REF_NAME"
+            exit 0
+          fi
+          git commit -m "Update to ${GITHUB_REF_NAME#v}"
+          git push origin master
