@@ -1,0 +1,52 @@
+{
+ "lines": [
+  {
+   "id": 130511,
+   "name": "Ancient Wombgift",
+   "levelRequired": 75,
+   "itemClass": 5,
+   "chaosValue": 19.0,
+   "exaltedValue": 23.36,
+   "divineValue": 0.09,
+   "count": 399,
+   "detailsId": "ancient-wombgift-75",
+   "listingCount": 723
+  },
+  {
+   "id": 130497,
+   "name": "Ancient Wombgift",
+   "levelRequired": 84,
+   "itemClass": 5,
+   "chaosValue": 19.9,
+   "exaltedValue": 24.47,
+   "divineValue": 0.09,
+   "count": 197,
+   "detailsId": "ancient-wombgift-84",
+   "listingCount": 197
+  },
+  {
+   "id": 130519,
+   "name": "Ancient Wombgift",
+   "levelRequired": 40,
+   "itemClass": 5,
+   "chaosValue": 23.4,
+   "exaltedValue": 28.77,
+   "divineValue": 0.11,
+   "count": 54,
+   "detailsId": "ancient-wombgift-40",
+   "listingCount": 54
+  },
+  {
+   "id": 130516,
+   "name": "Ancient Wombgift",
+   "levelRequired": 68,
+   "itemClass": 5,
+   "chaosValue": 14.0,
+   "exaltedValue": 17.21,
+   "divineValue": 0.07,
+   "count": 50,
+   "detailsId": "ancient-wombgift-68",
+   "listingCount": 50
+  }
+ ]
+}
