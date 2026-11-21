@@ -235,7 +235,6 @@ const MAP_PROPS: &[&str] = &[
     // PoE2's waystones.
     "Revives Available",
     "Pack Size",
-    "Monster Pack Size",
     "Magic Monsters",
     "Rare Monsters",
     "Waystone Drop Chance",

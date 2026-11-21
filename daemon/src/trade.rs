@@ -1289,23 +1289,25 @@ fn find_stat(data: &TradeData, kind: ModKind, template: &str, values: &[f64], lo
     if let Some(rest) = template.strip_prefix("-#") {
         wordings.push((format!("+#{rest}"), -1.0));
     }
-    // PoE2's stats have no "+": "# to Accuracy Rating", "#% to Cold
-    // Resistance" (the item's text still has it). Tried after the others.
-    let unsigned: Vec<(String, f64)> = wordings
-        .iter()
-        .filter_map(|(t, sign)| t.strip_prefix('+').or_else(|| t.strip_prefix('-')).map(|r| (r.to_string(), *sign)))
-        .collect();
-    wordings.extend(unsigned);
     // A local mod tries every wording's "(Local)" stat first, so a weapon's
     // "reduced Attack Speed" finds the local stat, not the global one. Any
     // other mod tries them last: a stat only listed as "(Local)" ("#%
     // increased Energy Shield") still matches, as in APT.
-    let locals = wordings.iter().map(|(t, sign)| (format!("{t} (Local)"), *sign)).collect::<Vec<_>>();
-    let candidates = if local.applies(template) {
-        locals.into_iter().chain(wordings).collect::<Vec<_>>()
-    } else {
-        wordings.into_iter().chain(locals).collect()
+    let with_locals = |wordings: Vec<(String, f64)>| {
+        let locals = wordings.iter().map(|(t, sign)| (format!("{t} (Local)"), *sign)).collect::<Vec<_>>();
+        if local.applies(template) {
+            locals.into_iter().chain(wordings).collect::<Vec<_>>()
+        } else {
+            wordings.into_iter().chain(locals).collect()
+        }
     };
+    // PoE2's stats have no "+": "# to Accuracy Rating", "#% to Cold
+    // Resistance" (the item's text still has it). Tried only when nothing
+    // above matches, so PoE1's matches stay as they were.
+    let unsigned: Vec<(String, f64)> =
+        wordings.iter().filter_map(|(t, sign)| t.strip_prefix('+').map(|r| (r.to_string(), *sign))).collect();
+    let candidates = with_locals(wordings);
+    let unsigned = with_locals(unsigned);
     let found = |text: &str, sign, fixed| {
         let mut ids = data.stat_ids(&group, text);
         // PoE2's desecrated mods are explicit mods once revealed: an item
@@ -1319,15 +1321,18 @@ fn find_stat(data: &TradeData, kind: ModKind, template: &str, values: &[f64], lo
         Some(Found { target: stat_target(select_stats(ids, local)), sign, fixed })
     };
     // Some stats are only searchable as pseudo stats (item rarity, for one).
-    candidates.iter().find_map(|(t, sign)| found(t, *sign, Vec::new())).or_else(|| {
-        candidates.iter().find_map(|(t, sign)| {
-            let (text, slots) = data.numbered.get(&(group.clone(), t.clone()))?.iter().find(|(_, slots)| {
-                slots.len() == values.len()
-                    && slots.iter().zip(values).all(|(slot, v)| slot.is_none_or(|n| (n - v).abs() < 1e-9))
-            })?;
-            found(text, *sign, slots.iter().map(Option::is_some).collect())
+    let search = |candidates: &[(String, f64)]| {
+        candidates.iter().find_map(|(t, sign)| found(t, *sign, Vec::new())).or_else(|| {
+            candidates.iter().find_map(|(t, sign)| {
+                let (text, slots) = data.numbered.get(&(group.clone(), t.clone()))?.iter().find(|(_, slots)| {
+                    slots.len() == values.len()
+                        && slots.iter().zip(values).all(|(slot, v)| slot.is_none_or(|n| (n - v).abs() < 1e-9))
+                })?;
+                found(text, *sign, slots.iter().map(Option::is_some).collect())
+            })
         })
-    })
+    };
+    search(&candidates).or_else(|| search(&unsigned))
 }
 
 /// For each `#` in a stat's numbered-out text, the fixed number it was, or
