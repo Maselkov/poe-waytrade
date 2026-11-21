@@ -289,7 +289,18 @@ fn average_damage(value: &str) -> f64 {
         .sum()
 }
 
+/// Invisible characters the game puts in some lines: a zero-width space in
+/// "Supported by Level 20 \u{200b}Cast on Melee Kill Support".
+const INVISIBLE: [char; 5] = ['\u{200b}', '\u{200c}', '\u{200d}', '\u{2060}', '\u{feff}'];
+
 pub fn parse(text: &str) -> Option<Item> {
+    let visible: String;
+    let text = if text.contains(INVISIBLE) {
+        visible = text.replace(INVISIBLE, "");
+        &visible
+    } else {
+        text
+    };
     let mut sections: Vec<Vec<&str>> = vec![Vec::new()];
     for line in text.lines() {
         let line = line.trim_end_matches('\r');
@@ -626,6 +637,16 @@ pub(crate) mod tests {
                     { Prefix Modifier \"Elder\" }\nArea is influenced by The Elder — Unscalable Value\n";
         let item = parse(text).unwrap();
         assert_eq!(item.mods[0].text, "Area is influenced by The Elder");
+    }
+
+    /// The game hides a zero-width space in some support gem mods.
+    #[test]
+    fn zero_width_space() {
+        let text = "Item Class: Two Hand Maces\r\nRarity: Rare\r\nCataclysm Grinder\r\nMeatgrinder\r\n--------\r\n\
+                    Item Level: 86\r\n--------\r\n{ Prefix Modifier \"The Shaper's\" (Tier: 2) — Gem }\r\n\
+                    Socketed Gems are Supported by Level 20 \u{200b}Cast on Melee Kill Support — Unscalable Value\r\n";
+        let item = parse(text).unwrap();
+        assert_eq!(item.mods[0].text, "Socketed Gems are Supported by Level 20 Cast on Melee Kill Support");
     }
 
     #[test]
