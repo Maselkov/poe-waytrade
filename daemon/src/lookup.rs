@@ -493,11 +493,16 @@ fn viscera_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
 }
 
 /// Same corruption state, closest level, then the highest quality bucket not
-/// above the gem's own quality.
+/// above the gem's own quality. A level no uncorrupted gem reaches, or
+/// quality above 20% (21/20 or 20/23 with "Corrupted" not read), is a
+/// corrupted one's.
 fn best_gem<'a>(lines: &'a [ItemLine], item: &Item) -> Option<&'a ItemLine> {
     let level = item.gem_level.unwrap_or(1);
-    let same_corruption: Vec<&ItemLine> =
-        lines.iter().filter(|l| l.corrupted.unwrap_or(false) == item.corrupted).collect();
+    let reaches = |corrupted: bool| {
+        lines.iter().any(|l| l.corrupted.unwrap_or(false) == corrupted && l.gem_level.unwrap_or(1) >= level)
+    };
+    let corrupted = item.corrupted || item.quality > 20 || (!reaches(false) && reaches(true));
+    let same_corruption: Vec<&ItemLine> = lines.iter().filter(|l| l.corrupted.unwrap_or(false) == corrupted).collect();
     let pool = if same_corruption.is_empty() { lines.iter().collect() } else { same_corruption };
     let closest = pool.iter().map(|l| l.gem_level.unwrap_or(1).abs_diff(level)).min()?;
     pool.into_iter().filter(|l| l.gem_level.unwrap_or(1).abs_diff(level) == closest).min_by_key(|l| {
@@ -776,9 +781,13 @@ mod tests {
         assert_eq!(arc("20 (Max)", Some(20), false), variant("20/20"));
         assert_eq!(arc("20 (Max)", None, false), variant("20"));
         assert_eq!(arc("21 (Max)", Some(20), true), variant("21/20c"));
-        // No uncorrupted 20/23 line: the highest quality not above ours.
+        // "Corrupted" not read: no uncorrupted Arc is level 21.
+        assert_eq!(arc("21 (Max)", Some(20), false), variant("21/20c"));
+        // Only corruption takes quality above 20%.
         assert!(fixture_lines("SkillGem", "Arc").iter().all(|l| l["variant"] != "20/23"));
-        assert_eq!(arc("20 (Max)", Some(23), false), variant("20/20"));
+        assert_eq!(arc("20 (Max)", Some(23), false), variant("20/23c"));
+        // No 20/22c line: the highest quality not above ours.
+        assert_eq!(arc("20 (Max)", Some(22), true), variant("20/20c"));
         // A level poe.ninja doesn't list: the closest one.
         assert_eq!(arc("19", Some(20), false), variant("20/20"));
     }
