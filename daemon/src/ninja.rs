@@ -217,6 +217,15 @@ pub fn pick_league(names: &[String], hardcore: bool) -> String {
     names.iter().find(|n| challenge(n)).cloned().unwrap_or_else(|| permanent.to_string())
 }
 
+/// A league setting that wants hardcore: "auto-hardcore", or a hardcore
+/// league's name. When a named league ends, its "Current" stays hardcore.
+pub fn is_hardcore(setting: &str) -> bool {
+    setting == "auto-hardcore"
+        || setting == "Hardcore"
+        || setting.starts_with("Hardcore ")
+        || setting.starts_with("HC ")
+}
+
 pub fn fetch(league: &str) -> Result<PriceDb, String> {
     let mut db = PriceDb::new(league);
     let league_q = encode(league);
@@ -316,6 +325,16 @@ pub(crate) mod tests {
         let names = only(&["Covens", "Hardcore Ruthless Covens", "Standard", "Hardcore"]);
         assert_eq!(pick_league(&names, false), "Covens");
         assert_eq!(pick_league(&names, true), "Hardcore");
+    }
+
+    #[test]
+    fn hardcore_settings() {
+        for s in ["auto-hardcore", "Hardcore", "Hardcore Covens", "HC Ruthless Covens"] {
+            assert!(is_hardcore(s), "{s}");
+        }
+        for s in ["auto", "Standard", "Covens", "Ruthless Covens", "Hardcoreish (PL1)"] {
+            assert!(!is_hardcore(s), "{s}");
+        }
     }
 
     #[test]
