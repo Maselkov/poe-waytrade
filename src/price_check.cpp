@@ -27,8 +27,6 @@ constexpr float kQuickCloseDistance = 40.0f;
 // A pinned panel closes once the pointer has been off it this long.
 constexpr auto kPinnedLeaveGrace = std::chrono::milliseconds(250);
 
-// Ctrl+D on a map opens the map check (is it safe to run?); logbooks are
-// mostly about what they're worth.
 // The item text with a name line, as the game copies an identified unique:
 // an unidentified one whose art matched is then checked (and searched) by
 // name.
@@ -40,8 +38,12 @@ std::string with_name(const std::string& text, const std::string& name) {
     return text.substr(0, eol + 1) + name + end + text.substr(eol + 1);
 }
 
+// Ctrl+D on a map opens the map check (is it safe to run?); logbooks are
+// mostly about what they're worth, and a white map or invitation has no mods
+// to check.
 PriceCheck::Purpose default_purpose(const ParsedItem& item) {
-    if (!is_map_like(item) || item.item_class == "Expedition Logbooks") return PriceCheck::Purpose::Price;
+    if (!is_map_like(item) || item.item_class == "Expedition Logbooks" || item.rarity == "Normal")
+        return PriceCheck::Purpose::Price;
     return PriceCheck::Purpose::Map;
 }
 

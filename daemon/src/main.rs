@@ -817,10 +817,14 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
         return format!("status\t{status}\nmessage\t{}\n", clean(&message));
     };
 
-    if (item.rarity == "Unique" || item.rarity == "Gem" || item.class == "Viscera") && trade::searchable(&item) {
+    let white_map = item.rarity == "Normal" && mapcheck::is_map_like(&item);
+    if (item.rarity == "Unique" || item.rarity == "Gem" || item.class == "Viscera" || white_map)
+        && trade::searchable(&item)
+    {
         // Identified uniques, gems and Viscera limbs: trade filters for
         // their rolls (a gem's level and quality), with the poe.ninja price
-        // alongside.
+        // alongside. White maps and invitations: their listings by type,
+        // with the poe.ninja price alongside.
         out = trade_response(state, &item, trade_search, preset, Some(&db));
         if out.starts_with("status\ttrade")
             && let lookup::Outcome::Found { prices, .. } = lookup::lookup(&db, &item)
