@@ -328,6 +328,8 @@ Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
 - **General:**
   - The panel size, and the cursor over the panels: the game's or the
     desktop's.
+  - The start-up notice, which says the overlay is running and stays while
+    prices load.
   - Item displays: pricing them in vaults and in Heist, and how their price
     tags follow (GPU or CPU).
 - **Price check:**

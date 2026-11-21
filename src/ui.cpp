@@ -37,8 +37,11 @@ const char* const kScanDoc = "ui/scan_labels.rml";
 const char* const kDocuments[] = {kScanDoc, kPriceDoc, kMapDoc, kSettingsDoc, kToastDoc, kDebugDoc};
 
 // The start-up notice: shown once the daemon has answered (or after a
-// moment without it), for a few seconds, fading out.
+// moment without it), for a few seconds, fading out. While prices load it
+// stays, and once they're in (or failed) it stays a little longer to say so;
+// an error longer still, to be read.
 constexpr double kToastWait = 3.0, kToastShow = 6.0, kToastIn = 0.45, kToastFade = 0.5;
+constexpr double kToastReadyLinger = 3.0, kToastErrorLinger = 8.0;
 
 // ---- RmlUi interfaces ------------------------------------------------------
 
@@ -295,6 +298,7 @@ struct Model {
     bool s_auto_watch = true;
     bool s_gpu_tracking = true;
     bool s_heist_watch = true;
+    bool s_startup_notice = true;
     bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
     int s_profile = 1;
     bool s_reset_armed = false;
@@ -451,6 +455,8 @@ struct OverlayUi::Impl {
     uint64_t placed_check = 0;
     bool debug = getenv("POE_WAYTRADE_DEBUG") != nullptr;
     double toast_started = -1;  // elapsed seconds; < 0: not yet
+    double toast_fade_at = 0;   // when it starts fading out
+    std::string toast_state;    // the daemon state it last showed
     bool toast_off = getenv("POE_WAYTRADE_DEMO_ITEM") || getenv("POE_WAYTRADE_DEMO_SETTINGS");
     void update_toast(PriceCheck& pc, VkExtent2D extent);
     // The display scan's labels: one element each, above its tooltip.
@@ -719,6 +725,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_auto_watch", &model.s_auto_watch);
     c.Bind("s_gpu_tracking", &model.s_gpu_tracking);
     c.Bind("s_heist_watch", &model.s_heist_watch);
+    c.Bind("s_startup_notice", &model.s_startup_notice);
     c.Bind("s_scaled", &model.s_scaled);
     c.Bind("s_profile", &model.s_profile);
     c.Bind("s_reset_armed", &model.s_reset_armed);
@@ -821,6 +828,7 @@ void OverlayUi::Impl::bind_model() {
     settings_event("auto_watch", [arg](SettingsPage& s, Args a) { s.set_auto_watch(arg(a) != 0); });
     settings_event("gpu_tracking", [arg](SettingsPage& s, Args a) { s.set_gpu_tracking(arg(a) != 0); });
     settings_event("heist_watch", [arg](SettingsPage& s, Args a) { s.set_heist_watch(arg(a) != 0); });
+    settings_event("startup_notice", [arg](SettingsPage& s, Args a) { s.set_startup_notice(arg(a) != 0); });
     settings_event("league_pick", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_league(a[0].Get<Rml::String>());
     });
@@ -1322,6 +1330,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_auto_watch = v.auto_watch;
     m.s_gpu_tracking = v.gpu_tracking;
     m.s_heist_watch = v.heist_watch;
+    m.s_startup_notice = v.startup_notice;
     m.s_profile = s.map_profile();
     m.s_reset_armed = s.reset_armed();
 
@@ -1346,20 +1355,38 @@ void OverlayUi::Impl::update_toast(PriceCheck& pc, VkExtent2D extent) {
     if (it == docs.end()) return;
     Rml::ElementDocument* doc = it->second;
     double now = system.GetElapsedTime();
-    if (toast_started < 0 && !toast_off &&
-        (pc.settings().loaded() || !pc.daemon_state().empty() || now > kToastWait)) {
+    // Waits for the settings (or a moment without them), which can turn it off.
+    if (pc.settings().loaded() && !pc.settings().values().startup_notice) toast_off = true;
+    if (toast_off) {
+        if (doc->IsVisible()) doc->Hide();
+        return;
+    }
+    if (toast_started < 0 && (pc.settings().loaded() || now > kToastWait)) {
         toast_started = now;
+        toast_fade_at = now + kToastShow - kToastFade;
+        toast_state = pc.daemon_state();
         poe_log("ui: start-up notice");
     }
     double t = toast_started < 0 ? -1 : now - toast_started;
-    if (t < 0 || t > kToastShow) {
+    if (t >= 0 && now < toast_fade_at + kToastFade) {
+        const std::string& state = pc.daemon_state();
+        if (state == "loading") {
+            toast_fade_at = std::max(toast_fade_at, now + kToastReadyLinger);
+        } else if (state != toast_state) {
+            // Done loading (or failed): long enough to see how it ended.
+            double linger = state == "error" ? kToastErrorLinger : kToastReadyLinger;
+            toast_fade_at = std::max(toast_fade_at, now + linger);
+        }
+        toast_state = state;
+    }
+    if (t < 0 || now > toast_fade_at + kToastFade) {
         if (doc->IsVisible()) doc->Hide();
         return;
     }
     if (!doc->IsVisible()) doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
     // Rises into place and fades in, then sinks and fades out.
     auto ease_out = [](double x) { return 1 - std::pow(1 - std::clamp(x, 0.0, 1.0), 3); };
-    double in = ease_out(t / kToastIn), out = ease_out((t - (kToastShow - kToastFade)) / kToastFade);
+    double in = ease_out(t / kToastIn), out = ease_out((now - toast_fade_at) / kToastFade);
     float dp = context->GetDensityIndependentPixelRatio();
     float alpha = (float)(in * (1 - out));
     float rise = (float)((1 - in) * 18 + out * 10) * dp;

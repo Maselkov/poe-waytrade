@@ -37,6 +37,7 @@ public:
         bool auto_watch = true;       // price displays on entering a vault
         bool gpu_tracking = true;     // display labels placed by the GPU (gpu_track.h)
         bool heist_watch = true;      // watch for curio displays in Heist
+        bool startup_notice = true;   // the "Waytrade is running" toast
         static std::array<KeyCombo, kActions> defaults();
     };
 
@@ -101,6 +102,7 @@ public:
     void set_auto_watch(bool on);
     void set_gpu_tracking(bool on);
     void set_heist_watch(bool on);
+    void set_startup_notice(bool on);
 
     // Price check
     void set_league(const std::string& league);

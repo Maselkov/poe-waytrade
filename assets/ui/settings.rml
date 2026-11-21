@@ -74,6 +74,16 @@
                 <div data-attr-class="s_desktop_cursor ? 'button on' : 'button'" data-event-click="desktop_cursor(1)">Desktop</div>
             </div>
         </div>
+        <div class="setting-row ruled">
+            <div class="setting-text">
+                <div class="setting-name">Start-up notice</div>
+                <div class="setting-desc">Says the overlay is running, and when prices are in</div>
+            </div>
+            <div class="button-row toggle">
+                <div data-attr-class="s_startup_notice ? 'button on' : 'button'" data-event-click="startup_notice(1)">On</div>
+                <div data-attr-class="s_startup_notice ? 'button' : 'button on'" data-event-click="startup_notice(0)">Off</div>
+            </div>
+        </div>
 
         <div class="group-label spaced">Item displays</div>
         <div class="setting-row">
