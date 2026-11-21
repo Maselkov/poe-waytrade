@@ -161,7 +161,9 @@ body {
    own value sits. Unticked, it's a faint track; ticked, it gets its fill
    and handles. With no maximum there's no right handle: the fill runs open
    to the end (pressing near the end still drags out a maximum). The handles
-   centre on their value; the padding keeps both ends reachable. */
+   centre on their value; the padding keeps both ends reachable. They're
+   10dp circles with the border counted inside (border-box), so they fit
+   within the 12dp strip. */
 .slider-row { padding: 0 0 3dp 0; margin-top: -2dp; }
 .range { height: 12dp; padding: 0 7dp; drag: drag; cursor: pointer; }
 .range-inner { position: relative; height: 12dp; }
@@ -174,11 +176,12 @@ body {
 .filter.on .range-roll { background-color: $accent-text; }
 .range-handle {
     position: absolute;
-    top: 0dp;
-    width: 12dp;
-    height: 12dp;
-    margin-left: -6dp;
-    border-radius: 6dp;
+    box-sizing: border-box;
+    top: 1dp;
+    width: 10dp;
+    height: 10dp;
+    margin-left: -5dp;
+    border-radius: 5dp;
     background-color: $accent-text;
     border: 2dp $accent;
 }
