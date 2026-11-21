@@ -1,5 +1,5 @@
-// The settings page: hotkeys, league, search defaults, panel size, map
-// check profile. The daemon keeps the settings (daemon/src/settings.rs) and
+// The settings page: hotkeys, panel size, item displays, league, search
+// defaults, map check profile. The daemon keeps the settings (daemon/src/settings.rs) and
 // saves them; we fetch them at start, show them, and send each change. Until
 // the daemon answers, the defaults below apply, so the hotkeys work at once.
 #pragma once
@@ -21,7 +21,7 @@ class SettingsPage {
 public:
     using Clock = std::chrono::steady_clock;
 
-    enum class Tab { Hotkeys, Price, Map, About };
+    enum class Tab { Hotkeys, General, Price, Map, About };
     // The rebindable hotkeys, in the order shown.
     enum class Action { Quick, Locked, MapAlias, Settings, Displays };
     static constexpr int kActions = 5;
@@ -93,6 +93,10 @@ public:
     static bool can_be_off(Action action) { return action == Action::MapAlias || action == Action::Displays; }
     static const char* action_label(Action action);
     void set_stash_scroll(bool on);
+
+    // General
+    void step_scale(int delta);  // tenths
+    bool scale_from_env() const { return scale_from_env_; }
     void set_desktop_cursor(bool on);
     void set_auto_watch(bool on);
     void set_gpu_tracking(bool on);
@@ -101,9 +105,7 @@ public:
     // Price check
     void set_league(const std::string& league);
     void set_status(const std::string& status);
-    void step_min(int delta);    // percent
-    void step_scale(int delta);  // tenths
-    bool scale_from_env() const { return scale_from_env_; }
+    void step_min(int delta);  // percent
 
     // Map check
     void set_map_profile(int profile);

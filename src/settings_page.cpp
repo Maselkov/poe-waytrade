@@ -48,9 +48,9 @@ const char* SettingsPage::action_label(Action action) {
 SettingsPage::SettingsPage() {
     scale_from_env_ = getenv("POE_WAYTRADE_UI_SCALE") != nullptr;
     send("SETTINGS\n");
-    // POE_WAYTRADE_DEMO_SETTINGS=<tab 0-3>: open on start, for design work.
+    // POE_WAYTRADE_DEMO_SETTINGS=<tab 0-4>: open on start, for design work.
     if (const char* tab = getenv("POE_WAYTRADE_DEMO_SETTINGS")) {
-        tab_ = (Tab)std::clamp(atoi(tab), 0, 3);
+        tab_ = (Tab)std::clamp(atoi(tab), 0, 4);
         visible_ = true;
     }
 }
@@ -260,6 +260,16 @@ void SettingsPage::set_stash_scroll(bool on) {
     set_note("");
 }
 
+// ---- general -----------------------------------------------------------------
+
+void SettingsPage::step_scale(int delta) {
+    double scale = std::clamp(std::round(values_.ui_scale * 10 + delta) / 10, 0.5, 2.0);
+    if (std::abs(scale - values_.ui_scale) < 1e-6) return;
+    values_.ui_scale = scale;
+    set("ui_scale", scale_text(scale));
+    set_note("");
+}
+
 void SettingsPage::set_auto_watch(bool on) {
     if (on == values_.auto_watch) return;
     values_.auto_watch = on;
@@ -320,14 +330,6 @@ void SettingsPage::step_min(int delta) {
     if (min == values_.min_percent) return;
     values_.min_percent = min;
     set("min_percent", std::to_string(min));
-    set_note("");
-}
-
-void SettingsPage::step_scale(int delta) {
-    double scale = std::clamp(std::round(values_.ui_scale * 10 + delta) / 10, 0.5, 2.0);
-    if (std::abs(scale - values_.ui_scale) < 1e-6) return;
-    values_.ui_scale = scale;
-    set("ui_scale", scale_text(scale));
     set_note("");
 }
 

@@ -181,13 +181,13 @@ tooltip as you move. The most valuable one in sight gets a gold border.
 - Price tags follow their tooltips exactly: each frame, before it's shown,
   the GPU finds every tooltip in it (a compute shader, about 0.15 ms of GPU
   time) and the tag is drawn there. Setting "Price tags follow by" to CPU
-  (Hotkeys tab) uses the older tracking instead: no GPU work, but tags trail
+  (General tab) uses the older tracking instead: no GPU work, but tags trail
   a frame or two and overshoot on sudden turns. Without GPU support for it,
   CPU tracking is used anyway.
 - The vault list, the automatic start and the log's path are under
   `auto_watch_areas`, `auto_watch` and `client_log` in
   `~/.config/poe-waytrade/settings.json`. Automatic start is also on the
-  Hotkeys tab.
+  General tab.
 
 `poe-waytrade-daemon scan <screenshot.png>` reads the displays in a
 screenshot without the game, which is handy if a display isn't recognised.
@@ -203,7 +203,7 @@ minutes get their price back at once.
 
 - It knows it's in Heist from the game's own id for the area (Client.txt's
   "Generating level ... area" line), so the Laboratory and Mansion maps don't
-  count. Turn it off with "Price them in Heist" (Hotkeys tab).
+  count. Turn it off with "Price them in Heist" (General tab).
 - Curio displays are found by their "Curio Display" title plate.
 - How rares are priced: a Thief's Trinket by its mods; an experimented base
   by its poe.ninja base price (by item level when the tooltip shows it); a
@@ -324,14 +324,17 @@ Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
 - **Hotkeys:** click a key, then press the new combination. A key without Ctrl
   or Alt gets a warning, since the game sees it too. Choosing a combination
   another action uses swaps the two. Stash scroll is switched on and off
-  here too, and so is the cursor over the panels: the game's or the
-  desktop's.
+  here too.
+- **General:**
+  - The panel size, and the cursor over the panels: the game's or the
+    desktop's.
+  - Item displays: pricing them in vaults and in Heist, and how their price
+    tags follow (GPU or CPU).
 - **Price check:**
   - The league. "Current" (or "Current hardcore") follows poe.ninja into
     each new league.
   - Which listings a search starts with.
   - How far below your roll a ticked filter starts.
-  - The panel size.
 - **Map check:** the active profile, and resetting its marks.
 - **About:** versions, where the logs are, and whether typing into panels works.
 
@@ -381,7 +384,7 @@ Environment variables, which take precedence over the settings page:
   listings, and its tag shows "?".
 - With fractional scaling, the game's cursor grows over the panels. Wine
   sizes its cursor for scale 1 on surfaces that aren't its own windows.
-  Setting the cursor to "Desktop" (Hotkeys tab) avoids it, at the cost of
+  Setting the cursor to "Desktop" (General tab) avoids it, at the cost of
   your desktop cursor over the panels.
 - The item text still shows up in clipboard managers' history. They see the
   game's copy, and Klipper can't be told to forget a single entry.
