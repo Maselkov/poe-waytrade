@@ -305,7 +305,17 @@ std::vector<SettingsPage::LeagueChoice> SettingsPage::league_choices() const {
     for (auto& c : out)
         for (const auto& [setting, league] : league_current_)
             if (setting == c.value) c.now = league;
-    for (const auto& name : leagues_) out.push_back({name, name, ""});
+    // A challenge league a "Current" button picks now would only be that
+    // button again (and stays put when the league ends). Standard and
+    // Hardcore stay: they're what "Current" picks between leagues, and
+    // worth pinning. So does the saved league, so it shows as picked.
+    auto doubled = [&](const std::string& name) {
+        if (name == "Standard" || name == "Hardcore" || name == values_.league) return false;
+        return std::any_of(league_current_.begin(), league_current_.end(),
+                           [&](const auto& current) { return current.second == name; });
+    };
+    for (const auto& name : leagues_)
+        if (!doubled(name)) out.push_back({name, name, ""});
     auto saved = [&](const LeagueChoice& c) { return c.value == values_.league; };
     if (std::none_of(out.begin(), out.end(), saved)) out.push_back({values_.league, values_.league, ""});
     return out;

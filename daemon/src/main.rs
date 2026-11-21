@@ -395,8 +395,8 @@ fn refresh_loop(state: &State) {
 }
 
 /// POE_LEAGUE wins; then the league picked in the settings, while poe.ninja
-/// still has it; then the current challenge league ("auto", or its hardcore
-/// twin for "auto-hardcore").
+/// still has it; then the current challenge league, or its hardcore twin
+/// for "auto-hardcore" or a hardcore league that ended.
 fn choose_league(state: &State, wanted: &str) -> Result<String, String> {
     let current = settings::AUTO_LEAGUES.contains(&wanted);
     if let Ok(league) = std::env::var("POE_LEAGUE") {
@@ -409,13 +409,15 @@ fn choose_league(state: &State, wanted: &str) -> Result<String, String> {
         Err(e) => return Err(e),
     };
     *state.leagues.lock().unwrap() = names.clone();
+    let hardcore = ninja::is_hardcore(wanted);
     if !current {
         if names.iter().any(|n| n == wanted) {
             return Ok(wanted.to_string());
         }
-        eprintln!("poe.ninja has no {wanted} league (any more); using the current one");
+        let which = if hardcore { "current hardcore" } else { "current" };
+        eprintln!("poe.ninja has no {wanted} league (any more); using the {which} one");
     }
-    Ok(ninja::pick_league(&names, wanted == "auto-hardcore"))
+    Ok(ninja::pick_league(&names, hardcore))
 }
 
 fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
