@@ -10,7 +10,11 @@
 #include "stb_image.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -358,9 +362,66 @@ void RmlRenderer::ReleaseGeometry(Rml::CompiledGeometryHandle handle) {
     });
 }
 
-// Images are only currency icons, "icon:<id>" (RmlUi may prefix the
-// document's folder), decoded from the PNGs in icons.cpp.
+// Reads "rrggbb" or "#rrggbb" into rgb.
+static bool parse_hex_colour(const std::string& s, float rgb[3]) {
+    size_t i = !s.empty() && s[0] == '#' ? 1 : 0;
+    if (s.size() != i + 6) return false;
+    for (int c = 0; c < 3; c++) {
+        char* end = nullptr;
+        std::string byte = s.substr(i + c * 2, 2);
+        long v = strtol(byte.c_str(), &end, 16);
+        if (*end) return false;
+        rgb[c] = (float)v;
+    }
+    return true;
+}
+
+// "disc:<fill>:<ring>": a round handle, a <fill> disc in a <ring> border
+// two-fifths of the radius wide, anti-aliased. RmlUi draws a small
+// border-radius as a few straight segments without anti-aliasing, which
+// looks square, so the slider handles use this as an image decorator
+// instead. It's drawn at 32px with a soft 2px edge, so scaled down to a
+// 10-20px handle the edge stays about a pixel wide.
+static std::vector<unsigned char> make_disc(const std::string& spec, int& size) {
+    size_t colon = spec.find(':');
+    float fill[3], ring[3];
+    if (colon == std::string::npos || !parse_hex_colour(spec.substr(0, colon), fill) ||
+        !parse_hex_colour(spec.substr(colon + 1), ring))
+        return {};
+    size = 32;
+    const float edge = 2.0f;
+    const float outer = size / 2.0f - edge / 2.0f;
+    const float inner = outer * 0.6f;
+    std::vector<unsigned char> rgba((size_t)size * size * 4);
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            float dx = x + 0.5f - size / 2.0f, dy = y + 0.5f - size / 2.0f;
+            float d = std::sqrt(dx * dx + dy * dy);
+            float alpha = std::clamp((outer - d) / edge + 0.5f, 0.0f, 1.0f);
+            float t = std::clamp((d - inner) / edge + 0.5f, 0.0f, 1.0f);
+            unsigned char* p = &rgba[((size_t)y * size + x) * 4];
+            for (int c = 0; c < 3; c++) p[c] = (unsigned char)std::lround((fill[c] + (ring[c] - fill[c]) * t) * alpha);
+            p[3] = (unsigned char)std::lround(alpha * 255.0f);
+        }
+    }
+    return rgba;
+}
+
+// Images are currency icons, "icon:<id>" (RmlUi may prefix the document's
+// folder), decoded from the PNGs in icons.cpp, and the generated "disc:"
+// handles above.
 Rml::TextureHandle RmlRenderer::LoadTexture(Rml::Vector2i& dimensions, const Rml::String& source) {
+    if (size_t disc = source.find("disc:"); disc != std::string::npos) {
+        int size = 0;
+        std::vector<unsigned char> rgba = make_disc(source.substr(disc + 5), size);
+        if (rgba.empty()) {
+            poe_log("ui: bad disc %s", source.c_str());
+            return 0;
+        }
+        Texture* t = create_texture(rgba.data(), size, size);
+        if (t) dimensions = {size, size};
+        return reinterpret_cast<Rml::TextureHandle>(t);
+    }
     size_t at = source.find("icon:");
     const std::string* png = at == std::string::npos ? nullptr : icons_get(source.substr(at + 5));
     if (!png) return 0;
