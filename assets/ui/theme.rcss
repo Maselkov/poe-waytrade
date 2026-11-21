@@ -510,7 +510,7 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 #settings-head .subtitle { margin-bottom: 8dp; }
 #settings .tabs { display: flex; justify-content: center; }
 #settings .tab {
-    padding: 6dp 12dp 8dp;
+    padding: 6dp 10dp 8dp;
     color: $text-muted;
     border-bottom: 2dp transparent;
     cursor: pointer;

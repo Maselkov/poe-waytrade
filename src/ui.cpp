@@ -1271,7 +1271,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     const SettingsPage::Values& v = s.values();
     using Action = SettingsPage::Action;
     m.s_tab = (int)s.tab();
-    m.s_tabs = {"Hotkeys", "Price check", "Map check", "About"};
+    m.s_tabs = {"Hotkeys", "General", "Price check", "Map check", "About"};
     m.s_profiles = {"I", "II", "III"};
     m.s_version = POE_WAYTRADE_VERSION;
 
