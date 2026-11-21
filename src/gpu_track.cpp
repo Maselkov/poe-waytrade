@@ -22,8 +22,10 @@ struct Slot {
     float norm2;
     int32_t tw4, th4, offset4;
     float norm4;
+    float fallback[2];
+    float pad[2];
 };
-static_assert(sizeof(Slot) == 64);
+static_assert(sizeof(Slot) == 80);
 struct Header {
     int32_t count, srgb, width, height;
     int32_t radius;
@@ -36,6 +38,10 @@ constexpr uint32_t kFinePositions = 25;
 // Labels tracked at once, and the room for their plates (half-size grey
 // floats: a plate is ~200x32 of them at 1440p, ~300x48 at 4K).
 constexpr size_t kMaxLabels = 16;
+// A label whose plate isn't found (covered a moment, or a weak match) is
+// moved by its last correction this recent: the CPU's prediction is off
+// the same way from one frame to the next.
+constexpr auto kFallbackFor = std::chrono::milliseconds(150);
 constexpr size_t kTemplateFloats = 16384;
 
 bool is_srgb(VkFormat f) {
@@ -248,7 +254,7 @@ void GpuTracker::read_time(Image& img) {
     double ms = (double)(t[1] - t[0]) * timestamp_ns_ / 1e6;
     const float* r = (const float*)img.results.mapped;
     for (int i = 0; i < img.count; i++, r += 4) {
-        if (r[3] < 0.5f) {
+        if (r[3] < 0.9f) {
             missed_++;
             continue;
         }
@@ -282,6 +288,16 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
     if (!s || index >= s->images.size() || labels.empty()) return VK_NULL_HANDLE;
     Image& img = s->images[index];
     read_time(img);  // its last frame is done: the caller waited on its fence
+    // Its corrections, for the labels' next misses.
+    auto now = std::chrono::steady_clock::now();
+    const float* r = (const float*)img.results.mapped;
+    for (size_t i = 0; i < img.ids.size(); i++, r += 4) {
+        if (r[3] < 0.9f) continue;
+        Correction& c = corrections_[img.ids[i]];
+        if (img.recorded_at > c.at) c = {r[0], r[1], img.recorded_at};
+    }
+    img.ids.clear();
+    std::erase_if(corrections_, [&](const auto& c) { return now - c.second.at > kFallbackFor; });
 
     // The slots and their plates; the GPU is done with this image's last use.
     auto* header = (Header*)img.slots.mapped;
@@ -300,6 +316,10 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
             used + n2 + n4 > kMaxLabels * kTemplateFloats)
             continue;
         Slot& slot = slots[count++];
+        img.ids.push_back(l.id);
+        auto c = corrections_.find(l.id);
+        slot.fallback[0] = c == corrections_.end() ? 0 : c->second.dx;
+        slot.fallback[1] = c == corrections_.end() ? 0 : c->second.dy;
         // Search between where it was measured and where it's predicted:
         // after a sudden turn it's somewhere in between, not ahead.
         slot.laid[0] = l.plate_x;
@@ -321,8 +341,12 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
         slot.norm4 = t4.norm;
         used += n4;
     }
-    if (count == 0) return VK_NULL_HANDLE;
+    if (count == 0) {
+        img.ids.clear();
+        return VK_NULL_HANDLE;
+    }
     img.count = count;
+    img.recorded_at = now;
     // A margin (48 pixels at 1440p: the UI scales with the height) beyond
     // the span the prediction covers, up to 96; a multiple of the coarse
     // step. Less misses sharp turns: the prediction overshoots past it.

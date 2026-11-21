@@ -14,6 +14,8 @@
 #include "screen_scan.h"
 
 #include <array>
+#include <chrono>
+#include <unordered_map>
 #include <memory>
 #include <vector>
 
@@ -22,6 +24,7 @@ class RmlRenderer;
 // One label to place: where it was laid out for (its plate's top-left, as
 // the CPU predicts it now), its box, and the plate to look for.
 struct GpuLabel {
+    uint64_t id = 0;  // the tooltip's (ScreenScan)
     float plate_x = 0, plate_y = 0;
     float seen_x = 0, seen_y = 0;  // its last measured place (no prediction)
     std::array<float, 4> rect{};  // x0, y0, x1, y1 (swapchain pixels)
@@ -58,7 +61,15 @@ private:
         VkQueryPool queries = VK_NULL_HANDLE;
         bool timed = false;  // its queries hold a measurement to read
         int count = 0;       // labels it searched for
+        std::vector<uint64_t> ids;  // their ids, by slot
+        std::chrono::steady_clock::time_point recorded_at;
     };
+    // Each label's last move from where the CPU put it, when found.
+    struct Correction {
+        float dx = 0, dy = 0;
+        std::chrono::steady_clock::time_point at;
+    };
+    std::unordered_map<uint64_t, Correction> corrections_;
     struct Swapchain {
         const void* key = nullptr;
         VkFormat format = VK_FORMAT_UNDEFINED;

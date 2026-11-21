@@ -40,6 +40,11 @@ constexpr auto kHideAfter = std::chrono::milliseconds(150);
 constexpr auto kStopLooking = std::chrono::seconds(1);
 // A display read as partly hidden this many times is taken as no item.
 constexpr int kMaxRereads = 4;
+// A display read and priced is read again this many times, this far apart,
+// in case another tooltip covered part of it the first time: the read with
+// the most lines wins.
+constexpr int kFollowUps = 2;
+constexpr auto kFollowUpGap = std::chrono::milliseconds(1500);
 // The daemon is still loading prices or names: ask again after this.
 constexpr auto kRetryLoading = std::chrono::seconds(2);
 // A display read as partly hidden: read again (from a newer frame) after this.
@@ -368,13 +373,23 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
     for (Tracked& t : tracked_) {
         if (t.request_job.valid() && t.request_job.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
             t.request = t.request_job.get();
-        if (t.client && !t.request.empty() && !t.client->busy() && (!t.replied || t.verify) && now >= t.retry_at)
+        if (t.client && !t.request.empty() && !t.client->busy() && (!t.replied || t.verify || t.following_up) &&
+            now >= t.retry_at)
             t.client->send_raw(t.request);
         PriceReply reply;
         if (t.client && t.client->poll(&reply)) {
             if (reply.status == "loading") {
                 t.retry_at = now + kRetryLoading;
                 continue;
+            }
+            if (t.following_up) {
+                // A second look: taken if it saw more of the tooltip.
+                t.following_up = false;
+                t.request.clear();
+                size_t n = reply.lines.size();
+                bool priced = reply.status == "ok" || reply.status == "not_found";
+                if (!priced || n <= t.read_lines) continue;
+                poe_log("displays: read more of %s (%zu lines, was %zu)", reply.title.c_str(), n, t.read_lines);
             }
             bool gave_up = false;
             // Not an item, says the first read: one more look from a later
@@ -395,7 +410,12 @@ void ScreenScan::update(Clock::time_point now, int toggles) {
             poe_log("displays: %s %s (%s) %s%s%s [%s]", reply.status.c_str(), reply.title.c_str(),
                     reply.detail.c_str(), reply.value_text.c_str(), reply.message.empty() ? "" : ": ",
                     reply.message.c_str(), lines.c_str());
+            t.read_lines = reply.lines.size();
             reply.lines.clear();
+            if ((reply.status == "ok" || reply.status == "not_found") && t.follow_ups < kFollowUps) {
+                t.follow_ups++;
+                t.reread_at = now + kFollowUpGap;
+            }
             // (Not one that only stayed hidden: it may be read when seen again.)
             if (reply.status == "no_item" && !gave_up && !t.name.v.empty()) not_items_.push_back(t.name);
             if (t.verify && reply.title != t.reply.title)
@@ -572,7 +592,9 @@ void ScreenScan::poll_find(Clock::time_point now) {
     }
     // Partly hidden displays, cropped again from this frame where they are.
     for (Tracked& t : tracked_) {
-        if (!t.reread_at || now < *t.reread_at || t.lost != 0 || t.replied) continue;
+        if (!t.reread_at || now < *t.reread_at || t.lost != 0 || t.verify || !t.request.empty() ||
+            t.request_job.valid())
+            continue;
         float tx, ty;
         then(t, &tx, &ty);
         int px = (int)tx, py = (int)ty, cx = px + t.crop_dx, cy = py + t.crop_dy;
@@ -581,6 +603,7 @@ void ScreenScan::poll_find(Clock::time_point now) {
         if (x1 - x0 < t.crop_w / 2 || y1 - y0 < t.crop_h / 4 || px < x0 || py < y0) continue;
         t.request_job = crop_request(x0, y0, x1 - x0, y1 - y0, px, py, (int)t.w, (int)t.h);
         t.reread_at.reset();
+        t.following_up = t.replied;
     }
 }
 
@@ -928,6 +951,7 @@ std::vector<ScreenScan::Label> ScreenScan::labels() const {
         // another display's tag shows already: no label.
         if ((t.replied && t.reply.status == "no_item") || t.duplicate) continue;
         Label l;
+        l.id = t.id;
         // Where it is by now: its last place, moved on at its speed.
         float dt = t.moving ? std::clamp(std::chrono::duration<float>(now_ - t.sampled).count(), 0.0f, kMaxPredict) : 0;
         l.plate_x = t.x + t.vx * dt;

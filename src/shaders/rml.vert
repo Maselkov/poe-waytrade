@@ -18,6 +18,8 @@ struct Slot {
     float norm2;
     int tw4, th4, offset4;
     float norm4;
+    vec2 fallback;
+    vec2 pad;
 };
 layout(std430, set = 1, binding = 0) readonly buffer Slots {
     int count;

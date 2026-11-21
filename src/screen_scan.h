@@ -77,6 +77,7 @@ public:
     struct Plate;
     // For the UI: a label above each display in sight.
     struct Label {
+        uint64_t id = 0;  // the tooltip's
         float x = 0, y = 0;  // the plate's top centre (swapchain pixels), predicted for now
         std::string amount;  // "3.2", "45"; or "…" while pending, "?" unpriced
         std::string icon;    // the amount's currency icon: chaos | divine ("" without a price)
@@ -157,6 +158,10 @@ private:
         // later frame, from this time.
         std::optional<Clock::time_point> reread_at;
         int rereads = 0;
+        // Read again after its price, to see more of it (kFollowUps).
+        int follow_ups = 0;
+        bool following_up = false;
+        size_t read_lines = 0;  // lines in the read its price is from
         bool was_hidden = false;  // hidden(), as last drawn
         Clock::time_point retry_at;
         // The reply is a remembered display's, by the look of its name: read

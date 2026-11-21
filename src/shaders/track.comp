@@ -25,6 +25,8 @@ struct Slot {
     float norm2;            // its (zero-mean) length
     int tw4, th4, offset4;  // quarter-size template
     float norm4;
+    vec2 fallback;  // the move to make if it isn't found (its last one)
+    vec2 pad;
 };
 
 layout(std430, set = 0, binding = 1) readonly buffer Slots {
@@ -36,7 +38,8 @@ layout(std430, set = 0, binding = 1) readonly buffer Slots {
     Slot slots[];
 };
 layout(std430, set = 0, binding = 2) readonly buffer Templates { float templ[]; };
-// Per slot: x, y (full-size pixels to move the label by), score, found (1/0).
+// Per slot: x, y (full-size pixels to move the label by), score, and 1 if
+// found, 0.75 if not (moved by its fallback).
 layout(std430, set = 0, binding = 3) writeonly buffer Results { vec4 result[]; };
 // Per slot: the best of stage 0, then of stage 1, as score (high 20 bits)
 // and position (low 12 bits): atomicMax keeps the best. Zeroed by stage 2.
@@ -148,7 +151,7 @@ void main() {
         // aren't that close together. Else the label stays where the CPU
         // put it.
         bool found_it = b1 != 0u && (score >= 0.7 || (score >= 0.55 && length(at - s.laid) < 12.0));
-        result[slot] = vec4(at - s.laid, score, found_it ? 1.0 : 0.0);
+        result[slot] = found_it ? vec4(at - s.laid, score, 1.0) : vec4(s.fallback, score, 0.75);
         best[slot * 2] = 0u;
         best[slot * 2 + 1] = 0u;
     }

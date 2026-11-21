@@ -570,10 +570,11 @@ pub fn read_item(
             item.rarity = match n.group.as_str() {
                 "gem" => "Gem".into(),
                 "currency" | "card" | "map" => "Currency".into(),
-                // A base type: white, blue or yellow. Any other colour (a
-                // unique's, a gem's) is a misread: still a base.
+                // A base type: white, blue or yellow; a unique's colour is
+                // a unique's base line, its name above covered (a gem's is
+                // a misread: still a base).
                 _ => match rarity_from_color(first.color) {
-                    r @ ("Magic" | "Rare") => r.into(),
+                    r @ ("Magic" | "Rare" | "Unique") => r.into(),
                     _ => "Normal".into(),
                 },
             };
@@ -635,10 +636,16 @@ pub fn read_item(
 ///   whose first line is shorter than its base's ("R CANIST GLOVES"), as
 ///   when another tooltip covers the start of a unique's name and the base
 ///   under it is all that's left;
-/// - a currency's name with nothing under it (its stack size covered).
+/// - a currency's name with nothing under it (its stack size covered);
+/// - a unique's or a rare's base line without the name above it;
+/// - a rare without a mod (the rest covered: every rare has one).
 pub fn partly_hidden(read: &ScreenItem) -> bool {
-    read.item.name.is_none() && read.lines.first().is_some_and(|l| key(l).len() < key(&read.item.base).len())
-        || read.item.rarity == "Currency" && read.item.stack_size.is_none() && read.lines.len() < 2
+    let item = &read.item;
+    let base_cut = || read.lines.first().is_some_and(|l| key(l).len() < key(&item.base).len());
+    let named = matches!(item.rarity.as_str(), "Unique" | "Rare");
+    item.name.is_none() && (named || base_cut())
+        || item.rarity == "Currency" && item.stack_size.is_none() && read.lines.len() < 2
+        || item.rarity == "Rare" && item.mods.is_empty()
 }
 
 /// Lines only an item's tooltip has.
@@ -869,6 +876,13 @@ mod tests {
         assert!(!partly_hidden(&read(&["ARCANIST GLOVES", "ENERGY SHIELD: 47"])));
         // A typo isn't a cut.
         assert!(!partly_hidden(&read(&["ARCANIST GLOVFS", "ENERGY SHIELD: 47"])));
+        // A rare without its mods, or a unique's base line on its own.
+        assert!(partly_hidden(&read(&["WRATH FANG", "TENDERIZER", "ONE HANDED MACE"])));
+        let mut base = lines(&["ARCANIST GLOVES", "ENERGY SHIELD: 47"]);
+        base[0].color = [175, 96, 37];
+        let base = read_item(&base, &v, |_| None).unwrap();
+        assert_eq!((base.item.rarity.as_str(), base.item.name.as_deref()), ("Unique", None));
+        assert!(partly_hidden(&base));
         // A currency without its stack size.
         assert!(partly_hidden(&read(&["CHAOS ORB"])));
         assert!(!partly_hidden(&read(&["CHAOS ORB", "STACK SIZE: 12/20"])));

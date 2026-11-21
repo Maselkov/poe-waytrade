@@ -721,7 +721,7 @@ bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc,
             for (size_t i = 0; i < ls.size(); i++)
                 if (ls[i].plate)
                     gpu_labels.push_back(
-                        {ls[i].plate_x, ls[i].plate_y, ls[i].seen_x, ls[i].seen_y, rects[i], ls[i].plate});
+                        {ls[i].id, ls[i].plate_x, ls[i].plate_y, ls[i].seen_x, ls[i].seen_y, rects[i], ls[i].plate});
             labels = ov.gpu->record(&sc, index, img.cmd, img.image, gpu_labels);
         }
     }
