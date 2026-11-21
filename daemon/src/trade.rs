@@ -559,6 +559,8 @@ pub fn searchable(item: &Item) -> bool {
         "Unique" => item.name.is_some() && (!item.mods.is_empty() || item.unidentified),
         // Gems by name, level and quality.
         "Gem" => true,
+        // Facetor's Lens: by its stored experience.
+        _ if item.stored_experience.is_some() => true,
         // Wickerman limbs have no rarity: searched by base and implicits.
         _ => item.class == "Viscera" && !item.mods.is_empty(),
     }
@@ -610,49 +612,6 @@ impl Trade {
     pub fn canonical_mod(&mut self, line: &str) -> Option<(ModKind, String)> {
         self.ensure_data().ok()?;
         self.data.as_ref().unwrap().0.canonical_mod(line)
-    }
-
-    /// Searches one base type ("Facetor's Lens") for listings with at least
-    /// `min` of an item property, e.g. ("misc_filters", "stored_experience").
-    pub fn search_property(
-        &mut self,
-        base: &str,
-        property: (&'static str, &'static str),
-        min: f64,
-        league: &str,
-        prices: &PriceDb,
-    ) -> Result<TradeResult, String> {
-        self.last_used = Instant::now();
-        self.ensure_data()?;
-        let item = Item { rarity: "Currency".into(), base: base.to_string(), ..Default::default() };
-        let filter = Filter::new(
-            property.1.to_string(),
-            Target::Property(property.0, property.1),
-            min,
-            None,
-            true,
-            Section::Base,
-        );
-        let options = SearchOptions {
-            base_only: true,
-            corrupted: Corrupted::Any,
-            preset: Preset::Normal,
-            status: crate::settings::default_status(),
-            six_link: false,
-            unidentified: false,
-        };
-        let body = query(&item, &[filter], &[Some((Some(min), None))], options).to_string();
-        let league_path = ninja::encode(league);
-        let resp = self.request("search", "POST", &format!("/api/trade/search/{league_path}"), Some(&body))?;
-        let (id, total, hashes) = parse_search(&resp.body)?;
-        let mut singles = Vec::new();
-        if !hashes.is_empty() {
-            let path = format!("/api/trade/fetch/{}?query={id}", hashes.join(","));
-            let resp = self.request("fetch", "GET", &path, None)?;
-            let data = &self.data.as_ref().unwrap().0;
-            singles = parse_fetch(&resp.body, data, prices, unix_now(), &[])?;
-        }
-        Ok(trade_result(singles, total, &id, &league_path))
     }
 
     /// The filters and options for an item, without searching. Needs only
@@ -1595,6 +1554,39 @@ fn map_filters(item: &Item) -> Vec<Filter> {
     filters
 }
 
+/// A Facetor's Lens is worth its experience: listings with at least as
+/// much. The slider (and wheel, 5% a step) widens it to smaller lenses.
+fn stored_experience_filter(xp: u64) -> Filter {
+    let xp = xp as f64;
+    Filter {
+        label: format!("Stored experience {}", group_thousands(xp as u64)),
+        target: Target::Property("misc_filters", "stored_experience"),
+        min: Some(xp),
+        slider: Some((0.0, xp)),
+        draw_slider: true,
+        step: (xp / 20.0).round().max(1.0),
+        max_roll: false,
+        default_on: true,
+        section: Section::Base,
+        tier: None,
+        max: None,
+        roll: Some(xp),
+    }
+}
+
+/// 750000000 -> "750,000,000", as the game writes it.
+fn group_thousands(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// Like APT: the item's memory strands as a minimum, ticked at 60+.
 fn memory_strands_filter(item: &Item) -> Option<Filter> {
     let strands = item.memory_strands? as f64;
@@ -2011,6 +2003,9 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     if item.rarity == "Gem" {
         return gem_filters(item, data);
     }
+    if let Some(xp) = item.stored_experience {
+        return vec![stored_experience_filter(xp)];
+    }
     if preset == Preset::Base {
         return base_filters(item, data);
     }
@@ -2274,6 +2269,11 @@ fn property_value(item: &Value, group: &str, key: &str) -> Option<(f64, bool)> {
         ("map_filters", "map_iiq") => (prop("Item Quantity")?, true),
         ("map_filters", "map_iir") => (prop("Item Rarity")?, true),
         ("map_filters", "map_packsize") => (prop("Monster Pack Size")?, true),
+        ("misc_filters", "stored_experience") => {
+            let p = item["properties"].as_array()?.iter().find(|p| p["name"] == "Stored Experience")?;
+            let text = p["values"][0][0].as_str()?;
+            (text.chars().filter(char::is_ascii_digit).collect::<String>().parse().ok()?, false)
+        }
         _ => return None,
     };
     Some(number)
@@ -2283,7 +2283,7 @@ fn property_value(item: &Value, group: &str, key: &str) -> Option<(f64, bool)> {
 /// "+172 total maximum Life" -> "Life", "+86% total Elemental Resistance"
 /// -> "Ele res", "Physical DPS 312" -> "pDPS". Long ones the layer cuts.
 pub fn column_name(label: &str) -> String {
-    const PHRASES: [(&str, &str); 15] = [
+    const PHRASES: [(&str, &str); 16] = [
         ("Physical DPS", "pDPS"),
         ("Elemental DPS", "eDPS"),
         ("Attacks per second", "APS"),
@@ -2299,6 +2299,7 @@ pub fn column_name(label: &str) -> String {
         ("Rarity of Items found", "Rarity"),
         ("Memory Strands", "Strands"),
         ("Gem level", "Level"),
+        ("Stored experience", "XP"),
     ];
     const DROP: [&str; 13] =
         ["to", "total", "maximum", "increased", "reduced", "of", "the", "a", "an", "Adds", "and", "with", "+"];
@@ -3505,6 +3506,34 @@ mod tests {
                 assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["memory_level"]["min"], strands as f64);
             }
         }
+    }
+
+    #[test]
+    fn facetors_lens() {
+        // Searched by base, with at least its stored experience.
+        let text = "Item Class: Stackable Currency\nRarity: Currency\nFacetor's Lens\n--------\n\
+                    Stored Experience: 750,000,000\n--------\n\
+                    Adds stored experience to a gem, up to its maximum level\n--------\n\
+                    Right click this item then left click a gem to apply it.\n";
+        let item = crate::item::parse(text).unwrap();
+        assert!(searchable(&item));
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), f.default_on, f.min)).collect();
+        assert_eq!(got, [("Stored experience 750,000,000", true, Some(750_000_000.0))]);
+        let chosen = [Some((filters[0].min, None))];
+        let opts = SearchOptions {
+            six_link: false,
+            unidentified: false,
+            base_only: false,
+            corrupted: Corrupted::No,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
+        let q = query(&item, &filters, &chosen, opts);
+        assert_eq!(q["query"]["type"], "Facetor's Lens");
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["stored_experience"]["min"], 750_000_000.0);
+        let listed = json!({ "properties": [{ "name": "Stored Experience", "values": [["1,500,000,000", 0]] }] });
+        assert_eq!(listing_value(&listed, &filters[0].target), Some("1500000000".into()));
     }
 
     #[test]

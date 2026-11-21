@@ -120,6 +120,11 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
         };
     }
 
+    // A Facetor's Lens: poe.ninja has no price by stored experience.
+    if item.stored_experience.is_some() {
+        return Outcome::Unsupported("Priced by stored experience on the trade site".into());
+    }
+
     // Currency, fragments, essences, divination cards, omens, ...
     if let Some(&chaos) = db.exchange.get(&item.base) {
         let mut prices =

@@ -27,6 +27,8 @@ pub struct Item {
     pub item_level: Option<u32>,
     /// "Memory Strands: 72" on weapons, armour and jewellery.
     pub memory_strands: Option<u32>,
+    /// "Stored Experience: 750,000,000" on a Facetor's Lens.
+    pub stored_experience: Option<u64>,
     /// Lines after the "Item Level:" section: enchants, implicits, explicits,
     /// plus some non-mod lines that simply won't match any trade stat.
     /// Roll ranges from advanced copy are stripped.
@@ -439,6 +441,10 @@ pub fn parse(text: &str) -> Option<Item> {
             item.memory_strands = leading_number(v);
         } else if let Some(v) = line.strip_prefix("Stack Size: ") {
             item.stack_size = leading_number(v);
+        } else if let Some(v) = line.strip_prefix("Stored Experience: ") {
+            let digits: String =
+                v.chars().take_while(|c| c.is_ascii_digit() || *c == ',').filter(|c| *c != ',').collect();
+            item.stored_experience = digits.parse().ok();
         } else if let Some(v) = line.strip_prefix("Physical Damage: ") {
             item.physical_damage = Some(average_damage(v));
         } else if let Some(v) = line.strip_prefix("Elemental Damage: ") {
@@ -559,6 +565,14 @@ pub(crate) mod tests {
         let item = parse(text).unwrap();
         assert_eq!(item.base, "Chaos Orb");
         assert_eq!(item.stack_size, Some(1234));
+    }
+
+    #[test]
+    fn stored_experience() {
+        let text = "Item Class: Stackable Currency\nRarity: Currency\nFacetor's Lens\n--------\n\
+                    Stored Experience: 750,000,000\n--------\n\
+                    Adds stored experience to a gem, up to its maximum level\n";
+        assert_eq!(parse(text).unwrap().stored_experience, Some(750_000_000));
     }
 
     #[test]

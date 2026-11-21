@@ -366,8 +366,6 @@ fn crop_sized(cx: f32, y: f32, cw: f32, ch: f32, full_width: u32, full_height: u
 #[derive(Debug, Clone)]
 pub struct ScreenItem {
     pub item: Item,
-    /// Facetor's Lens.
-    pub stored_experience: Option<u64>,
     /// The lines that made it, for the log.
     pub lines: Vec<String>,
 }
@@ -653,7 +651,6 @@ pub fn read_item(
         return Err(format!("No item name in: {}", texts.join(" | ")));
     };
 
-    let mut stored_experience = None;
     for line in &lines[body_from..] {
         let up = line.text.to_ascii_uppercase();
         let k = key(&up);
@@ -664,7 +661,7 @@ pub fn read_item(
         } else if k == "UNIDENTIFIED" {
             item.unidentified = true;
         } else if let Some(v) = value_after(&up, "STORED EXPERIENCE") {
-            stored_experience = number(v).map(|n| n as u64);
+            item.stored_experience = number(v).map(|n| n as u64);
         } else if let Some(v) = value_after(&up, "STACK SIZE") {
             item.stack_size = number(v.split('/').next().unwrap_or(v)).map(|n| n as u32);
         } else if let Some(v) = value_after(&up, "ITEM LEVEL") {
@@ -684,7 +681,7 @@ pub fn read_item(
             item.mods.push(m);
         }
     }
-    Ok(ScreenItem { item, stored_experience, lines: texts })
+    Ok(ScreenItem { item, lines: texts })
 }
 
 /// Whether the item was made of too little to price, to be read again:
@@ -836,7 +833,7 @@ mod tests {
             .unwrap();
         assert_eq!(read.item.base, "Facetor's Lens");
         assert_eq!(read.item.rarity, "Currency");
-        assert_eq!(read.stored_experience, Some(750_000_000));
+        assert_eq!(read.item.stored_experience, Some(750_000_000));
     }
 
     #[test]
@@ -1119,7 +1116,7 @@ mod tests {
             assert_eq!(read.item.name.as_deref(), name, "{png}: {:?}", read.lines);
             assert_eq!(read.item.base, base, "{png}");
             if name.is_none() {
-                assert_eq!(read.stored_experience, Some(750_000_000), "{:?}", read.lines);
+                assert_eq!(read.item.stored_experience, Some(750_000_000), "{:?}", read.lines);
             }
         }
     }
