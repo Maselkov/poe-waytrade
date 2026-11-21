@@ -35,6 +35,16 @@
                 </div>
             </div>
         </div>
+        <div class="setting-row ruled">
+            <div class="setting-text">
+                <div class="setting-name">Ctrl+C</div>
+                <div class="setting-desc">Your own copy of an item opens a quick look too</div>
+            </div>
+            <div class="button-row toggle">
+                <div data-attr-class="s_copy_check ? 'button on' : 'button'" data-event-click="copy_check(1)">On</div>
+                <div data-attr-class="s_copy_check ? 'button' : 'button on'" data-event-click="copy_check(0)">Off</div>
+            </div>
+        </div>
         <div class="setting-foot">The game sees these keys too. A key another action uses swaps the two.</div>
 
         <div class="group-label spaced">Stash</div>

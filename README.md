@@ -146,7 +146,7 @@ Hover an item and press **Ctrl+D**. Open the settings with **Ctrl+Alt+S**.
 |---|---|
 | **Ctrl+D** | Quick look. Closes as soon as you move the mouse away. To use the panel, keep holding Ctrl and move onto it; it then stays until the mouse leaves it with Ctrl released. |
 | **Ctrl+Alt+D** | A locked panel that stays open until you click its × or click anywhere in the game. |
-| **Ctrl+C** | Your own copy of an item opens a quick look too. |
+| **Ctrl+C** | Your own copy of an item opens a quick look too, if turned on in the settings (off by default). |
 | **Ctrl+Alt+S** | Settings. Also the gear at the top left of a panel. |
 | **Ctrl+Alt+F** | Item displays: prices every display on screen (vault reliquaries, Heist curios) until you leave the area (see below). It starts by itself in vaults and Heist; this starts it anywhere else, or stops it. Can be turned off. |
 | **Alt+D** | The old map check key; now the same as Ctrl+Alt+D. Can be turned off. |
@@ -408,7 +408,8 @@ Environment variables, which take precedence over the settings page:
   `~/.local/state/poe-waytrade/daemon.log`.
 - **The panel says "open /dev/uinput: Permission denied".** Ctrl+D can't
   send the game its Ctrl+C. See the `/dev/uinput` requirement under Quick
-  start. Until it's fixed, pressing Ctrl+C on an item yourself still works.
+  start. Until it's fixed, turn on Ctrl+C in the settings and press it on an
+  item yourself.
 - **Trade searches fail.** Install Chromium or Google Chrome.
 - **More detail.** Put `POE_WAYTRADE_LOG=/tmp/poe-waytrade.log` before
   `waytrade` in the launch options for the overlay's log. Add

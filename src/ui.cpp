@@ -299,6 +299,7 @@ struct Model {
     bool s_gpu_tracking = true;
     bool s_heist_watch = true;
     bool s_startup_notice = true;
+    bool s_copy_check = false;
     bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
     int s_profile = 1;
     bool s_reset_armed = false;
@@ -726,6 +727,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_gpu_tracking", &model.s_gpu_tracking);
     c.Bind("s_heist_watch", &model.s_heist_watch);
     c.Bind("s_startup_notice", &model.s_startup_notice);
+    c.Bind("s_copy_check", &model.s_copy_check);
     c.Bind("s_scaled", &model.s_scaled);
     c.Bind("s_profile", &model.s_profile);
     c.Bind("s_reset_armed", &model.s_reset_armed);
@@ -829,6 +831,7 @@ void OverlayUi::Impl::bind_model() {
     settings_event("gpu_tracking", [arg](SettingsPage& s, Args a) { s.set_gpu_tracking(arg(a) != 0); });
     settings_event("heist_watch", [arg](SettingsPage& s, Args a) { s.set_heist_watch(arg(a) != 0); });
     settings_event("startup_notice", [arg](SettingsPage& s, Args a) { s.set_startup_notice(arg(a) != 0); });
+    settings_event("copy_check", [arg](SettingsPage& s, Args a) { s.set_copy_check(arg(a) != 0); });
     settings_event("league_pick", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_league(a[0].Get<Rml::String>());
     });
@@ -1331,6 +1334,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_gpu_tracking = v.gpu_tracking;
     m.s_heist_watch = v.heist_watch;
     m.s_startup_notice = v.startup_notice;
+    m.s_copy_check = v.copy_check;
     m.s_profile = s.map_profile();
     m.s_reset_armed = s.reset_armed();
 

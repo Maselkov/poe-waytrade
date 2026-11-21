@@ -114,12 +114,13 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_he
                 open_settings();
             break;
         case Hotkey::CopySeen:
-            // The user's own Ctrl+C on an item, or the echo of ours (then
-            // we're already waiting and keep the hotkey's mode).
-            if (!waiting_)
-                begin_wait(input, Mode::Quick, Purpose::Price, now + kCopyTimeout);
-            else
+            // The echo of ours (then we're already waiting and keep the
+            // hotkey's mode), or the user's own Ctrl+C on an item, which
+            // opens a quick look if the setting's on.
+            if (waiting_)
                 deadline_ = now + kCopyTimeout;
+            else if (settings_.values().copy_check)
+                begin_wait(input, Mode::Quick, Purpose::Price, now + kCopyTimeout);
             break;
         }
     }
@@ -254,7 +255,9 @@ void PriceCheck::apply_closing_rules(WaylandInput& input, int game_clicks, Clock
 
 void PriceCheck::request_copy(WaylandInput& input, Mode mode, Purpose purpose) {
     if (!keyboard_.ok()) {
-        status_ = keyboard_.error() + ". Press Ctrl+C on the item instead.";
+        status_ = keyboard_.error() +
+                  (settings_.values().copy_check ? ". Press Ctrl+C on the item instead."
+                                                 : ". Turn on Ctrl+C in the settings and press it on the item instead.");
         item_.reset();
         pending_mode_ = Mode::Locked;  // there's nothing to move toward
         pending_purpose_ = purpose;
