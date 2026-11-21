@@ -371,13 +371,16 @@ pub struct ScreenItem {
 }
 
 impl ScreenItem {
-    /// How much is known of a rare (what its price depends on): its mods,
-    /// and its item level if read. 0 for anything else.
+    /// How much of what an item's price depends on was read: whether it's
+    /// corrupted or mirrored (lines a read cut short misses), and a rare's
+    /// mods and item level. A read with more is the better one.
     pub fn facts(&self) -> usize {
-        if self.item.rarity != "Rare" {
-            return 0;
+        let item = &self.item;
+        let flags = usize::from(item.corrupted) + usize::from(item.mirrored);
+        if item.rarity != "Rare" {
+            return flags;
         }
-        self.item.mods.len() + usize::from(self.item.item_level.is_some())
+        flags + item.mods.len() + usize::from(item.item_level.is_some())
     }
 }
 
@@ -424,6 +427,12 @@ pub fn gather(into: &mut ScreenItem, read: &ScreenItem) {
     item.mirrored |= read.item.mirrored;
     item.quality = item.quality.max(read.item.quality);
     into.lines = read.lines.clone();
+}
+
+/// A line's key without the specks OCR adds around a short line ("I
+/// CORRUPTED"): words of one or two letters are dropped.
+fn flag_key(s: &str) -> String {
+    s.split_whitespace().map(key).filter(|k| k.len() > 2).collect()
 }
 
 /// Names normalised for matching: OCR reads small caps as capitals and loses
@@ -653,7 +662,7 @@ pub fn read_item(
 
     for line in &lines[body_from..] {
         let up = line.text.to_ascii_uppercase();
-        let k = key(&up);
+        let k = flag_key(&up);
         if k == "CORRUPTED" {
             item.corrupted = true;
         } else if k == "MIRRORED" {
@@ -699,6 +708,9 @@ pub fn partly_hidden(read: &ScreenItem) -> bool {
     item.name.is_none() && (named || base_cut())
         || item.rarity == "Currency" && item.stack_size.is_none() && read.lines.len() < 2
         || item.rarity == "Rare" && item.mods.is_empty()
+        // A gem's tooltip ends with how to socket it; a read without that
+        // was cut short, maybe before "Corrupted".
+        || item.rarity == "Gem" && !read.lines.iter().any(|l| key(l).contains("SOCKET"))
 }
 
 /// Lines only an item's tooltip has.
@@ -860,6 +872,26 @@ mod tests {
     }
 
     #[test]
+    fn gem_read_whole_or_not() {
+        let v = vocabulary();
+        let read = |ls: &[&str]| read_item(&lines(ls), &v, |_| None).unwrap();
+        let top = ["GREATER MULTISTRIKE SUPPORT", "SUPPORT, ATTACK, MELEE", "LEVEL: 4 (MAX)", "QUALITY: +20%"];
+        // Read before the tooltip was drawn whole: "Corrupted" may be below.
+        let cut = read(&top);
+        assert!(partly_hidden(&cut));
+        // A speck read with "Corrupted" still makes it corrupted, and that
+        // read knows more than one without it.
+        let whole = read(
+            &[&top[..], &["I CORRUPTED", "THIS IS A SUPPORT GEM.", "RIGHT CLICK TO REMOVE FROM A SOCKET."]].concat(),
+        );
+        assert!(!partly_hidden(&whole));
+        assert!(whole.item.corrupted);
+        assert!(whole.facts() > cut.facts());
+        let clean = read(&[&top[..], &["RIGHT CLICK TO REMOVE FROM A SOCKET."]].concat());
+        assert!(!clean.item.corrupted);
+    }
+
+    #[test]
     fn currency_stack_and_base() {
         let v = vocabulary();
         let read = read_item(&lines(&["CHAOS ORB", "STACK SIZE: 12/20"]), &v, |_| None).unwrap();
@@ -942,7 +974,7 @@ mod tests {
         let mods: Vec<&str> = first.item.mods.iter().map(|m| m.text.as_str()).collect();
         assert_eq!(mods, ["+30 to Strength", "+42 to maximum Life", "+39% to Fire Resistance"]);
         assert!(first.item.corrupted);
-        assert_eq!(first.facts(), 3);
+        assert_eq!(first.facts(), 4, "three mods and corrupted");
         // Another rare on the same base isn't the same one.
         let other = read(&["DOOM BITE", "TENDERIZER", "+30 TO STRENGTH"]);
         assert!(!same_rare(&first.item, &other.item));
