@@ -23,7 +23,7 @@ class WaylandInput;
 
 // An inventory cell's pitch as a fraction of the frame's height: PoE1's UI
 // scales with the height, and 1080p cells are 52.67 px apart. (Quad stash
-// tabs' cells are half that.)
+// tabs' cells are half that.) PoE2's are the same, measured at 3440x1440.
 inline constexpr float kCellPerHeight = 52.67f / 1080.0f;
 
 // The game's frame around the cursor when an item was checked, copied by
