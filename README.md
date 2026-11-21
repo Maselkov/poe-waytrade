@@ -8,6 +8,44 @@ item's price: poe.ninja for currency, uniques, gems, maps and other priced
 items, and a ready-made trade search for rares. Maps get a check for
 dangerous mods. PoE1 only for now.
 
+<p align="center">
+  <img src="docs/media/heist-curio-displays.webp" alt="Price tags following Heist curio displays as the player walks past them" width="100%">
+  <br>
+  <em>Heist curio displays priced on sight, with tags that follow their tooltips.</em>
+</p>
+
+## Features
+
+- **Price check on Ctrl+D:** poe.ninja prices for currency, uniques
+  (unidentified ones recognised by their art), gems, maps, cluster jewels and
+  high item level bases.
+- **Trade search for rares:** filters built from the item's mods, with tier
+  markers and sliders, searched only when you press Search and shown
+  in the panel.
+- **Map check:** deadly, warning and good mods marked at a glance, with
+  profiles you can edit.
+- **Vault reliquaries and Heist curio displays priced on screen:** the
+  tooltips can't be copied, so Waytrade reads them and tags each one with its
+  price.
+- **Stash scroll:** Ctrl + mouse wheel switches stash tabs from anywhere.
+- **Native Wayland, in fullscreen, on any compositor:** drawn into the game's
+  own frames, no X11 or XWayland needed, and your clipboard is kept.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/trade-search.webp" alt="Trade search for a rare body armour, with filters and listings"></td>
+    <td width="50%">
+      <img src="docs/media/unique-price.webp" alt="A unique's poe.ninja price next to the inventory">
+      <br><br>
+      <img src="docs/media/map-check.webp" alt="Map check marking a map's deadly, warning and good mods">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><em>Trade search for a rare</em></td>
+    <td align="center"><em>A unique's price, and the map check</em></td>
+  </tr>
+</table>
+
 ## Why Waytrade, and how it's different
 
 Price check overlays usually run as a separate, transparent window kept on
@@ -62,16 +100,25 @@ You need:
 - Optional: Chromium or Google Chrome for trade searches, and `xdg-utils` to
   open searches in your browser.
 
-**1. Install.** Get the latest
-[release](https://github.com/Maselkov/poe-waytrade/releases):
+**1. Install.**
+
+On Arch Linux and its derivatives, install
+[`poe-waytrade`](https://aur.archlinux.org/packages/poe-waytrade) from the
+AUR with your AUR helper:
 
 ```bash
-sudo pacman -U poe-waytrade-*.pkg.tar.zst                 # Arch Linux
+paru -S poe-waytrade        # or: yay -S poe-waytrade
 ```
 
+On other distros (with a recent glibc), download the `x86_64.tar.gz` from the
+latest [release](https://github.com/Maselkov/poe-waytrade/releases) and
+unpack it over `/`:
+
 ```bash
-sudo tar -C / -xzf poe-waytrade-*-x86_64.tar.gz           # other distros (recent glibc)
+sudo tar -C / -xzf poe-waytrade-*-x86_64.tar.gz
 ```
+
+Packages for other distros aren't available yet.
 
 Or build the Arch package from a checkout:
 
