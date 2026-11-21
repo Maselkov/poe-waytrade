@@ -327,10 +327,21 @@ impl PriceDb {
             if kind.starts_with("Unique")
                 && let Some(base) = &line.base_type
             {
-                self.uniques_by_base.entry(base.clone()).or_default().push(line.clone());
+                self.uniques_by_base.entry(unique_base(base).to_string()).or_default().push(line.clone());
             }
             self.items.entry(line.name.clone()).or_default().push(line);
         }
+    }
+}
+
+/// The base `uniques_by_base` keys a unique by: a map's without its tier,
+/// since poe.ninja lists a unique map at one tier ("Pillars of Arun" at
+/// "Map (Tier 7)") and it drops at others, at the tier of its Replica
+/// ("Map (Tier 16)"), which has the same art.
+pub fn unique_base(base: &str) -> &str {
+    match base.split_once(" (Tier ") {
+        Some((map, tier)) if map.ends_with("Map") && tier.ends_with(')') => map,
+        _ => base,
     }
 }
 
@@ -447,6 +458,7 @@ pub(crate) mod tests {
     const EXCHANGE: &str = include_str!("../fixtures/ninja-exchange-currency.json");
     const ITEMS: &[(&str, &str)] = &[
         ("UniqueArmour", include_str!("../fixtures/ninja-unique-armour.json")),
+        ("UniqueMap", include_str!("../fixtures/ninja-unique-map.json")),
         ("SkillGem", include_str!("../fixtures/ninja-skill-gem.json")),
         ("Map", include_str!("../fixtures/ninja-map.json")),
         ("Viscera", include_str!("../fixtures/ninja-viscera.json")),
