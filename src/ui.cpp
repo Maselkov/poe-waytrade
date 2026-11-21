@@ -1054,8 +1054,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     if (!item || !reply) {
         m.state = "status";
         m.status = !pc.status().empty() ? pc.status()
-                   : m.searching         ? (map ? "Checking map…" : "Checking price…")
-                                         : (map ? "No map check" : "No price");
+                   : m.searching         ? (map ? (is_poe2() ? "Checking waystone…" : "Checking map…") : "Checking price…")
+                                         : (map ? (is_poe2() ? "No waystone check" : "No map check") : "No price");
         m.status_error = !pc.status().empty();
     } else if (reply->status == "map") {
         m.state = "map";
@@ -1068,7 +1068,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         }
     } else if (reply->status == "not_map") {
         m.state = "status";
-        m.status = "Not a map. The map check is for maps, invitations, contracts and logbooks.";
+        m.status = is_poe2() ? "Not a waystone. The waystone check is for waystones and logbooks."
+                             : "Not a map. The map check is for maps, invitations, contracts and logbooks.";
     } else if (reply->status == "trade") {
         m.state = "trade";
         m.status = pc.status();
@@ -1106,7 +1107,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             return std::any_of(reply->filters.begin(), reply->filters.end(),
                                [&](const TradeFilter& f) { return f.section == section; });
         };
-        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? "Map"
+        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? (is_poe2() ? "Waystone" : "Map")
                         : has("gem")       ? "Gem"
                                            : "Item";
         m.filter_groups = {{top, {}}, {"Enchant", {}}, {"Implicit", {}}, {"Totals", {}}, {"Mods", {}}};
@@ -1286,7 +1287,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     const SettingsPage::Values& v = s.values();
     using Action = SettingsPage::Action;
     m.s_tab = (int)s.tab();
-    m.s_tabs = {"Hotkeys", "General", "Price check", "Map check", "About"};
+    m.s_tabs = {"Hotkeys", "General", "Price check", is_poe2() ? "Waystone check" : "Map check", "About"};
     m.s_profiles = {"I", "II", "III"};
     m.s_version = POE_WAYTRADE_VERSION;
 

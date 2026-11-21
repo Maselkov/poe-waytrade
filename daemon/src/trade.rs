@@ -1578,6 +1578,37 @@ fn armour_filters(item: &Item) -> Vec<Filter> {
 
 /// Current map bases name their tier, e.g. "Map (Tier 16)" or "Blighted Map
 /// (Tier 5)"; older ones ("Strand Map") don't.
+/// A PoE2 waystone's properties (its tier is above): what drops more
+/// (ticked), and what makes it harder (unticked). Labels as the item says
+/// them; PoE2's trade site has a filter for each.
+fn waystone_filters(item: &Item) -> Vec<Filter> {
+    let props: [(&str, &str, &'static str, bool, bool); 8] = [
+        ("Waystone Drop Chance", "Waystone drop chance", "map_bonus", true, true),
+        ("Item Rarity", "Rarity", "map_iir", true, true),
+        ("Gold Found", "Gold", "map_gold", true, false),
+        ("Pack Size", "Pack size", "map_packsize", true, false),
+        ("Monster Pack Size", "Pack size", "map_packsize", true, false),
+        ("Magic Monsters", "Magic monsters", "map_magic_monsters", true, false),
+        ("Rare Monsters", "Rare monsters", "map_rare_monsters", true, false),
+        ("Revives Available", "Revives", "map_revives", false, false),
+    ];
+    let mut filters = Vec::new();
+    for (prop, name, key, percent, on) in props {
+        let value = item
+            .map_props
+            .iter()
+            .find(|(label, _)| label == prop)
+            .and_then(|(_, v)| v.trim_start_matches('+').trim_end_matches('%').parse::<f64>().ok());
+        let Some(value) = value.filter(|v| *v > 0.0) else { continue };
+        if filters.iter().any(|f: &Filter| f.target == Target::Property("map_filters", key)) {
+            continue;
+        }
+        let label = if percent { format!("{name} +{value}%") } else { format!("{name} {value}") };
+        filters.push(Filter::new(label, Target::Property("map_filters", key), value, None, on, Section::Map));
+    }
+    filters
+}
+
 fn tiered_map_base(item: &Item) -> bool {
     item.class == "Maps" && item.base.contains("(Tier ")
 }
@@ -1598,6 +1629,10 @@ fn map_filters(item: &Item) -> Vec<Filter> {
             true,
             Section::Map,
         ));
+    }
+    if item.class == "Waystones" {
+        filters.extend(waystone_filters(item));
+        return filters;
     }
     // Since 3.25 a map's worth is mostly its "More ..." drop bonuses; old
     // maps still have item quantity.
@@ -2083,7 +2118,7 @@ fn listed_filter(m: &ModLine, data: &TradeData, local: Local) -> Option<Filter> 
 }
 
 fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
-    if item.class == "Maps" && item.rarity != "Unique" {
+    if (item.class == "Maps" || item.class == "Waystones") && item.rarity != "Unique" {
         return map_filters(item);
     }
     if item.rarity == "Unique" {
@@ -4156,6 +4191,25 @@ mod tests {
         let stats: Value = serde_json::from_str(include_str!("../fixtures/poe2/trade-stats.json")).unwrap();
         let statics: Value = serde_json::from_str(include_str!("../fixtures/poe2/trade-static.json")).unwrap();
         TradeData::from_json(&stats, &statics, &Value::Null)
+    }
+
+    #[test]
+    fn poe2_waystone_filters() {
+        let path = format!("{}/fixtures/poe2/items/waystone-rare.txt", env!("CARGO_MANIFEST_DIR"));
+        let item = crate::item::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let filters = build_filters(&item, &poe2_data(), Preset::Normal);
+        let got: Vec<(&str, bool)> = filters.iter().map(|f| (f.label.as_str(), f.default_on)).collect();
+        assert_eq!(
+            got,
+            [
+                ("Tier 14", true),
+                ("Waystone drop chance +75%", true),
+                ("Pack size +34%", false),
+                ("Rare monsters +28%", false),
+                ("Revives 2", false),
+            ]
+        );
+        assert_eq!(filters[1].target, Target::Property("map_filters", "map_bonus"));
     }
 
     /// PoE2's stats have no "+", and its rune and desecrated mods have

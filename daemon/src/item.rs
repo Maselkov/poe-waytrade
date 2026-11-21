@@ -232,6 +232,14 @@ const MAP_PROPS: &[&str] = &[
     "More Scarabs",
     "More Maps",
     "More Divination Cards",
+    // PoE2's waystones.
+    "Revives Available",
+    "Pack Size",
+    "Monster Pack Size",
+    "Magic Monsters",
+    "Rare Monsters",
+    "Waystone Drop Chance",
+    "Gold Found",
     "Quality",
 ];
 
@@ -481,7 +489,7 @@ pub fn parse(text: &str) -> Option<Item> {
         } else if let Some(v) = line.strip_prefix("Sockets: ") {
             item.links = largest_link_group(v);
             item.sockets = v.split(|c: char| c == '-' || c.is_whitespace()).filter(|s| !s.is_empty()).count() as u32;
-        } else if let Some(v) = line.strip_prefix("Map Tier: ") {
+        } else if let Some(v) = line.strip_prefix("Map Tier: ").or_else(|| line.strip_prefix("Waystone Tier: ")) {
             item.map_tier = leading_number(v);
         } else if let Some(v) = line.strip_prefix("Memory Strands: ") {
             item.memory_strands = leading_number(v);
@@ -525,6 +533,13 @@ pub fn parse(text: &str) -> Option<Item> {
             let value = strip_roll_ranges(value.trim_end_matches(" (augmented)"));
             item.map_props.push((label.to_string(), value));
         }
+    }
+    // PoE2's waystones name their tier in the base: "Waystone (Tier 14)".
+    if item.map_tier.is_none()
+        && item.class == "Waystones"
+        && let Some(rest) = item.base.rsplit_once("(Tier ").map(|(_, r)| r)
+    {
+        item.map_tier = leading_number(rest);
     }
     // A magic item's one name line is its base with the affixes around it
     // ("Fecund Paladin Crown of the Genius"); advanced copy names them.
@@ -663,6 +678,17 @@ pub(crate) mod tests {
         assert_eq!((gem.rarity.as_str(), gem.base.as_str()), ("Currency", "Uncut Skill Gem (Level 19)"));
         let waystone = poe2("waystone-rare");
         assert_eq!((waystone.class.as_str(), waystone.base.as_str()), ("Waystones", "Waystone (Tier 14)"));
+        assert_eq!(waystone.map_tier, Some(14));
+        let props: Vec<(&str, &str)> = waystone.map_props.iter().map(|(l, v)| (l.as_str(), v.as_str())).collect();
+        assert_eq!(
+            props,
+            [
+                ("Revives Available", "2"),
+                ("Pack Size", "+34%"),
+                ("Rare Monsters", "+28%"),
+                ("Waystone Drop Chance", "+75%")
+            ]
+        );
         assert_eq!(waystone.mods.len(), 5, "{:?}", waystone.mods);
     }
 
