@@ -29,9 +29,31 @@ const DEFAULTS: &[(&str, char)] = &[
     ("Area contains two Unique Bosses", 'g'),
 ];
 
+/// PoE2's waystone marks for a fresh install, from the trade site's stat
+/// texts for waystone mods.
+const POE2_DEFAULTS: &[(&str, char)] = &[
+    ("Players and their Minions deal no damage for 3 out of every 10 seconds", 'd'),
+    ("#% maximum Player Resistances", 'w'),
+    ("Players have #% less Recovery Rate of Life and Energy Shield", 'w'),
+    ("Players gain #% reduced Flask Charges", 'w'),
+    ("Players are periodically Cursed with Elemental Weakness", 'w'),
+    ("Players are periodically Cursed with Temporal Chains", 'w'),
+    ("Players are periodically Cursed with Enfeeble", 'w'),
+    ("Monsters fire # additional Projectiles", 'w'),
+    ("Monsters have #% chance to steal Power, Frenzy and Endurance charges on Hit", 'w'),
+];
+
+fn defaults() -> &'static [(&'static str, char)] {
+    match crate::game::current() {
+        crate::game::Game::Poe1 => DEFAULTS,
+        crate::game::Game::Poe2 => POE2_DEFAULTS,
+    }
+}
+
 /// Map-like items, as PoE names their item class.
 const MAP_CLASSES: &[&str] = &[
     "Maps",
+    "Waystones",      // PoE2's
     "Misc Map Items", // Maven's invitations
     "Contracts",
     "Heist Contracts",
@@ -105,7 +127,7 @@ pub struct Decisions {
 
 impl Decisions {
     fn defaults() -> Decisions {
-        let mods = DEFAULTS.iter().map(|(text, d)| (mod_key(text), d.to_string().repeat(PROFILES))).collect();
+        let mods = defaults().iter().map(|(text, d)| (mod_key(text), d.to_string().repeat(PROFILES))).collect();
         Decisions { profile: 1, mods }
     }
 
@@ -113,10 +135,11 @@ impl Decisions {
         let base = std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"));
-        let path = base.join("poe-waytrade").join("map-mods.json");
-        // Marks saved before the rename (poe-overlay) move over once.
+        let path = crate::game::config_dir().join("map-mods.json");
+        // Marks saved before the rename (poe-overlay) move over once. They
+        // were PoE1's.
         let legacy = base.join("poe-overlay").join("map-mods.json");
-        if !path.exists() && legacy.exists() {
+        if crate::game::current() == crate::game::Game::Poe1 && !path.exists() && legacy.exists() {
             if let Some(dir) = path.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
@@ -299,5 +322,28 @@ mod tests {
         assert_eq!(d.get(&key).chars().next(), Some('g'));
         assert_eq!(d.get("some other mod"), "---");
         assert!(!d.reset(0) && !d.reset(4));
+    }
+
+    #[test]
+    fn poe2_waystone() {
+        let path = format!("{}/fixtures/poe2/items/waystone-rare.txt", env!("CARGO_MANIFEST_DIR"));
+        let item = item::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert!(is_map_like(&item));
+        let info = analyse(&item);
+        assert_eq!(info.subtitle, "Tier 14 · Waystones");
+        let mods: Vec<&str> = info.mods.iter().map(|m| m.text.as_str()).collect();
+        assert_eq!(
+            mods,
+            [
+                "Area has patches of Shocked Ground",
+                "28% increased Monster Damage",
+                "Monsters fire 2 additional Projectiles",
+                "Monsters have 293% increased Critical Hit Chance",
+                "+26% to Monster Critical Damage Bonus",
+            ]
+        );
+        // PoE2's default marks are keyed like the mods they mark.
+        assert!(POE2_DEFAULTS.iter().any(|(t, _)| mod_key(t) == info.mods[2].key));
+        assert_eq!(mod_key("-10% maximum Player Resistances"), mod_key(POE2_DEFAULTS[1].0));
     }
 }

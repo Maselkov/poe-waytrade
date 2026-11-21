@@ -39,4 +39,13 @@ sleep 1
 grep -q "already served" "$log" || fail "second daemon didn't step aside: $(cat "$log")"
 kill -0 "$other" || fail "the running daemon was stopped"
 kill "$other"
+# The game comes from Steam's app id; PoE2's daemon logs to its own file.
+SteamAppId=2694490 "$launcher" sh -c '[ "$POE_WAYTRADE_GAME" = poe2 ]' || fail "PoE2 not picked by its app id"
+SteamAppId=238960 "$launcher" sh -c '[ "$POE_WAYTRADE_GAME" = poe1 ]' || fail "PoE1 not picked by its app id"
+SteamAppId=2694490 POE_WAYTRADE_GAME=poe1 "$launcher" sh -c '[ "$POE_WAYTRADE_GAME" = poe1 ]' \
+    || fail "POE_WAYTRADE_GAME didn't override the app id"
+SteamAppId=2694490 "$launcher" sh -c 'sleep 2'
+grep -q "for poe2" "$XDG_STATE_HOME/poe-waytrade/daemon-poe2.log" \
+    || fail "PoE2's daemon didn't log to daemon-poe2.log: $(cat "$XDG_STATE_HOME/poe-waytrade/daemon-poe2.log")"
+
 echo "launcher OK"

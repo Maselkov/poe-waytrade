@@ -164,6 +164,7 @@
 mod area;
 mod art;
 mod cdp;
+mod game;
 mod item;
 mod lookup;
 mod mapcheck;
@@ -184,7 +185,6 @@ use std::time::{Duration, Instant};
 
 /// This build's version, from `git describe` (see build.rs).
 const VERSION: &str = env!("WAYTRADE_VERSION");
-const SOCKET_NAME: &str = "poe-waytrade";
 /// SCANITEM's and SCANFIND's pixels are the biggest requests: a few MiB.
 const MAX_FRAME: usize = 16 * 1024 * 1024;
 const REFRESH: Duration = Duration::from_secs(15 * 60);
@@ -243,7 +243,7 @@ fn main() {
     if args.iter().any(|a| a == "--exit-with-parent") {
         exit_with_parent();
     }
-    eprintln!("poe-waytrade-daemon {VERSION}");
+    eprintln!("poe-waytrade-daemon {VERSION} for {}", game::current().as_str());
 
     let systemd = systemd_listener();
     let state = Arc::new(State {
@@ -274,7 +274,8 @@ fn main() {
             l
         }
         None => {
-            let name = std::env::var("POE_WAYTRADE_SOCKET").unwrap_or_else(|_| SOCKET_NAME.to_string());
+            let name =
+                std::env::var("POE_WAYTRADE_SOCKET").unwrap_or_else(|_| game::current().socket_name().to_string());
             let addr = SocketAddr::from_abstract_name(name.as_bytes()).expect("socket name");
             match UnixListener::bind_addr(&addr) {
                 Ok(l) => {
@@ -552,7 +553,8 @@ fn settings_reply(state: &State) -> String {
         "journalctl --user -u poe-waytrade-daemon".to_string()
     } else {
         let state_dir = std::env::var("XDG_STATE_HOME").unwrap_or_else(|_| "~/.local/state".to_string());
-        format!("{state_dir}/poe-waytrade/daemon.log")
+        let suffix = if game::current() == game::Game::Poe2 { "-poe2" } else { "" };
+        format!("{state_dir}/poe-waytrade/daemon{suffix}.log")
     };
     let _ = writeln!(out, "log\t{}", clean(&log));
     out
@@ -655,7 +657,8 @@ fn map_check(state: &State, text: &str) -> String {
 
 /// Only trade search URLs, so a local client can't make us open anything.
 fn open_trade_url(url: &str) -> String {
-    if !url.starts_with("https://www.pathofexile.com/trade/search/") || url.contains(char::is_whitespace) {
+    let site = format!("{}/", game::current().trade_site());
+    if !url.starts_with(&site) || url.contains(char::is_whitespace) {
         return "status\tbad_request\nmessage\tNot a trade search URL\n".to_string();
     }
     match std::process::Command::new("xdg-open").arg(url).spawn() {
@@ -1190,14 +1193,16 @@ fn scan_detail(read: &scan::ScreenItem) -> String {
     parts.join(", ")
 }
 
-/// "3.2 div" for a divine or more, else "45c" ("0.5c" under one).
+/// "3.2 div" for a divine or more, else "45c" ("0.5c" under one; "ex" in
+/// PoE2).
 fn short_price(chaos: f64, divine: f64) -> String {
+    let unit = game::current().small_suffix();
     if divine >= 1.0 {
         format!("{} div", trade::trim_number((divine * 10.0).round() / 10.0))
     } else if chaos >= 1.0 {
-        format!("{chaos:.0}c")
+        format!("{chaos:.0}{unit}")
     } else {
-        format!("{}c", trade::trim_number((chaos * 10.0).round() / 10.0))
+        format!("{}{unit}", trade::trim_number((chaos * 10.0).round() / 10.0))
     }
 }
 
@@ -1426,7 +1431,7 @@ fn query(args: &[String]) -> io::Result<()> {
         Some(p) => std::fs::read_to_string(p)?,
         None => io::read_to_string(io::stdin())?,
     };
-    let name = std::env::var("POE_WAYTRADE_SOCKET").unwrap_or_else(|_| "poe-waytrade".into());
+    let name = std::env::var("POE_WAYTRADE_SOCKET").unwrap_or_else(|_| game::current().socket_name().into());
     let addr = SocketAddr::from_abstract_name(name.as_bytes())?;
     let mut stream = UnixStream::connect_addr(&addr)?;
     write_frame(&mut stream, &format!("{}\n{text}", if map { "MAPCHECK" } else { "PRICE" }))?;

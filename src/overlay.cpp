@@ -1,4 +1,5 @@
 // Draws the overlay UI into the app's swapchain images right before present.
+#include "game.h"
 #include "gpu_track.h"
 #include "hdr.h"
 #include "layer.h"
@@ -320,7 +321,7 @@ void build_ui(DeviceData* dev, OverlayDevice& ov, const OverlaySwapchain& sc) {
     ov.scan.set_extent((int)sc.extent.width, (int)sc.extent.height);
     ov.scan.update(now, ov.price_check.take_displays_toggles());
     if (ov.scan.active()) {
-        ov.price_check.want_icon("chaos");
+        ov.price_check.want_icon(small_unit_id());
         ov.price_check.want_icon("divine");
     }
     // The HDR overlay's white: follows the compositor's, which can change

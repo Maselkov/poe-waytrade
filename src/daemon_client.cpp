@@ -1,4 +1,5 @@
 #include "daemon_client.h"
+#include "game.h"
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -12,10 +13,11 @@
 
 namespace {
 
-// POE_WAYTRADE_SOCKET picks another name, to test against a separate daemon.
+// The game's daemon. POE_WAYTRADE_SOCKET picks another name, to test
+// against a separate daemon.
 std::string socket_name() {
     const char* name = getenv("POE_WAYTRADE_SOCKET");
-    return name && *name ? name : "poe-waytrade";
+    return name && *name ? name : game_socket_name();
 }
 // A trade search can take a few seconds (browser start, two API requests).
 constexpr auto kTimeout = std::chrono::seconds(20);
@@ -164,7 +166,8 @@ void DaemonClient::start(const std::string& body) {
 
 bool DaemonClient::poll(PriceReply* out) {
     if (out_buf_.empty()) return false;  // no request pending
-    if (fd_ < 0) return fail(out, "Price daemon isn't running (systemctl --user start poe-waytrade-daemon.socket)");
+    if (fd_ < 0) return fail(out, is_poe2() ? "Price daemon isn't running (start the game with waytrade %command%)"
+                                   : "Price daemon isn't running (systemctl --user start poe-waytrade-daemon.socket)");
     if (std::chrono::steady_clock::now() > deadline_) return fail(out, "Price daemon didn't answer");
 
     while (out_sent_ < out_buf_.size()) {

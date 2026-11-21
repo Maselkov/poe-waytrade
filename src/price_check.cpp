@@ -1,4 +1,5 @@
 #include "price_check.h"
+#include "game.h"
 #include "icons.h"
 #include "layer.h"
 #include "wl_input.h"
@@ -80,6 +81,7 @@ bool PriceCheck::anchor(float* x, float* y) const {
 void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_height) {
     if (release_pending_) {
         keyboard_.key(KEY_C, false);
+        if (we_pressed_alt_) keyboard_.key(KEY_LEFTALT, false);
         if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, false);
         keyboard_.sync();
         release_pending_ = false;
@@ -280,15 +282,19 @@ void PriceCheck::send_copy_keys(WaylandInput& input) {
     Mode mode = pending_mode_;
     Purpose purpose = pending_purpose_;
     // Ctrl+C: PoE copies the advanced description (mod headers with tiers,
-    // affix names and roll ranges), the same as Ctrl+Alt+C. The user may
-    // still be holding Ctrl from the hotkey; only press it if not.
+    // affix names and roll ranges), the same as Ctrl+Alt+C. PoE2's Ctrl+C
+    // copies the plain one, so there it's Ctrl+Alt+C (Alt: the game's
+    // default "show advanced mods" key). The user may still be holding Ctrl
+    // or Alt from the hotkey; only press them if not.
     if (test_copy_) {
-        poe_log("test copy: would press Ctrl+C now");
+        poe_log("test copy: would press %s now", is_poe2() ? "Ctrl+Alt+C" : "Ctrl+C");
         begin_wait(input, mode, purpose, Clock::now() + std::chrono::seconds(5));
         return;
     }
     we_pressed_ctrl_ = !input.ctrl_held();
     if (we_pressed_ctrl_) keyboard_.key(KEY_LEFTCTRL, true);
+    we_pressed_alt_ = is_poe2() && !input.alt_held();
+    if (we_pressed_alt_) keyboard_.key(KEY_LEFTALT, true);
     keyboard_.key(KEY_C, true);
     keyboard_.sync();
     release_pending_ = true;

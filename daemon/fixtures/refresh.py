@@ -2,7 +2,8 @@
 """Re-captures the API replies the daemon's tests run against, trimmed to
 what the tests use. Run it from anywhere; it writes next to itself:
 
-    python3 daemon/fixtures/refresh.py
+    python3 daemon/fixtures/refresh.py          # PoE1's and PoE2's
+    python3 daemon/fixtures/refresh.py --poe2   # PoE2's only (fixtures/poe2/)
 
 then `cargo test`. A test that fails afterwards means poe.ninja or the trade
 site changed something the daemon relies on (or the market moved: prices in
@@ -23,6 +24,27 @@ OUT = pathlib.Path(__file__).resolve().parent
 UA = "poe-waytrade-daemon/tests (personal price-check overlay)"
 NINJA = "https://poe.ninja/poe1/api"
 TRADE = "https://www.pathofexile.com/api/trade"
+NINJA2 = "https://poe.ninja/poe2/api"
+TRADE2 = "https://www.pathofexile.com/api/trade2"
+# PoE2's exchange currencies the tests use.
+CURRENCIES2 = {"exalted", "divine", "chaos", "alch", "regal", "annul", "vaal", "mirror", "transmute", "aug"}
+# PoE2 stat texts the tests' items use (fixtures/poe2/items), in every
+# group. PoE2's have no "+".
+STAT_TEXTS2 = {
+    "#% increased Physical Damage",
+    "# to Armour",
+    "# to Armour (Local)",
+    "#% increased Armour",
+    "#% increased Armour (Local)",
+    "#% increased Armour, Evasion and Energy Shield",
+    "# to Accuracy Rating",
+    "# to Accuracy Rating (Local)",
+    "#% to Critical Hit Chance",
+    "# to Spirit",
+    "# to Level of all Spell Skills",
+    "+# total maximum Life",
+    "+#% total Elemental Resistance",
+}
 
 # The exchange currencies the tests price things in.
 CURRENCIES = {"chaos", "divine", "alch", "exalted", "mirror", "alt", "chance", "fusing", "jew", "chrome", "vaal",
@@ -83,6 +105,7 @@ def get(url, body=None):
 
 
 def save(name, value):
+    (OUT / name).parent.mkdir(exist_ok=True)
     (OUT / name).write_text(json.dumps(value, indent=1, ensure_ascii=False) + "\n")
     print(f"wrote {name}")
 
@@ -164,6 +187,48 @@ def main():
     save("trade-fetch.json", {"result": entries})
 
 
+def main_poe2():
+    index = get(f"{NINJA2}/data/index-state")
+    # "indexed" isn't whether a league has prices: the current league can
+    # be false.
+    leagues = [lg["name"] for lg in index["economyLeagues"]]
+    save("poe2/ninja-index-state.json", {"economyLeagues": [{"name": n} for n in leagues]})
+    league = next(n for n in leagues if not n.startswith(("HC ", "Hardcore")) and n != "Standard")
+    q = urllib.parse.quote(league)
+
+    ex = get(f"{NINJA2}/economy/exchange/current/overview?league={q}&type=Currency")
+    save("poe2/ninja-exchange-currency.json", {
+        "core": slim(ex["core"]) | {"items": [slim(i) for i in ex["core"].get("items", [])]},
+        "lines": [slim(line) for line in ex["lines"] if line["id"] in CURRENCIES2],
+        "items": [slim(i) for i in ex["items"] if i["id"] in CURRENCIES2],
+    })
+
+    # Uniques: one on two bases (plain and Runemastered), and one listed once.
+    ov = get(f"{NINJA2}/economy/stash/current/item/overview?league={q}&type=UniqueArmours")
+    keep = [line for line in ov["lines"] if line["name"] in ("Black Sun Crest", "Atziri's Step")]
+    save("poe2/ninja-unique-armours.json", {
+        "core": slim(ov["core"]) | {"items": [slim(i) for i in ov["core"].get("items", [])]},
+        "lines": [slim(line, mods=True) for line in keep],
+    })
+
+    static = get(f"{TRADE2}/data/static")
+    save("poe2/trade-static.json", {"result": [
+        {"id": g["id"], "label": g.get("label"), "entries": [e for e in g["entries"] if e["id"] in CURRENCIES2]}
+        for g in static["result"] if g["id"] == "Currency"
+    ]})
+    stats = get(f"{TRADE2}/data/stats")
+    save("poe2/trade-stats.json", {"result": [
+        {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"] if e["text"] in STAT_TEXTS2]}
+        for g in stats["result"]
+    ]})
+    filters = get(f"{TRADE2}/data/filters")
+    save("poe2/trade-filters.json", {"result": [
+        {"id": g["id"], "filters": [{"id": f["id"]} for f in g["filters"]]} for g in filters["result"]
+    ]})
+
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--poe2" not in sys.argv:
+        main()
+    main_poe2()

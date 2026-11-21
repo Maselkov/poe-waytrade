@@ -1,6 +1,11 @@
-//! Parser for the text PoE1 puts on the clipboard when an item is copied:
+//! Parser for the text PoE puts on the clipboard when an item is copied:
 //! plain, or the "advanced" copy with mod headers and roll ranges (what
-//! Ctrl+C gives now, like Ctrl+Alt+C).
+//! PoE1's Ctrl+C gives now, like Ctrl+Alt+C; PoE2's Ctrl+Alt+C).
+//!
+//! PoE2's text has the same shape, with its own lines: one "Requires: Level
+//! 65, 121 Str" line, rune sockets ("Sockets: S S"), mods from runes marked
+//! "(rune)", desecrated mods, "Critical Hit Chance", a damage line per
+//! element, "Spirit", "Unidentified (Tier 4)".
 
 #[derive(Debug, Default, Clone)]
 pub struct Item {
@@ -42,8 +47,15 @@ pub struct Item {
     pub physical_damage: Option<f64>,
     pub elemental_damage: f64,
     pub attacks_per_second: Option<f64>,
-    /// "Critical Strike Chance: 6.50%", in percent.
+    /// "Critical Strike Chance: 6.50%" (PoE2: "Critical Hit Chance"), in
+    /// percent.
     pub critical_chance: Option<f64>,
+    /// PoE2: "Spirit: 152" on sceptres.
+    pub spirit: Option<f64>,
+    /// PoE2: rune (augment) sockets, "Sockets: S S" (they have no links).
+    pub rune_sockets: u32,
+    /// PoE2: "Unidentified (Tier 4)", the item's mod tier when identified.
+    pub unidentified_tier: Option<u32>,
     /// "Fractured Item", "Synthesised Item", "Mirrored" lines.
     pub fractured_item: bool,
     pub synthesised: bool,
@@ -80,6 +92,10 @@ pub enum ModKind {
     Crafted,
     Fractured,
     Enchant,
+    /// PoE2: from a socketed rune or soul core, "(rune)" or "(added rune)".
+    Rune,
+    /// PoE2: desecrated ("{ Desecrated Prefix Modifier … }", "(desecrated)").
+    Desecrated,
 }
 
 impl ModKind {
@@ -91,6 +107,8 @@ impl ModKind {
             ModKind::Crafted => "crafted",
             ModKind::Fractured => "fractured",
             ModKind::Enchant => "enchant",
+            ModKind::Rune => "rune",
+            ModKind::Desecrated => "desecrated",
         }
     }
 }
@@ -160,7 +178,9 @@ fn eldritch_header(header: &str) -> Option<(Eldritch, Option<u32>)> {
 fn kind_from_header(header: &str) -> Option<ModKind> {
     if header.starts_with("{ Fractured ") {
         Some(ModKind::Fractured)
-    } else if header.starts_with("{ Master Crafted ") {
+    } else if header.starts_with("{ Desecrated ") {
+        Some(ModKind::Desecrated)
+    } else if header.starts_with("{ Master Crafted ") || header.starts_with("{ Crafted ") {
         Some(ModKind::Crafted)
     } else if header.contains("Implicit Modifier") {
         Some(ModKind::Implicit)
@@ -175,6 +195,9 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
         (" (crafted)", ModKind::Crafted),
         (" (fractured)", ModKind::Fractured),
         (" (enchant)", ModKind::Enchant),
+        (" (rune)", ModKind::Rune),
+        (" (added rune)", ModKind::Rune),
+        (" (desecrated)", ModKind::Desecrated),
     ];
     for (marker, kind) in MARKERS {
         if let Some(text) = line.strip_suffix(marker) {
@@ -209,6 +232,13 @@ const MAP_PROPS: &[&str] = &[
     "More Scarabs",
     "More Maps",
     "More Divination Cards",
+    // PoE2's waystones.
+    "Revives Available",
+    "Pack Size",
+    "Magic Monsters",
+    "Rare Monsters",
+    "Waystone Drop Chance",
+    "Gold Found",
     "Quality",
 ];
 
@@ -277,12 +307,12 @@ fn parse_range(inner: &str) -> Option<(f64, f64)> {
 }
 
 /// "45-120 (augmented)" or "10-20 (augmented), 5-50 (augmented)": the sum of
-/// each range's average.
+/// each range's average. PoE2 names the element: "27-36 (fire)".
 fn average_damage(value: &str) -> f64 {
     value
         .split(", ")
         .filter_map(|part| {
-            let part = part.trim_end_matches(" (augmented)");
+            let part = part.split(" (").next().unwrap_or(part);
             let (a, b) = part.split_once('-')?;
             Some((a.trim().parse::<f64>().ok()? + b.trim().parse::<f64>().ok()?) / 2.0)
         })
@@ -354,8 +384,10 @@ pub fn parse(text: &str) -> Option<Item> {
             let mut eldritch = None;
             let mut tags = Vec::new();
             for line in section {
-                // A property, wherever the game puts it.
+                // A property, wherever the game puts it. PoE2's granted
+                // skills come in a section of their own among the mods.
                 if line.starts_with("Memory Strands: ")
+                    || line.starts_with("Grants Skill: ")
                     || *line == "Searing Exarch Item"
                     || *line == "Eater of Worlds Item"
                 {
@@ -423,6 +455,11 @@ pub fn parse(text: &str) -> Option<Item> {
             item.corrupted = true;
         } else if *line == "Unidentified" {
             item.unidentified = true;
+        } else if let Some(v) = line.strip_prefix("Unidentified (Tier ") {
+            item.unidentified = true;
+            item.unidentified_tier = leading_number(v);
+        } else if *line == "Twice Corrupted" {
+            item.corrupted = true;
         } else if *line == "Fractured Item" {
             item.fractured_item = true;
         } else if *line == "Synthesised Item" {
@@ -443,10 +480,15 @@ pub fn parse(text: &str) -> Option<Item> {
             }
         } else if let Some(v) = line.strip_prefix("Quality: ") {
             item.quality = leading_number(v).unwrap_or(0);
+        } else if let Some(v) = line.strip_prefix("Sockets: ")
+            && v.split_whitespace().all(|s| s == "S")
+        {
+            // PoE2's rune sockets: no colours, no links.
+            item.rune_sockets = v.split_whitespace().count() as u32;
         } else if let Some(v) = line.strip_prefix("Sockets: ") {
             item.links = largest_link_group(v);
             item.sockets = v.split(|c: char| c == '-' || c.is_whitespace()).filter(|s| !s.is_empty()).count() as u32;
-        } else if let Some(v) = line.strip_prefix("Map Tier: ") {
+        } else if let Some(v) = line.strip_prefix("Map Tier: ").or_else(|| line.strip_prefix("Waystone Tier: ")) {
             item.map_tier = leading_number(v);
         } else if let Some(v) = line.strip_prefix("Memory Strands: ") {
             item.memory_strands = leading_number(v);
@@ -458,7 +500,12 @@ pub fn parse(text: &str) -> Option<Item> {
             item.stored_experience = digits.parse().ok();
         } else if let Some(v) = line.strip_prefix("Physical Damage: ") {
             item.physical_damage = Some(average_damage(v));
-        } else if let Some(v) = line.strip_prefix("Elemental Damage: ") {
+        } else if let Some(v) = line
+            .strip_prefix("Elemental Damage: ")
+            .or_else(|| line.strip_prefix("Fire Damage: "))
+            .or_else(|| line.strip_prefix("Cold Damage: "))
+            .or_else(|| line.strip_prefix("Lightning Damage: "))
+        {
             item.elemental_damage += average_damage(v);
         } else if let Some(v) = line.strip_prefix("Attacks per Second: ") {
             item.attacks_per_second = v.trim_end_matches(" (augmented)").parse().ok();
@@ -470,10 +517,14 @@ pub fn parse(text: &str) -> Option<Item> {
             item.energy_shield = property_number(v);
         } else if let Some(v) = line.strip_prefix("Ward: ") {
             item.ward = property_number(v);
-        } else if let Some(v) = line.strip_prefix("Chance to Block: ") {
+        } else if let Some(v) = line.strip_prefix("Chance to Block: ").or_else(|| line.strip_prefix("Block chance: ")) {
             item.block = property_number(v);
-        } else if let Some(v) = line.strip_prefix("Critical Strike Chance: ") {
+        } else if let Some(v) =
+            line.strip_prefix("Critical Strike Chance: ").or_else(|| line.strip_prefix("Critical Hit Chance: "))
+        {
             item.critical_chance = v.trim_end_matches(" (augmented)").trim_end_matches('%').parse().ok();
+        } else if let Some(v) = line.strip_prefix("Spirit: ") {
+            item.spirit = property_number(v);
         }
         if let Some((label, value)) = line.split_once(": ")
             && MAP_PROPS.contains(&label)
@@ -481,6 +532,13 @@ pub fn parse(text: &str) -> Option<Item> {
             let value = strip_roll_ranges(value.trim_end_matches(" (augmented)"));
             item.map_props.push((label.to_string(), value));
         }
+    }
+    // PoE2's waystones name their tier in the base: "Waystone (Tier 14)".
+    if item.map_tier.is_none()
+        && item.class == "Waystones"
+        && let Some(rest) = item.base.rsplit_once("(Tier ").map(|(_, r)| r)
+    {
+        item.map_tier = leading_number(rest);
     }
     // A magic item's one name line is its base with the affixes around it
     // ("Fecund Paladin Crown of the Genius"); advanced copy names them.
@@ -538,6 +596,100 @@ fn largest_link_group(sockets: &str) -> u32 {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    /// PoE2 items copied with Ctrl+Alt+C (fixtures/poe2/items).
+    fn poe2(name: &str) -> Item {
+        let path = format!("{}/fixtures/poe2/items/{name}.txt", env!("CARGO_MANIFEST_DIR"));
+        parse(&std::fs::read_to_string(&path).unwrap()).unwrap_or_else(|| panic!("{name} didn't parse"))
+    }
+
+    fn kinds(item: &Item, kind: ModKind) -> Vec<&str> {
+        item.mods.iter().filter(|m| m.kind == kind).map(|m| m.text.as_str()).collect()
+    }
+
+    #[test]
+    fn poe2_weapon() {
+        let bow = poe2("bow-runes-desecrated-crafted");
+        assert_eq!((bow.class.as_str(), bow.base.as_str()), ("Bows", "Obliterator Bow"));
+        assert_eq!(bow.critical_chance, Some(8.45));
+        assert_eq!(bow.attacks_per_second, Some(1.27));
+        assert_eq!(bow.physical_damage, Some(411.0));
+        // "Fire Damage: 47-92 (fire)": a line per element.
+        assert_eq!(bow.elemental_damage, 69.5);
+        assert_eq!((bow.rune_sockets, bow.sockets, bow.links), (3, 0, 0));
+        assert_eq!(bow.item_level, Some(80));
+        assert!(bow.corrupted);
+        assert_eq!(
+            kinds(&bow, ModKind::Rune),
+            ["38% increased Physical Damage", "Bow Attacks fire an additional Arrow"]
+        );
+        assert_eq!(kinds(&bow, ModKind::Desecrated), ["Adds 21 to 39 Physical Damage"]);
+        assert_eq!(kinds(&bow, ModKind::Crafted), ["+3.45% to Critical Hit Chance"]);
+        assert_eq!(kinds(&bow, ModKind::Implicit), ["50% reduced Projectile Range"]);
+        let cruel = bow.mods.iter().find(|m| m.text == "151% increased Physical Damage").unwrap();
+        assert_eq!((cruel.tier, cruel.ranges.clone()), (Some(3), vec![Some((135.0, 154.0))]));
+
+        let elemental = poe2("bow-rare-elemental");
+        // "Elemental Damage: 27-36 (fire), 9-13 (cold), 5-82 (lightning)"
+        assert_eq!(elemental.elemental_damage, 31.5 + 11.0 + 43.5);
+        assert_eq!(elemental.critical_chance, Some(5.0));
+
+        let crossbow = poe2("crossbow-every-mod-kind");
+        assert_eq!(crossbow.elemental_damage, 141.5);
+        assert!(crossbow.mods.iter().all(|m| !m.text.starts_with("Grants Skill")), "{:?}", crossbow.mods);
+        assert_eq!(kinds(&crossbow, ModKind::Enchant), ["45% increased Elemental Damage with Attacks"]);
+        assert_eq!(kinds(&crossbow, ModKind::Fractured), ["Adds 10 to 273 Lightning Damage"]);
+        assert!(crossbow.fractured_item && crossbow.corrupted);
+    }
+
+    #[test]
+    fn poe2_armour_and_jewellery() {
+        let chest = poe2("body-armour-runes-sockets");
+        assert_eq!((chest.armour, chest.quality, chest.rune_sockets), (Some(3075.0), 20, 3));
+        assert_eq!(kinds(&chest, ModKind::Rune), ["54% increased Armour, Evasion and Energy Shield"]);
+        assert_eq!(kinds(&chest, ModKind::Desecrated), ["+256 to Armour"]);
+        // The note isn't a mod.
+        assert!(chest.mods.iter().all(|m| !m.text.starts_with("Note:")));
+
+        let amulet = poe2("amulet-desecrated-enchant");
+        assert_eq!(kinds(&amulet, ModKind::Desecrated), ["+17% to Fire and Chaos Resistances"]);
+        assert_eq!(kinds(&amulet, ModKind::Fractured), ["+37% to Cold Resistance"]);
+        assert_eq!(kinds(&amulet, ModKind::Enchant), ["Allocates Cooked"]);
+
+        let sceptre = poe2("sceptre-spirit");
+        assert_eq!((sceptre.spirit, sceptre.rune_sockets), (Some(152.0), 1));
+        assert!(sceptre.mods.iter().all(|m| !m.text.starts_with("Grants Skill")));
+
+        let shield = poe2("shield-normal");
+        assert_eq!((shield.block, shield.armour, shield.evasion), (Some(25.0), Some(71.0), Some(64.0)));
+
+        let ring = poe2("ring-unidentified-tier");
+        assert!(ring.unidentified);
+        assert_eq!(ring.unidentified_tier, Some(4));
+
+        let charm = poe2("charm-magic");
+        assert_eq!((charm.base.as_str(), charm.quality), ("Silver Charm", 14));
+    }
+
+    #[test]
+    fn poe2_currency_like() {
+        let gem = poe2("uncut-skill-gem");
+        assert_eq!((gem.rarity.as_str(), gem.base.as_str()), ("Currency", "Uncut Skill Gem (Level 19)"));
+        let waystone = poe2("waystone-rare");
+        assert_eq!((waystone.class.as_str(), waystone.base.as_str()), ("Waystones", "Waystone (Tier 14)"));
+        assert_eq!(waystone.map_tier, Some(14));
+        let props: Vec<(&str, &str)> = waystone.map_props.iter().map(|(l, v)| (l.as_str(), v.as_str())).collect();
+        assert_eq!(
+            props,
+            [
+                ("Revives Available", "2"),
+                ("Pack Size", "+34%"),
+                ("Rare Monsters", "+28%"),
+                ("Waystone Drop Chance", "+75%")
+            ]
+        );
+        assert_eq!(waystone.mods.len(), 5, "{:?}", waystone.mods);
+    }
 
     #[test]
     fn unique_with_links() {

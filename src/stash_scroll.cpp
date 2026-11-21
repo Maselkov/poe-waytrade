@@ -14,7 +14,8 @@ constexpr int kMaxPending = 8;
 
 // APT's isStashArea: the left side panel (370/600 of the height wide, as
 // in PoE's 800x600 layout; the same 986/1600 the panels are placed by),
-// from the tab bar down to the bottom of the grid.
+// from the tab bar down to the bottom of the grid. PoE2's stash has the same
+// layout (measured at 3440x1440).
 bool StashScroll::over_stash(float x, float y, int height) {
     if (height <= 0) return false;
     float h = (float)height;

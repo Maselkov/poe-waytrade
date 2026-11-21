@@ -1,4 +1,5 @@
 #include "screen_scan.h"
+#include "game.h"
 #include "icons.h"
 #include "layer.h"
 
@@ -996,7 +997,7 @@ std::vector<ScreenScan::Label> ScreenScan::labels() const {
         } else if (t.reply.status == "ok") {
             bool divine = t.reply.value_divine >= 1;
             l.amount = amount_text(divine ? t.reply.value_divine : t.reply.value_chaos);
-            l.icon = divine ? "divine" : "chaos";
+            l.icon = divine ? "divine" : small_unit_id();
             l.price = t.reply.value_text;
             l.best = best > 0 && t.reply.value_chaos >= best;
         } else {

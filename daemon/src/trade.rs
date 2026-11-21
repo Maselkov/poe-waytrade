@@ -2,6 +2,7 @@
 //! headless browser (see cdp.rs for why).
 
 use crate::cdp::{self, Browser, HttpResponse};
+use crate::game;
 use crate::item::{Eldritch, Item, ModKind, ModLine};
 use crate::ninja::{self, PriceDb};
 use crate::settings::min_fraction;
@@ -686,7 +687,12 @@ impl Trade {
         let body = body.to_string();
         let league_path = ninja::encode(league);
 
-        let resp = self.request("search", "POST", &format!("/api/trade/search/{league_path}"), Some(&body))?;
+        let resp = self.request(
+            "search",
+            "POST",
+            &format!("{}/search/{league_path}", game::current().trade_api()),
+            Some(&body),
+        )?;
         let (id, total, hashes) = parse_search(&resp.body)?;
 
         // One entry per listing first, with what each has of the enabled
@@ -702,7 +708,7 @@ impl Trade {
             .collect();
         let mut singles: Vec<Single> = Vec::new();
         if !hashes.is_empty() {
-            let path = format!("/api/trade/fetch/{}?query={id}{pseudos}", hashes.join(","));
+            let path = format!("{}/fetch/{}?query={id}{pseudos}", game::current().trade_api(), hashes.join(","));
             let resp = self.request("fetch", "GET", &path, None)?;
             let data = &self.data.as_ref().unwrap().0;
             singles = parse_fetch(&resp.body, data, prices, unix_now(), &columns)?;
@@ -810,7 +816,7 @@ impl Trade {
         if fresh && let Some(v) = std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok()) {
             return Ok(v);
         }
-        let resp = self.request("data", "GET", &format!("/api/trade/data/{name}"), None)?;
+        let resp = self.request("data", "GET", &format!("{}/data/{name}", game::current().trade_api()), None)?;
         let v: Value = serde_json::from_str(&resp.body).map_err(|e| format!("bad {name} data: {e}"))?;
         let _ = std::fs::create_dir_all(cache_dir());
         let _ = std::fs::write(&path, &resp.body);
@@ -850,7 +856,11 @@ fn parse_fetch(
             continue; // unpriced
         };
         let name = data.currencies.get(currency).cloned().unwrap_or_else(|| currency.to_string());
-        let chaos = if currency == "chaos" { Some(amount) } else { prices.exchange.get(&name).map(|c| c * amount) };
+        let chaos = if currency == game::current().small_unit() {
+            Some(amount)
+        } else {
+            prices.exchange.get(&name).map(|c| c * amount)
+        };
         let minutes = listing["indexed"].as_str().and_then(parse_utc).map(|then| (now - then).max(0) / 60);
         let item = &entry["item"];
         let values = columns.iter().filter_map(|(i, t)| listing_value(item, t).map(|v| (*i, v))).collect();
@@ -873,7 +883,7 @@ fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -
             format!("{}–{} {}", trim_number(first.0), trim_number(last.0), name)
         } else {
             let c = |s: &Single| s.3.map(trim_number).unwrap_or("?".into());
-            format!("{}–{}c", c(first), c(last))
+            format!("{}–{}{}", c(first), c(last), game::current().small_suffix())
         };
         Summary { capped, amount: *amount, currency: name.clone(), currency_id: id.clone(), chaos: *chaos, range }
     });
@@ -918,12 +928,7 @@ fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -
         };
     }
 
-    TradeResult {
-        listings,
-        summary,
-        total,
-        url: format!("https://www.pathofexile.com/trade/search/{league_path}/{id}"),
-    }
+    TradeResult { listings, summary, total, url: format!("{}/{league_path}/{id}", game::current().trade_site()) }
 }
 
 /// An item's image on web.poecdn.com (a listed item's, or a unique's art
@@ -989,10 +994,7 @@ fn download_image(url: &str, path: &std::path::Path) -> Result<Vec<u8>, String> 
 }
 
 pub(crate) fn cache_dir() -> PathBuf {
-    let base = std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".cache"));
-    base.join("poe-waytrade")
+    game::cache_dir()
 }
 
 /// A listing this old has had time to sell and hasn't: it's overpriced.
@@ -1099,6 +1101,9 @@ fn resist_parts(template: &str) -> Option<(u32, bool)> {
 
 /// The trade category for an item and a short label for it ("Ring").
 fn category(item: &Item) -> Option<(&'static str, &'static str)> {
+    if game::current() == game::Game::Poe2 {
+        return poe2_category(item);
+    }
     if item.base.contains("Cluster Jewel") {
         return Some(("jewel.cluster", "Cluster Jewel"));
     }
@@ -1134,6 +1139,71 @@ fn category(item: &Item) -> Option<(&'static str, &'static str)> {
         c if c.ends_with("Flasks") => ("flask", "Flask"),
         _ => return None,
     })
+}
+
+/// PoE2's item classes and trade categories (/api/trade2/data/filters).
+fn poe2_category(item: &Item) -> Option<(&'static str, &'static str)> {
+    Some(match item.class.as_str() {
+        "Body Armours" => ("armour.chest", "Body Armour"),
+        "Boots" => ("armour.boots", "Boots"),
+        "Gloves" => ("armour.gloves", "Gloves"),
+        "Helmets" => ("armour.helmet", "Helmet"),
+        "Shields" => ("armour.shield", "Shield"),
+        "Bucklers" => ("armour.buckler", "Buckler"),
+        "Foci" => ("armour.focus", "Focus"),
+        "Quivers" => ("armour.quiver", "Quiver"),
+        "Amulets" => ("accessory.amulet", "Amulet"),
+        "Belts" => ("accessory.belt", "Belt"),
+        "Rings" => ("accessory.ring", "Ring"),
+        "Jewels" => ("jewel", "Jewel"),
+        "Bows" => ("weapon.bow", "Bow"),
+        "Crossbows" => ("weapon.crossbow", "Crossbow"),
+        "Claws" => ("weapon.claw", "Claw"),
+        "Daggers" => ("weapon.dagger", "Dagger"),
+        "One Hand Axes" => ("weapon.oneaxe", "One-Handed Axe"),
+        "One Hand Swords" => ("weapon.onesword", "One-Handed Sword"),
+        "One Hand Maces" => ("weapon.onemace", "One-Handed Mace"),
+        "Spears" => ("weapon.spear", "Spear"),
+        "Flails" => ("weapon.flail", "Flail"),
+        "Two Hand Axes" => ("weapon.twoaxe", "Two-Handed Axe"),
+        "Two Hand Maces" => ("weapon.twomace", "Two-Handed Mace"),
+        "Two Hand Swords" => ("weapon.twosword", "Two-Handed Sword"),
+        "Quarterstaves" => ("weapon.warstaff", "Quarterstaff"),
+        "Talismans" => ("weapon.talisman", "Talisman"),
+        "Sceptres" => ("weapon.sceptre", "Sceptre"),
+        "Staves" => ("weapon.staff", "Staff"),
+        "Wands" => ("weapon.wand", "Wand"),
+        "Fishing Rods" => ("weapon.rod", "Fishing Rod"),
+        "Life Flasks" => ("flask.life", "Life Flask"),
+        "Mana Flasks" => ("flask.mana", "Mana Flask"),
+        "Charms" => ("flask.charm", "Charm"),
+        "Waystones" => ("map.waystone", "Waystone"),
+        "Tablet" | "Tablets" | "Precursor Tablets" => ("map.tablet", "Tablet"),
+        "Relics" => ("sanctum.relic", "Relic"),
+        _ => return None,
+    })
+}
+
+/// PoE2's spirit (sceptres) and rune sockets, as unticked filters.
+fn poe2_filters_for(item: &Item) -> Vec<Filter> {
+    let mut filters = Vec::new();
+    if let Some(spirit) = item.spirit.filter(|v| *v > 0.0) {
+        let target = Target::Property("equipment_filters", "spirit");
+        filters.push(Filter::new(format!("Spirit {spirit}"), target, spirit, None, false, Section::Weapon));
+    }
+    if item.rune_sockets > 0 {
+        let n = item.rune_sockets as f64;
+        let target = Target::Property("equipment_filters", "rune_sockets");
+        let mut f = Filter::new(format!("Rune sockets {n}"), target, n, None, false, Section::Base);
+        // A socket count isn't a roll: the item's own, not a fraction of it.
+        f.min = Some(n);
+        f.slider = None;
+        f.draw_slider = false;
+        f.step = 1.0;
+        f.max_roll = false;
+        filters.push(f);
+    }
+    filters
 }
 
 /// Which of an item's mods apply to the item itself, which the trade site
@@ -1223,26 +1293,46 @@ fn find_stat(data: &TradeData, kind: ModKind, template: &str, values: &[f64], lo
     // "reduced Attack Speed" finds the local stat, not the global one. Any
     // other mod tries them last: a stat only listed as "(Local)" ("#%
     // increased Energy Shield") still matches, as in APT.
-    let locals = wordings.iter().map(|(t, sign)| (format!("{t} (Local)"), *sign)).collect::<Vec<_>>();
-    let candidates = if local.applies(template) {
-        locals.into_iter().chain(wordings).collect::<Vec<_>>()
-    } else {
-        wordings.into_iter().chain(locals).collect()
+    let with_locals = |wordings: Vec<(String, f64)>| {
+        let locals = wordings.iter().map(|(t, sign)| (format!("{t} (Local)"), *sign)).collect::<Vec<_>>();
+        if local.applies(template) {
+            locals.into_iter().chain(wordings).collect::<Vec<_>>()
+        } else {
+            wordings.into_iter().chain(locals).collect()
+        }
     };
+    // PoE2's stats have no "+": "# to Accuracy Rating", "#% to Cold
+    // Resistance" (the item's text still has it). Tried only when nothing
+    // above matches, so PoE1's matches stay as they were.
+    let unsigned: Vec<(String, f64)> =
+        wordings.iter().filter_map(|(t, sign)| t.strip_prefix('+').map(|r| (r.to_string(), *sign))).collect();
+    let candidates = with_locals(wordings);
+    let unsigned = with_locals(unsigned);
     let found = |text: &str, sign, fixed| {
-        let ids = data.stat_ids(&group, text).or_else(|| data.stat_ids("pseudo", text))?;
+        let mut ids = data.stat_ids(&group, text);
+        // PoE2's desecrated mods are explicit mods once revealed: an item
+        // like this one may have the mod either way.
+        if kind == ModKind::Desecrated
+            && let Some(explicit) = data.stat_ids("explicit", text)
+        {
+            ids.get_or_insert_with(Vec::new).extend(explicit);
+        }
+        let ids = ids.or_else(|| data.stat_ids("pseudo", text))?;
         Some(Found { target: stat_target(select_stats(ids, local)), sign, fixed })
     };
     // Some stats are only searchable as pseudo stats (item rarity, for one).
-    candidates.iter().find_map(|(t, sign)| found(t, *sign, Vec::new())).or_else(|| {
-        candidates.iter().find_map(|(t, sign)| {
-            let (text, slots) = data.numbered.get(&(group.clone(), t.clone()))?.iter().find(|(_, slots)| {
-                slots.len() == values.len()
-                    && slots.iter().zip(values).all(|(slot, v)| slot.is_none_or(|n| (n - v).abs() < 1e-9))
-            })?;
-            found(text, *sign, slots.iter().map(Option::is_some).collect())
+    let search = |candidates: &[(String, f64)]| {
+        candidates.iter().find_map(|(t, sign)| found(t, *sign, Vec::new())).or_else(|| {
+            candidates.iter().find_map(|(t, sign)| {
+                let (text, slots) = data.numbered.get(&(group.clone(), t.clone()))?.iter().find(|(_, slots)| {
+                    slots.len() == values.len()
+                        && slots.iter().zip(values).all(|(slot, v)| slot.is_none_or(|n| (n - v).abs() < 1e-9))
+                })?;
+                found(text, *sign, slots.iter().map(Option::is_some).collect())
+            })
         })
-    })
+    };
+    search(&candidates).or_else(|| search(&unsigned))
 }
 
 /// For each `#` in a stat's numbered-out text, the fixed number it was, or
@@ -1406,7 +1496,10 @@ fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
         let label = format!("Attacks per second {aps:.2}");
         filters.push(Filter::new(label, Target::Property("weapon_filters", "aps"), aps, None, false, Section::Weapon));
         if let Some(crit) = item.critical_chance {
-            let label = format!("Critical strike chance {crit:.2}%");
+            let label = match game::current() {
+                game::Game::Poe1 => format!("Critical strike chance {crit:.2}%"),
+                game::Game::Poe2 => format!("Critical hit chance {crit:.2}%"),
+            };
             let (min, slider, step, max_roll) = defaults(crit, None, true);
             filters.push(Filter {
                 label,
@@ -1490,6 +1583,37 @@ fn armour_filters(item: &Item) -> Vec<Filter> {
 
 /// Current map bases name their tier, e.g. "Map (Tier 16)" or "Blighted Map
 /// (Tier 5)"; older ones ("Strand Map") don't.
+/// A PoE2 waystone's properties (its tier is above): what drops more
+/// (ticked), and what makes it harder (unticked). Labels as the item says
+/// them; PoE2's trade site has a filter for each.
+fn waystone_filters(item: &Item) -> Vec<Filter> {
+    let props: [(&str, &str, &'static str, bool, bool); 8] = [
+        ("Waystone Drop Chance", "Waystone drop chance", "map_bonus", true, true),
+        ("Item Rarity", "Rarity", "map_iir", true, true),
+        ("Gold Found", "Gold", "map_gold", true, false),
+        ("Pack Size", "Pack size", "map_packsize", true, false),
+        ("Monster Pack Size", "Pack size", "map_packsize", true, false),
+        ("Magic Monsters", "Magic monsters", "map_magic_monsters", true, false),
+        ("Rare Monsters", "Rare monsters", "map_rare_monsters", true, false),
+        ("Revives Available", "Revives", "map_revives", false, false),
+    ];
+    let mut filters = Vec::new();
+    for (prop, name, key, percent, on) in props {
+        let value = item
+            .map_props
+            .iter()
+            .find(|(label, _)| label == prop)
+            .and_then(|(_, v)| v.trim_start_matches('+').trim_end_matches('%').parse::<f64>().ok());
+        let Some(value) = value.filter(|v| *v > 0.0) else { continue };
+        if filters.iter().any(|f: &Filter| f.target == Target::Property("map_filters", key)) {
+            continue;
+        }
+        let label = if percent { format!("{name} +{value}%") } else { format!("{name} {value}") };
+        filters.push(Filter::new(label, Target::Property("map_filters", key), value, None, on, Section::Map));
+    }
+    filters
+}
+
 fn tiered_map_base(item: &Item) -> bool {
     item.class == "Maps" && item.base.contains("(Tier ")
 }
@@ -1510,6 +1634,10 @@ fn map_filters(item: &Item) -> Vec<Filter> {
             true,
             Section::Map,
         ));
+    }
+    if item.class == "Waystones" {
+        filters.extend(waystone_filters(item));
+        return filters;
     }
     // Since 3.25 a map's worth is mostly its "More ..." drop bonuses; old
     // maps still have item quantity.
@@ -1766,6 +1894,9 @@ fn kind_section(kind: ModKind, section: Section) -> Section {
         (ModKind::Implicit, Section::Mod) => Section::Implicit,
         (ModKind::Enchant, Section::Mod) => Section::Enchant,
         (ModKind::Crafted, Section::Mod) => Section::Crafted,
+        // PoE2's rune mods: like enchants, they come from outside the item's
+        // own mods.
+        (ModKind::Rune, Section::Mod) => Section::Enchant,
         _ => section,
     }
 }
@@ -1938,6 +2069,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         filters.extend(mod_filter(m, data, local, on, section));
     }
     filters.extend(armour_filters(item));
+    filters.extend(poe2_filters_for(item));
     drop_covered_eldritch(&mut filters);
     exact_cluster_counts(&mut filters);
     filters
@@ -1991,7 +2123,7 @@ fn listed_filter(m: &ModLine, data: &TradeData, local: Local) -> Option<Filter> 
 }
 
 fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
-    if item.class == "Maps" && item.rarity != "Unique" {
+    if (item.class == "Maps" || item.class == "Waystones") && item.rarity != "Unique" {
         return map_filters(item);
     }
     if item.rarity == "Unique" {
@@ -2071,6 +2203,7 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
 
     filters.extend(weapon_filters(item, true));
     filters.extend(armour_filters(item));
+    filters.extend(poe2_filters_for(item));
     filters.extend(influence_filters(item, false));
     filters.extend(eldritch_filters(item, data, false));
     filters.extend(memory_strands_filter(item));
@@ -2188,8 +2321,11 @@ type Single = (f64, String, String, Option<f64>, Option<i64>, Preview, Values);
 pub type Values = Vec<(usize, String)>;
 
 /// Mod lists of a listed item, and their keys in `extended.hashes`.
-const MOD_LISTS: [(&str, &str); 7] = [
+const MOD_LISTS: [(&str, &str); 9] = [
     ("enchantMods", "enchant"),
+    // PoE2's.
+    ("runeMods", "rune"),
+    ("desecratedMods", "desecrated"),
     ("implicitMods", "implicit"),
     ("fracturedMods", "fractured"),
     ("explicitMods", "explicit"),
@@ -2258,12 +2394,13 @@ fn property_value(item: &Value, group: &str, key: &str) -> Option<(f64, bool)> {
     let number = match (group, key) {
         ("weapon_filters", "pdps" | "edps") => (ext[key].as_f64()?.round(), false),
         ("weapon_filters", "aps") => (prop("Attacks per Second")?, false),
-        ("weapon_filters", "crit") => (prop("Critical Strike Chance")?, true),
+        ("weapon_filters", "crit") => (prop("Critical Strike Chance").or_else(|| prop("Critical Hit Chance"))?, true),
         ("armour_filters", "ar") => (ext["ar"].as_f64().or_else(|| prop("Armour"))?, false),
         ("armour_filters", "ev") => (ext["ev"].as_f64().or_else(|| prop("Evasion Rating"))?, false),
         ("armour_filters", "es") => (ext["es"].as_f64().or_else(|| prop("Energy Shield"))?, false),
         ("armour_filters", "ward") => (ext["ward"].as_f64().or_else(|| prop("Ward"))?, false),
-        ("armour_filters", "block") => (prop("Chance to Block")?, true),
+        ("armour_filters", "block") => (prop("Chance to Block").or_else(|| prop("Block chance"))?, true),
+        ("equipment_filters", "spirit") => (prop("Spirit")?, false),
         ("misc_filters", "ilvl") => (item["ilvl"].as_f64()?, false),
         ("map_filters", "map_tier") => (prop("Map Tier")?, false),
         ("map_filters", "map_iiq") => (prop("Item Quantity")?, true),
@@ -2283,18 +2420,20 @@ fn property_value(item: &Value, group: &str, key: &str) -> Option<(f64, bool)> {
 /// "+172 total maximum Life" -> "Life", "+86% total Elemental Resistance"
 /// -> "Ele res", "Physical DPS 312" -> "pDPS". Long ones the layer cuts.
 pub fn column_name(label: &str) -> String {
-    const PHRASES: [(&str, &str); 16] = [
+    const PHRASES: [(&str, &str); 18] = [
         ("Physical DPS", "pDPS"),
         ("Elemental DPS", "eDPS"),
         ("Attacks per second", "APS"),
         ("Critical strike chance", "Crit"),
         ("Critical Strike Chance", "Crit"),
+        ("Critical hit chance", "Crit"),
         ("Chance to block", "Block"),
         ("Item level", "ilvl"),
         ("Energy Shield", "ES"),
         ("Energy shield", "ES"),
         ("Evasion Rating", "Evasion"),
         ("Movement Speed", "Move speed"),
+        ("Rune sockets", "Sockets"),
         ("Attack Speed", "Atk speed"),
         ("Rarity of Items found", "Rarity"),
         ("Memory Strands", "Strands"),
@@ -2390,9 +2529,13 @@ fn item_preview(item: &Value) -> Preview {
     }
     for (kind, key) in [
         ("enchant", "enchantMods"),
+        // PoE2's mods from runes, shown like enchants (as in the panel's
+        // filters), and its desecrated mods like explicit ones.
+        ("enchant", "runeMods"),
         ("implicit", "implicitMods"),
         ("fractured", "fracturedMods"),
         ("explicit", "explicitMods"),
+        ("explicit", "desecratedMods"),
         ("crafted", "craftedMods"),
         ("veiled", "veiledMods"),
     ] {
@@ -2502,9 +2645,15 @@ pub const ICON_CDN: &str = "https://web.poecdn.com/";
 /// Sockets as PoE writes them in item text: linked ones joined by "-",
 /// groups apart ("R-G-B B"). None without sockets.
 fn sockets_text(sockets: &Value) -> Option<String> {
+    // PoE2's rune sockets have a type and no colour or links: in words.
+    let list = sockets.as_array()?;
+    if !list.is_empty() && list.iter().all(|s| s["sColour"].is_null() && s["type"].is_string()) {
+        let n = list.len();
+        return Some(format!("{n} rune socket{}", if n == 1 { "" } else { "s" }));
+    }
     let mut out = String::new();
     let mut group = None;
-    for s in sockets.as_array()? {
+    for s in list {
         let colour = s["sColour"].as_str().unwrap_or("?");
         let g = s["group"].as_u64();
         if group.is_some() {
@@ -2641,7 +2790,101 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
         Corrupted::No => q["filters"]["misc_filters"]["filters"]["corrupted"] = json!({ "option": "false" }),
         Corrupted::Yes => q["filters"]["misc_filters"]["filters"]["corrupted"] = json!({ "option": "true" }),
     }
+    if game::current() == game::Game::Poe2 {
+        poe2_filters(&mut q["filters"]);
+    }
     json!({ "query": q, "sort": { "price": "asc" } })
+}
+
+/// PoE2's trade site has the filters of /api/trade2/data/filters: weapon
+/// and armour properties together in `equipment_filters`, item level and
+/// quality in `type_filters`, no links. Moves PoE1's filters where PoE2
+/// has them, and drops what PoE2 doesn't have (it refuses the whole search
+/// over an unknown filter).
+fn poe2_filters(filters: &mut Value) {
+    const POE2: &[(&str, &[&str])] = &[
+        ("status_filters", &["status"]),
+        ("type_filters", &["category", "rarity", "ilvl", "quality"]),
+        (
+            "equipment_filters",
+            &[
+                "damage",
+                "aps",
+                "crit",
+                "dps",
+                "pdps",
+                "edps",
+                "reload_time",
+                "ar",
+                "ev",
+                "es",
+                "ward",
+                "block",
+                "spirit",
+                "rune_sockets",
+                "total_augment_sockets",
+            ],
+        ),
+        ("req_filters", &["lvl", "str", "dex", "int"]),
+        (
+            "map_filters",
+            &[
+                "map_tier",
+                "map_packsize",
+                "map_magic_monsters",
+                "map_iir",
+                "map_rare_monsters",
+                "map_revives",
+                "map_bonus",
+                "map_gold",
+                "map_experience",
+                "ultimatum_hint",
+            ],
+        ),
+        (
+            "misc_filters",
+            &[
+                "gem_level",
+                "gem_sockets",
+                "area_level",
+                "stack_size",
+                "identified",
+                "fractured_item",
+                "corrupted",
+                "sanctified",
+                "twice_corrupted",
+                "mutated",
+                "veiled",
+                "desecrated",
+                "crafted",
+                "foreseeing",
+                "mirrored",
+                "sanctum_gold",
+                "unidentified_tier",
+            ],
+        ),
+        ("trade_filters", &["account", "collapse", "indexed", "sale_type", "fee", "price"]),
+    ];
+    let Some(groups) = filters.as_object_mut() else { return };
+    let mut moved = serde_json::Map::new();
+    for (group, body) in std::mem::take(groups) {
+        let Value::Object(mut body) = body else { continue };
+        let Some(Value::Object(inner)) = body.remove("filters") else { continue };
+        for (key, value) in inner {
+            let to = match (group.as_str(), key.as_str()) {
+                ("weapon_filters" | "armour_filters", _) => "equipment_filters",
+                ("misc_filters", "ilvl" | "quality") => "type_filters",
+                (g, _) => g,
+            };
+            if !POE2.iter().any(|(g, keys)| *g == to && keys.contains(&key.as_str())) {
+                eprintln!("trade: PoE2 has no {group}.{key} filter; searching without it");
+                continue;
+            }
+            let entry = moved.entry(to).or_insert_with(|| json!({ "filters": {} }));
+            entry["filters"][key] = value;
+        }
+    }
+    *groups = moved;
 }
 
 // ---- rate limits -----------------------------------------------------------
@@ -2728,6 +2971,42 @@ impl RateLimiter {
 
 #[cfg(test)]
 mod tests {
+    /// `poe2_filters`' list is the site's.
+    #[test]
+    fn poe2_filter_list_matches_the_site() {
+        let site: Value = serde_json::from_str(include_str!("../fixtures/poe2/trade-filters.json")).unwrap();
+        let mut all = json!({});
+        for group in site["result"].as_array().unwrap() {
+            for f in group["filters"].as_array().unwrap() {
+                all[group["id"].as_str().unwrap()]["filters"][f["id"].as_str().unwrap()] = json!({});
+            }
+        }
+        let mut kept = all.clone();
+        poe2_filters(&mut kept);
+        assert_eq!(kept, all, "a filter the site has is dropped, or the site has new ones");
+    }
+
+    #[test]
+    fn poe2_filters_move_and_drop() {
+        let mut f = json!({
+            "type_filters": { "filters": { "rarity": { "option": "nonunique" } } },
+            "weapon_filters": { "filters": { "pdps": { "min": 300 } } },
+            "armour_filters": { "filters": { "es": { "min": 100 } } },
+            "misc_filters": { "filters": { "ilvl": { "min": 82 }, "corrupted": { "option": "false" },
+                "synthesised_item": { "option": "true" } } },
+            "socket_filters": { "filters": { "links": { "min": 6 } } },
+        });
+        poe2_filters(&mut f);
+        assert_eq!(
+            f,
+            json!({
+                "type_filters": { "filters": { "rarity": { "option": "nonunique" }, "ilvl": { "min": 82 } } },
+                "equipment_filters": { "filters": { "pdps": { "min": 300 }, "es": { "min": 100 } } },
+                "misc_filters": { "filters": { "corrupted": { "option": "false" } } },
+            })
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -3912,6 +4191,60 @@ mod tests {
     }
 
     // ---- against replies captured by fixtures/refresh.py ----
+
+    fn poe2_data() -> TradeData {
+        let stats: Value = serde_json::from_str(include_str!("../fixtures/poe2/trade-stats.json")).unwrap();
+        let statics: Value = serde_json::from_str(include_str!("../fixtures/poe2/trade-static.json")).unwrap();
+        TradeData::from_json(&stats, &statics, &Value::Null)
+    }
+
+    #[test]
+    fn poe2_waystone_filters() {
+        let path = format!("{}/fixtures/poe2/items/waystone-rare.txt", env!("CARGO_MANIFEST_DIR"));
+        let item = crate::item::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let filters = build_filters(&item, &poe2_data(), Preset::Normal);
+        let got: Vec<(&str, bool)> = filters.iter().map(|f| (f.label.as_str(), f.default_on)).collect();
+        assert_eq!(
+            got,
+            [
+                ("Tier 14", true),
+                ("Waystone drop chance +75%", true),
+                ("Pack size +34%", false),
+                ("Rare monsters +28%", false),
+                ("Revives 2", false),
+            ]
+        );
+        assert_eq!(filters[1].target, Target::Property("map_filters", "map_bonus"));
+    }
+
+    /// PoE2's stats have no "+", and its rune and desecrated mods have
+    /// groups of their own.
+    #[test]
+    fn poe2_stats() {
+        let data = poe2_data();
+        let find = |kind, text: &str, local| find_stat(&data, kind, &templatize(text).0, &[], local).map(|f| f.target);
+        let stat = |id: &str| Some(Target::Stat(id.to_string()));
+        assert_eq!(
+            find(ModKind::Explicit, "+57 to Accuracy Rating", Local::Weapon),
+            stat("explicit.stat_691932474"),
+            "a weapon's accuracy is its local stat"
+        );
+        assert_eq!(find(ModKind::Explicit, "+57 to Accuracy Rating", Local::None), stat("explicit.stat_803737631"));
+        assert_eq!(
+            find(ModKind::Crafted, "+3.45% to Critical Hit Chance", Local::Weapon),
+            stat("crafted.stat_518292764")
+        );
+        assert_eq!(
+            find(ModKind::Rune, "54% increased Armour, Evasion and Energy Shield", Local::Armour),
+            stat("rune.stat_3523867985")
+        );
+        assert_eq!(find(ModKind::Rune, "38% increased Physical Damage", Local::Weapon), stat("rune.stat_1509134228"));
+        // A desecrated mod may be explicit on another item.
+        assert_eq!(
+            find(ModKind::Desecrated, "+256 to Armour", Local::Armour),
+            Some(Target::AnyStat(vec!["desecrated.stat_3484657501".into(), "explicit.stat_3484657501".into()]))
+        );
+    }
 
     fn real_data() -> TradeData {
         let stats: Value = serde_json::from_str(include_str!("../fixtures/trade-stats.json")).unwrap();

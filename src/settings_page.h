@@ -93,6 +93,9 @@ public:
     void warning_keep();    // keep the old one
     void clear_hotkey(Action action);  // only MapAlias and Displays can be off
     static bool can_be_off(Action action) { return action == Action::MapAlias || action == Action::Displays; }
+    // PoE2 has no item displays, and needs no second map check key: those
+    // aren't listed or bound there.
+    static bool shown(Action action);
     static const char* action_label(Action action);
     void set_stash_scroll(bool on);
 

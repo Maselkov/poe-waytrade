@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "assets.h"
+#include "game.h"
 #include "icons.h"
 #include "layer.h"
 #include "price_check.h"
@@ -298,6 +299,7 @@ struct Model {
     bool s_auto_watch = true;
     bool s_gpu_tracking = true;
     bool s_heist_watch = true;
+    bool s_displays = true;  // the item displays settings (PoE1's vaults and Heist)
     bool s_startup_notice = true;
     bool s_copy_check = false;
     bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
@@ -332,7 +334,8 @@ Rml::String thousands(const std::string& digits) {
 // "3.3", "93", "29,400"
 Rml::String amount_text(double v) { return v < 10 ? format("%.1f", v) : thousands(format("%.0f", v)); }
 
-Rml::String chaos_text(double chaos) { return amount_text(chaos) + "c"; }
+// In the game's small unit: "93c", PoE2's "93ex".
+Rml::String chaos_text(double chaos) { return amount_text(chaos) + small_unit_suffix(); }
 
 // "stack of 28" -> "Stack of 28"
 Rml::String capitalized(Rml::String s) {
@@ -358,7 +361,7 @@ UiPriceRow ninja_row(const PriceLine& p) {
         r.main = amount;
         r.icon = id;
     } else {
-        r.main = amount + (divine ? " div" : "c");
+        r.main = amount + (divine ? " div" : small_unit_suffix());
     }
     if (divine) r.sub = chaos_text(p.chaos);
     return r;
@@ -726,6 +729,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_auto_watch", &model.s_auto_watch);
     c.Bind("s_gpu_tracking", &model.s_gpu_tracking);
     c.Bind("s_heist_watch", &model.s_heist_watch);
+    c.Bind("s_displays", &model.s_displays);
     c.Bind("s_startup_notice", &model.s_startup_notice);
     c.Bind("s_copy_check", &model.s_copy_check);
     c.Bind("s_scaled", &model.s_scaled);
@@ -1050,8 +1054,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
     if (!item || !reply) {
         m.state = "status";
         m.status = !pc.status().empty() ? pc.status()
-                   : m.searching         ? (map ? "Checking map…" : "Checking price…")
-                                         : (map ? "No map check" : "No price");
+                   : m.searching         ? (map ? (is_poe2() ? "Checking waystone…" : "Checking map…") : "Checking price…")
+                                         : (map ? (is_poe2() ? "No waystone check" : "No map check") : "No price");
         m.status_error = !pc.status().empty();
     } else if (reply->status == "map") {
         m.state = "map";
@@ -1064,7 +1068,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         }
     } else if (reply->status == "not_map") {
         m.state = "status";
-        m.status = "Not a map. The map check is for maps, invitations, contracts and logbooks.";
+        m.status = is_poe2() ? "Not a waystone. The waystone check is for waystones and logbooks."
+                             : "Not a map. The map check is for maps, invitations, contracts and logbooks.";
     } else if (reply->status == "trade") {
         m.state = "trade";
         m.status = pc.status();
@@ -1102,7 +1107,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             return std::any_of(reply->filters.begin(), reply->filters.end(),
                                [&](const TradeFilter& f) { return f.section == section; });
         };
-        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? "Map"
+        Rml::String top = m.preset_base ? "Base item" : has("weapon") ? "Weapon" : has("armour") ? "Armour" : has("map") ? (is_poe2() ? "Waystone" : "Map")
                         : has("gem")       ? "Gem"
                                            : "Item";
         m.filter_groups = {{top, {}}, {"Enchant", {}}, {"Implicit", {}}, {"Totals", {}}, {"Mods", {}}};
@@ -1183,7 +1188,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             if (icons_get(l.currency_id)) u.icon = l.currency_id;
             else u.price += " " + l.currency;
             // Skip conversions too small to read ("0.0c").
-            if (l.chaos >= 0.1 && l.currency != "Chaos Orb") u.sub = chaos_text(l.chaos);
+            if (l.chaos >= 0.1 && l.currency != small_unit_name()) u.sub = chaos_text(l.chaos);
             u.age = l.age;
             if (l.count > 1) u.count = "×" + std::to_string(l.count);
             // A gem's level and quality ("Level 20 · 23%"), each in its column.
@@ -1235,7 +1240,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             } else {
                 trade.main = amount + " " + s.currency;
             }
-            if (s.chaos >= 0.1 && s.currency != "Chaos Orb") trade.sub = chaos_text(s.chaos);
+            if (s.chaos >= 0.1 && s.currency != small_unit_name()) trade.sub = chaos_text(s.chaos);
             // "15–19 Chaos Orb" -> "15–19": the icon above names the currency.
             Rml::String range = s.range;
             Rml::String suffix = " " + s.currency;
@@ -1282,7 +1287,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     const SettingsPage::Values& v = s.values();
     using Action = SettingsPage::Action;
     m.s_tab = (int)s.tab();
-    m.s_tabs = {"Hotkeys", "General", "Price check", "Map check", "About"};
+    m.s_tabs = {"Hotkeys", "General", "Price check", is_poe2() ? "Waystone check" : "Map check", "About"};
     m.s_profiles = {"I", "II", "III"};
     m.s_version = POE_WAYTRADE_VERSION;
 
@@ -1294,6 +1299,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
         "Prices the item displays on screen (vault reliquaries) until you leave the area",
     };
     for (int i = 0; i < SettingsPage::kActions; i++) {
+        if (!SettingsPage::shown((Action)i)) continue;
         UiHotkey h;
         h.index = i;
         h.label = SettingsPage::action_label((Action)i);
@@ -1333,6 +1339,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_auto_watch = v.auto_watch;
     m.s_gpu_tracking = v.gpu_tracking;
     m.s_heist_watch = v.heist_watch;
+    m.s_displays = !is_poe2();
     m.s_startup_notice = v.startup_notice;
     m.s_copy_check = v.copy_check;
     m.s_profile = s.map_profile();
@@ -1577,7 +1584,9 @@ void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
     }
     // Sockets go on the image, like in game; in words until it and the
     // socket images are here.
-    bool drawn = !u.item_icon.empty() && u.icon_w > 0 && icons_get(kSocketSprite);
+    // PoE2's rune sockets stay in words ("3 rune sockets"): the sprites are
+    // PoE1's.
+    bool drawn = !is_poe2() && !u.item_icon.empty() && u.icon_w > 0 && icons_get(kSocketSprite);
     if (drawn) place_sockets(sockets, u);
     for (const Rml::String& part : {ilvl, drawn ? "" : sockets, dps})
         if (!part.empty()) u.meta += (u.meta.empty() ? "" : " · ") + part;

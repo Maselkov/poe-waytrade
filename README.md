@@ -1,12 +1,12 @@
 # Waytrade
 
-In-game price checks for Path of Exile on Linux, for when the game runs as a
-native Wayland client.
+In-game price checks for Path of Exile and Path of Exile 2 on Linux, for
+when the game runs as a native Wayland client.
 
-Hover an item, press **Ctrl+D**, and a panel opens next to it with the
-item's price: poe.ninja for currency, uniques, gems, maps and other priced
-items, and a ready-made trade search for rares. Maps get a check for
-dangerous mods. PoE1 only for now.
+Hover an item, press **Ctrl+D** (**Ctrl+\`** in PoE2), and a panel opens
+next to it with the item's price: poe.ninja for currency, uniques, gems, maps
+and other priced items, and a ready-made trade search for rares. Maps and
+PoE2's waystones get a check for dangerous mods.
 
 <p align="center">
   <img src="docs/media/heist-curio-displays.webp" alt="Price tags following Heist curio displays as the player walks past them" width="100%">
@@ -126,19 +126,45 @@ Or build the Arch package from a checkout:
 cd packaging/arch && makepkg -si
 ```
 
-**2. Set Path of Exile's Steam launch options** (Properties → General):
+**2. Set Path of Exile's (or Path of Exile 2's) Steam launch options**
+(Properties → General):
 
 ```
 waytrade %command%
 ```
 
 This turns the overlay on, starts the game on Proton's Wayland driver, and
-runs the price daemon for as long as the game does.
+runs the price daemon for as long as the game does. It tells the games apart
+by Steam's app id (see [Path of Exile 2](#path-of-exile-2)).
 
 **3. Play.** A notice under the login screen says when the overlay is ready.
 Hover an item and press **Ctrl+D**. Open the settings with **Ctrl+Alt+S**.
 
 ## Using it
+
+### Path of Exile 2
+
+PoE2 works the same way, with a few differences:
+
+- **Hotkeys:** PoE2 can move with WASD, and the game sees every hotkey too,
+  so Ctrl+D would walk your character away. PoE2's defaults are **Ctrl+\`**
+  (the key under Esc) for a quick look, **Ctrl+Alt+\`** for a locked panel
+  and **Ctrl+Alt+S** for the settings. There's no Alt+D or Ctrl+Alt+F.
+- **Copying:** the overlay sends Ctrl+Alt+C, PoE2's advanced copy, with the
+  mod tiers and ranges.
+- **Prices:** in Exalted Orbs below a Divine Orb. poe.ninja's PoE2 prices
+  cover currency, runes, essences, omens, uncut gems and the like, and
+  uniques. Rares, waystones and the rest get a trade search on PoE2's trade
+  site, with rune and desecrated mods, Spirit and rune sockets as filters.
+- **Waystone check:** waystones open the map check, with its own marks for
+  PoE2's waystone mods.
+- **No item displays:** vault reliquaries and Heist curios are PoE1's.
+
+PoE2 gets a daemon of its own (on the socket `@poe-waytrade-poe2`), with its
+settings in `~/.config/poe-waytrade/poe2/` and its log in
+`~/.local/state/poe-waytrade/daemon-poe2.log`. systemd's socket serves PoE1
+only, so for PoE2 the launcher always starts the daemon.
+`POE_WAYTRADE_GAME=poe1|poe2` overrides the game the launcher picks.
 
 ### Hotkeys
 
@@ -423,7 +449,6 @@ Environment variables, which take precedence over the settings page:
 
 ## Known limitations
 
-- PoE1 only.
 - Native Wayland only. There's no X11 or XWayland input, and none is planned:
   other price check overlays already cover X11.
 - Only one Vulkan device gets the overlay.
