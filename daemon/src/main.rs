@@ -1177,7 +1177,7 @@ fn scan_detail(read: &scan::ScreenItem) -> String {
     if let Some(ilvl) = item.item_level {
         parts.push(format!("ilvl {ilvl}"));
     }
-    if let Some(xp) = read.stored_experience {
+    if let Some(xp) = read.item.stored_experience {
         parts.push(format!("{}M xp", xp / 1_000_000));
     }
     if item.corrupted {
@@ -1218,17 +1218,6 @@ fn price_screen_item(state: &State, db: &ninja::PriceDb, read: &scan::ScreenItem
         Err(e) => format!("status\terror\n{head}message\t{}\n", clean(&e)),
     };
 
-    if let Some(xp) = read.stored_experience {
-        // A lens is worth its experience: listings with at least about as much.
-        let result = state.trade.lock().unwrap().search_property(
-            &item.base,
-            ("misc_filters", "stored_experience"),
-            (xp as f64 * 0.95).floor(),
-            &db.league,
-            db,
-        );
-        return from_trade(result);
-    }
     let gear = matches!(item.rarity.as_str(), "Rare" | "Magic" | "Normal");
     let trinket = item.base.contains("Trinket");
     // An experimented base sells as its base, whatever its mods.
@@ -1247,8 +1236,9 @@ fn price_screen_item(state: &State, db: &ninja::PriceDb, read: &scan::ScreenItem
     // An enchanted one (Heist's Enchanted Armaments) by its type and
     // enchant: the Base item preset, whose enchant filters start ticked.
     let enchanted = gear && !trinket && item.mods.iter().any(|m| m.kind == item::ModKind::Enchant);
-    if enchanted || (gear && item.rarity == "Rare") {
-        // Else a rare (a trinket, say): its base with all its mods.
+    // A Facetor's Lens by its stored experience; else a rare (a trinket,
+    // say): its base with all its mods.
+    if enchanted || (gear && item.rarity == "Rare") || item.stored_experience.is_some() {
         let preset = if enchanted { trade::Preset::Base } else { trade::Preset::Normal };
         let mut trade = state.trade.lock().unwrap();
         let prepared = match trade.prepare(item, preset) {
