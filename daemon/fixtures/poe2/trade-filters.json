@@ -1,0 +1,210 @@
+{
+ "result": [
+  {
+   "id": "status_filters",
+   "filters": [
+    {
+     "id": "status"
+    }
+   ]
+  },
+  {
+   "id": "type_filters",
+   "filters": [
+    {
+     "id": "category"
+    },
+    {
+     "id": "rarity"
+    },
+    {
+     "id": "ilvl"
+    },
+    {
+     "id": "quality"
+    }
+   ]
+  },
+  {
+   "id": "equipment_filters",
+   "filters": [
+    {
+     "id": "damage"
+    },
+    {
+     "id": "aps"
+    },
+    {
+     "id": "crit"
+    },
+    {
+     "id": "dps"
+    },
+    {
+     "id": "pdps"
+    },
+    {
+     "id": "edps"
+    },
+    {
+     "id": "reload_time"
+    },
+    {
+     "id": "ar"
+    },
+    {
+     "id": "ev"
+    },
+    {
+     "id": "es"
+    },
+    {
+     "id": "ward"
+    },
+    {
+     "id": "block"
+    },
+    {
+     "id": "spirit"
+    },
+    {
+     "id": "rune_sockets"
+    },
+    {
+     "id": "total_augment_sockets"
+    }
+   ]
+  },
+  {
+   "id": "req_filters",
+   "filters": [
+    {
+     "id": "lvl"
+    },
+    {
+     "id": "str"
+    },
+    {
+     "id": "dex"
+    },
+    {
+     "id": "int"
+    }
+   ]
+  },
+  {
+   "id": "map_filters",
+   "filters": [
+    {
+     "id": "map_tier"
+    },
+    {
+     "id": "map_packsize"
+    },
+    {
+     "id": "map_magic_monsters"
+    },
+    {
+     "id": "map_iir"
+    },
+    {
+     "id": "map_rare_monsters"
+    },
+    {
+     "id": "map_revives"
+    },
+    {
+     "id": "map_bonus"
+    },
+    {
+     "id": "map_gold"
+    },
+    {
+     "id": "map_experience"
+    },
+    {
+     "id": "ultimatum_hint"
+    }
+   ]
+  },
+  {
+   "id": "misc_filters",
+   "filters": [
+    {
+     "id": "gem_level"
+    },
+    {
+     "id": "gem_sockets"
+    },
+    {
+     "id": "area_level"
+    },
+    {
+     "id": "stack_size"
+    },
+    {
+     "id": "identified"
+    },
+    {
+     "id": "fractured_item"
+    },
+    {
+     "id": "corrupted"
+    },
+    {
+     "id": "sanctified"
+    },
+    {
+     "id": "twice_corrupted"
+    },
+    {
+     "id": "mutated"
+    },
+    {
+     "id": "veiled"
+    },
+    {
+     "id": "desecrated"
+    },
+    {
+     "id": "crafted"
+    },
+    {
+     "id": "foreseeing"
+    },
+    {
+     "id": "mirrored"
+    },
+    {
+     "id": "sanctum_gold"
+    },
+    {
+     "id": "unidentified_tier"
+    }
+   ]
+  },
+  {
+   "id": "trade_filters",
+   "filters": [
+    {
+     "id": "account"
+    },
+    {
+     "id": "collapse"
+    },
+    {
+     "id": "indexed"
+    },
+    {
+     "id": "sale_type"
+    },
+    {
+     "id": "fee"
+    },
+    {
+     "id": "price"
+    }
+   ]
+  }
+ ]
+}

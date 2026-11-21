@@ -1,0 +1,151 @@
+{
+ "core": {
+  "items": [
+   {
+    "id": "divine",
+    "name": "Divine Orb",
+    "category": "Currency",
+    "detailsId": "divine-orb"
+   },
+   {
+    "id": "exalted",
+    "name": "Exalted Orb",
+    "category": "Currency",
+    "detailsId": "exalted-orb"
+   },
+   {
+    "id": "chaos",
+    "name": "Chaos Orb",
+    "category": "Currency",
+    "detailsId": "chaos-orb"
+   }
+  ],
+  "rates": {
+   "exalted": 548.6,
+   "chaos": 7.46
+  },
+  "primary": "divine",
+  "secondary": "chaos"
+ },
+ "lines": [
+  {
+   "id": "alch",
+   "primaryValue": 0.0004074,
+   "volumePrimaryValue": 0.1838,
+   "maxVolumeCurrency": "exalted",
+   "maxVolumeRate": 4.47
+  },
+  {
+   "id": "exalted",
+   "primaryValue": 0.001823,
+   "volumePrimaryValue": 52.5,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 548.6
+  },
+  {
+   "id": "chaos",
+   "primaryValue": 0.1341,
+   "volumePrimaryValue": 819.5,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 7.46
+  },
+  {
+   "id": "divine",
+   "primaryValue": 1,
+   "volumePrimaryValue": 819.5,
+   "maxVolumeCurrency": "chaos",
+   "maxVolumeRate": 0.1341
+  },
+  {
+   "id": "annul",
+   "primaryValue": 0.4004,
+   "volumePrimaryValue": 164.2,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 2.5
+  },
+  {
+   "id": "aug",
+   "primaryValue": 0.0005573,
+   "volumePrimaryValue": 0.02582,
+   "maxVolumeCurrency": "exalted",
+   "maxVolumeRate": 3.27
+  },
+  {
+   "id": "regal",
+   "primaryValue": 0.0002174,
+   "volumePrimaryValue": 0.0158,
+   "maxVolumeCurrency": "exalted",
+   "maxVolumeRate": 8.38
+  },
+  {
+   "id": "transmute",
+   "primaryValue": 0.0007331,
+   "volumePrimaryValue": 0.1667,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 1364
+  },
+  {
+   "id": "vaal",
+   "primaryValue": 0.01269,
+   "volumePrimaryValue": 9.83,
+   "maxVolumeCurrency": "divine",
+   "maxVolumeRate": 78.8
+  }
+ ],
+ "items": [
+  {
+   "id": "alch",
+   "name": "Orb of Alchemy",
+   "category": "Currency",
+   "detailsId": "orb-of-alchemy"
+  },
+  {
+   "id": "exalted",
+   "name": "Exalted Orb",
+   "category": "Currency",
+   "detailsId": "exalted-orb"
+  },
+  {
+   "id": "chaos",
+   "name": "Chaos Orb",
+   "category": "Currency",
+   "detailsId": "chaos-orb"
+  },
+  {
+   "id": "divine",
+   "name": "Divine Orb",
+   "category": "Currency",
+   "detailsId": "divine-orb"
+  },
+  {
+   "id": "annul",
+   "name": "Orb of Annulment",
+   "category": "Currency",
+   "detailsId": "orb-of-annulment"
+  },
+  {
+   "id": "aug",
+   "name": "Orb of Augmentation",
+   "category": "Currency",
+   "detailsId": "orb-of-augmentation"
+  },
+  {
+   "id": "regal",
+   "name": "Regal Orb",
+   "category": "Currency",
+   "detailsId": "regal-orb"
+  },
+  {
+   "id": "transmute",
+   "name": "Orb of Transmutation",
+   "category": "Currency",
+   "detailsId": "orb-of-transmutation"
+  },
+  {
+   "id": "vaal",
+   "name": "Vaal Orb",
+   "category": "Currency",
+   "detailsId": "vaal-orb"
+  }
+ ]
+}

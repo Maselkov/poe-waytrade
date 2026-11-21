@@ -141,7 +141,7 @@ pub fn find_log(setting: &str, hint: &str) -> Option<PathBuf> {
     }
     libraries
         .into_iter()
-        .map(|l| l.join("steamapps/common/Path of Exile/logs/Client.txt"))
+        .map(|l| l.join("steamapps/common").join(crate::game::current().steam_dir()).join("logs/Client.txt"))
         .filter_map(|p| Some((std::fs::metadata(&p).ok()?.modified().ok()?, p)))
         .max_by_key(|(t, _): &(SystemTime, PathBuf)| *t)
         .map(|(_, p)| p)

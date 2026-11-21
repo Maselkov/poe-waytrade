@@ -1,6 +1,7 @@
 // Vulkan layer entry points: loader negotiation, dispatch chaining and the
 // handful of calls we intercept. Rendering lives in overlay.cpp.
 #include "layer.h"
+#include "game.h"
 #include "version.h"
 #include "wl_input.h"
 
@@ -82,7 +83,7 @@ VKAPI_ATTR VkResult VKAPI_CALL CreateInstance(const VkInstanceCreateInfo* ci,
     if (res != VK_SUCCESS) return res;
 
     static bool logged_version = [] {
-        poe_log("poe-waytrade %s", POE_WAYTRADE_VERSION);
+        poe_log("poe-waytrade %s (%s)", POE_WAYTRADE_VERSION, game_name());
         return true;
     }();
     (void)logged_version;

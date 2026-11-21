@@ -113,10 +113,11 @@ impl Decisions {
         let base = std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"));
-        let path = base.join("poe-waytrade").join("map-mods.json");
-        // Marks saved before the rename (poe-overlay) move over once.
+        let path = crate::game::config_dir().join("map-mods.json");
+        // Marks saved before the rename (poe-overlay) move over once. They
+        // were PoE1's.
         let legacy = base.join("poe-overlay").join("map-mods.json");
-        if !path.exists() && legacy.exists() {
+        if crate::game::current() == crate::game::Game::Poe1 && !path.exists() && legacy.exists() {
             if let Some(dir) = path.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }

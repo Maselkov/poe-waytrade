@@ -1,0 +1,28 @@
+{
+ "economyLeagues": [
+  {
+   "name": "Forbidden Rites",
+   "indexed": false
+  },
+  {
+   "name": "Runes of Aldur",
+   "indexed": true
+  },
+  {
+   "name": "HC Forbidden Rites",
+   "indexed": false
+  },
+  {
+   "name": "HC Runes of Aldur",
+   "indexed": false
+  },
+  {
+   "name": "Standard",
+   "indexed": false
+  },
+  {
+   "name": "Hardcore",
+   "indexed": false
+  }
+ ]
+}

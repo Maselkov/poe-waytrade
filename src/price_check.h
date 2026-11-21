@@ -167,6 +167,7 @@ private:
     StashScroll stash_scroll_;
     bool release_pending_ = false;  // keys go down one frame, up the next
     bool we_pressed_ctrl_ = false;
+    bool we_pressed_alt_ = false;  // PoE2's advanced copy is Ctrl+Alt+C
     // Ctrl+D: the copy keystroke waits (briefly) until the user's clipboard
     // is saved, and the clipboard is restored once the item text is in.
     void send_copy_keys(WaylandInput& input);

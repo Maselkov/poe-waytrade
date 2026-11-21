@@ -1,11 +1,22 @@
-//! poe.ninja (PoE1) price data: fetching and an in-memory index.
+//! poe.ninja price data: fetching and an in-memory index.
+//!
+//! PoE1's prices are in chaos. PoE2's poe.ninja counts in divines; its
+//! prices are turned into Exalted Orbs here, PoE2's small unit, so the rest
+//! of the daemon reads them like PoE1's chaos values ("chaos" below is the
+//! game's small unit: `game::Game::small_unit`).
 
+use crate::game::{self, Game};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::thread;
 use std::time::{Duration, Instant};
 
-const BASE: &str = "https://poe.ninja/poe1/api";
+fn base() -> &'static str {
+    match game::current() {
+        Game::Poe1 => "https://poe.ninja/poe1/api",
+        Game::Poe2 => "https://poe.ninja/poe2/api",
+    }
+}
 pub const USER_AGENT: &str =
     concat!("poe-waytrade-daemon/", env!("WAYTRADE_VERSION"), " (personal price-check overlay)");
 /// Be polite: poe.ninja is a free community service.
@@ -28,6 +39,40 @@ const EXCHANGE_TYPES: &[&str] = &[
     "AllflameEmber",
     "Astrolabe",
 ];
+
+/// PoE2's exchange categories.
+const POE2_EXCHANGE_TYPES: &[&str] = &[
+    "Currency",
+    "Fragments",
+    "Runes",
+    "Essences",
+    "Ritual",
+    "Abyss",
+    "UncutGems",
+    "LineageSupportGems",
+    "Idols",
+    "Expedition",
+    "Delirium",
+    "Breach",
+    "Verisium",
+    "Ultimatum",
+];
+
+fn exchange_types() -> &'static [&'static str] {
+    match game::current() {
+        Game::Poe1 => EXCHANGE_TYPES,
+        Game::Poe2 => POE2_EXCHANGE_TYPES,
+    }
+}
+
+/// PoE2's stash item lines (uniques) are priced in divines, with no chaos
+/// value: not read yet, so PoE2 has exchange prices only.
+fn item_types() -> &'static [&'static str] {
+    match game::current() {
+        Game::Poe1 => ITEM_TYPES,
+        Game::Poe2 => &[],
+    }
+}
 
 /// Categories served by the stash item endpoint (per-variant lines).
 const ITEM_TYPES: &[&str] = &[
@@ -58,6 +103,8 @@ struct IndexState {
 #[derive(Deserialize)]
 struct League {
     name: String,
+    /// false: listed, but poe.ninja has no prices for it (yet).
+    indexed: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -69,8 +116,10 @@ struct ExchangeOverview {
 
 #[derive(Deserialize)]
 struct ExchangeCore {
-    /// e.g. {"divine": 0.0044}: units of that currency per chaos.
+    /// e.g. {"divine": 0.0044}: units of that currency per `primary`.
     rates: HashMap<String, f64>,
+    /// The currency the lines' values are in: chaos (PoE1), divine (PoE2).
+    primary: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -174,14 +223,25 @@ impl PriceDb {
         chaos * self.divine_rate
     }
 
-    fn add_exchange(&mut self, ov: ExchangeOverview) {
-        if let Some(rate) = ov.core.rates.get("divine") {
-            self.divine_rate = *rate;
+    /// `small`: the game's small unit, the values' unit here.
+    fn add_exchange(&mut self, ov: ExchangeOverview, small: &str) {
+        // An empty category (PoE2's Ultimatum, between leagues) has no rates.
+        if ov.lines.is_empty() {
+            return;
+        }
+        // Units of a currency per one of the reply's primary currency.
+        let primary = ov.core.primary.as_deref().unwrap_or(small);
+        let per = |c: &str| if c == primary { Some(1.0) } else { ov.core.rates.get(c).copied().filter(|r| *r > 0.0) };
+        let Some(scale) = per(small) else {
+            return eprintln!("poe.ninja: an exchange overview in {primary}, with no {small} rate");
+        };
+        if let Some(divine) = per("divine") {
+            self.divine_rate = divine / scale;
         }
         let names: HashMap<_, _> = ov.items.into_iter().map(|i| (i.id, i.name)).collect();
         for line in ov.lines {
             if let (Some(name), Some(value)) = (names.get(&line.id), line.primary_value) {
-                self.exchange.insert(name.clone(), value);
+                self.exchange.insert(name.clone(), value * scale);
             }
         }
     }
@@ -226,18 +286,18 @@ fn get<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
 /// The leagues poe.ninja has prices for, as it orders them (challenge
 /// leagues first).
 pub fn leagues() -> Result<Vec<String>, String> {
-    let index: IndexState = get(&format!("{BASE}/data/index-state"))?;
-    Ok(index.economy_leagues.into_iter().map(|l| l.name).collect())
+    let index: IndexState = get(&format!("{}/data/index-state", base()))?;
+    Ok(index.economy_leagues.into_iter().filter(|l| l.indexed != Some(false)).map(|l| l.name).collect())
 }
 
 /// The current challenge league, falling back to Standard; or with
-/// `hardcore`, its hardcore twin ("Hardcore Covens"), falling back to
-/// Hardcore.
+/// `hardcore`, its hardcore twin ("Hardcore Covens", PoE2's "HC Runes of
+/// Aldur"), falling back to Hardcore.
 pub fn pick_league(names: &[String], hardcore: bool) -> String {
     let (permanent, challenge): (&str, fn(&str) -> bool) = if hardcore {
-        ("Hardcore", |n| n.starts_with("Hardcore ") && !n.contains("Ruthless"))
+        ("Hardcore", |n| n != "Hardcore" && is_hardcore(n) && !n.contains("Ruthless"))
     } else {
-        ("Standard", |n| !n.contains("Hardcore") && !n.contains("Ruthless") && n != "Standard")
+        ("Standard", |n| !is_hardcore(n) && !n.contains("Hardcore") && !n.contains("Ruthless") && n != "Standard")
     };
     names.iter().find(|n| challenge(n)).cloned().unwrap_or_else(|| permanent.to_string())
 }
@@ -256,10 +316,11 @@ pub fn fetch(league: &str) -> Result<PriceDb, String> {
     let league_q = encode(league);
     let mut failures = 0;
 
-    for kind in EXCHANGE_TYPES {
-        let url = format!("{BASE}/economy/exchange/current/overview?league={league_q}&type={kind}");
+    let small = game::current().small_unit();
+    for kind in exchange_types() {
+        let url = format!("{}/economy/exchange/current/overview?league={league_q}&type={kind}", base());
         match get::<ExchangeOverview>(&url) {
-            Ok(ov) => db.add_exchange(ov),
+            Ok(ov) => db.add_exchange(ov, small),
             Err(e) => {
                 eprintln!("poe.ninja: {e}");
                 failures += 1;
@@ -268,8 +329,8 @@ pub fn fetch(league: &str) -> Result<PriceDb, String> {
         thread::sleep(REQUEST_GAP);
     }
 
-    for kind in ITEM_TYPES {
-        let url = format!("{BASE}/economy/stash/current/item/overview?league={league_q}&type={kind}");
+    for kind in item_types() {
+        let url = format!("{}/economy/stash/current/item/overview?league={league_q}&type={kind}", base());
         match get::<ItemOverview>(&url) {
             Ok(ov) => db.add_items(kind, ov),
             Err(e) => {
@@ -280,7 +341,7 @@ pub fn fetch(league: &str) -> Result<PriceDb, String> {
         thread::sleep(REQUEST_GAP);
     }
 
-    if failures == EXCHANGE_TYPES.len() + ITEM_TYPES.len() {
+    if failures == exchange_types().len() + item_types().len() {
         return Err("every poe.ninja request failed".to_string());
     }
     if db.divine_rate == 0.0 {
@@ -317,7 +378,7 @@ pub(crate) mod tests {
     /// A price list built from the fixtures the way `fetch` builds it.
     pub(crate) fn fixture_db() -> PriceDb {
         let mut db = PriceDb::new("Fixture");
-        db.add_exchange(serde_json::from_str(EXCHANGE).expect("exchange overview"));
+        db.add_exchange(serde_json::from_str(EXCHANGE).expect("exchange overview"), "chaos");
         for (kind, json) in ITEMS {
             let ov: ItemOverview = serde_json::from_str(json).unwrap_or_else(|e| panic!("{kind} overview: {e}"));
             db.add_items(kind, ov);
@@ -350,6 +411,33 @@ pub(crate) mod tests {
         let names = only(&["Covens", "Hardcore Ruthless Covens", "Standard", "Hardcore"]);
         assert_eq!(pick_league(&names, false), "Covens");
         assert_eq!(pick_league(&names, true), "Hardcore");
+    }
+
+    #[test]
+    fn poe2_leagues() {
+        let index: IndexState = serde_json::from_str(include_str!("../fixtures/poe2/ninja-index-state.json")).unwrap();
+        let names: Vec<String> =
+            index.economy_leagues.into_iter().filter(|l| l.indexed != Some(false)).map(|l| l.name).collect();
+        let league = pick_league(&names, false);
+        assert!(!is_hardcore(&league) && league != "Standard", "picked {league} from {names:?}");
+        let only = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let names = only(&["Runes of Aldur", "HC Runes of Aldur", "Standard", "Hardcore"]);
+        assert_eq!(pick_league(&names, false), "Runes of Aldur");
+        assert_eq!(pick_league(&names, true), "HC Runes of Aldur");
+    }
+
+    /// PoE2's poe.ninja counts in divines: read as Exalted Orbs.
+    #[test]
+    fn poe2_exchange_in_exalted() {
+        let json = include_str!("../fixtures/poe2/ninja-exchange-currency.json");
+        let raw: serde_json::Value = serde_json::from_str(json).unwrap();
+        let per_divine = raw["core"]["rates"]["exalted"].as_f64().unwrap();
+        let mut db = PriceDb::new("Fixture");
+        db.add_exchange(serde_json::from_str(json).unwrap(), "exalted");
+        assert!((db.exchange["Exalted Orb"] - 1.0).abs() < 0.05, "an exalted is {}", db.exchange["Exalted Orb"]);
+        assert!((db.exchange["Divine Orb"] - per_divine).abs() < 0.01 * per_divine);
+        assert!((db.to_divine(db.exchange["Divine Orb"]) - 1.0).abs() < 0.01);
+        assert!(db.exchange["Chaos Orb"] > db.exchange["Exalted Orb"]);
     }
 
     #[test]

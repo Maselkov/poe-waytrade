@@ -332,7 +332,8 @@ Rml::String thousands(const std::string& digits) {
 // "3.3", "93", "29,400"
 Rml::String amount_text(double v) { return v < 10 ? format("%.1f", v) : thousands(format("%.0f", v)); }
 
-Rml::String chaos_text(double chaos) { return amount_text(chaos) + "c"; }
+// In the game's small unit: "93c", PoE2's "93ex".
+Rml::String chaos_text(double chaos) { return amount_text(chaos) + small_unit_suffix(); }
 
 // "stack of 28" -> "Stack of 28"
 Rml::String capitalized(Rml::String s) {
@@ -358,7 +359,7 @@ UiPriceRow ninja_row(const PriceLine& p) {
         r.main = amount;
         r.icon = id;
     } else {
-        r.main = amount + (divine ? " div" : "c");
+        r.main = amount + (divine ? " div" : small_unit_suffix());
     }
     if (divine) r.sub = chaos_text(p.chaos);
     return r;
@@ -1183,7 +1184,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             if (icons_get(l.currency_id)) u.icon = l.currency_id;
             else u.price += " " + l.currency;
             // Skip conversions too small to read ("0.0c").
-            if (l.chaos >= 0.1 && l.currency != "Chaos Orb") u.sub = chaos_text(l.chaos);
+            if (l.chaos >= 0.1 && l.currency != small_unit_name()) u.sub = chaos_text(l.chaos);
             u.age = l.age;
             if (l.count > 1) u.count = "×" + std::to_string(l.count);
             // A gem's level and quality ("Level 20 · 23%"), each in its column.
@@ -1235,7 +1236,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             } else {
                 trade.main = amount + " " + s.currency;
             }
-            if (s.chaos >= 0.1 && s.currency != "Chaos Orb") trade.sub = chaos_text(s.chaos);
+            if (s.chaos >= 0.1 && s.currency != small_unit_name()) trade.sub = chaos_text(s.chaos);
             // "15–19 Chaos Orb" -> "15–19": the icon above names the currency.
             Rml::String range = s.range;
             Rml::String suffix = " " + s.currency;

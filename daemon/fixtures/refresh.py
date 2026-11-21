@@ -2,7 +2,8 @@
 """Re-captures the API replies the daemon's tests run against, trimmed to
 what the tests use. Run it from anywhere; it writes next to itself:
 
-    python3 daemon/fixtures/refresh.py
+    python3 daemon/fixtures/refresh.py          # PoE1's and PoE2's
+    python3 daemon/fixtures/refresh.py --poe2   # PoE2's only (fixtures/poe2/)
 
 then `cargo test`. A test that fails afterwards means poe.ninja or the trade
 site changed something the daemon relies on (or the market moved: prices in
@@ -23,6 +24,10 @@ OUT = pathlib.Path(__file__).resolve().parent
 UA = "poe-waytrade-daemon/tests (personal price-check overlay)"
 NINJA = "https://poe.ninja/poe1/api"
 TRADE = "https://www.pathofexile.com/api/trade"
+NINJA2 = "https://poe.ninja/poe2/api"
+TRADE2 = "https://www.pathofexile.com/api/trade2"
+# PoE2's exchange currencies the tests use.
+CURRENCIES2 = {"exalted", "divine", "chaos", "alch", "regal", "annul", "vaal", "mirror", "transmute", "aug"}
 
 # The exchange currencies the tests price things in.
 CURRENCIES = {"chaos", "divine", "alch", "exalted", "mirror", "alt", "chance", "fusing", "jew", "chrome", "vaal",
@@ -83,6 +88,7 @@ def get(url, body=None):
 
 
 def save(name, value):
+    (OUT / name).parent.mkdir(exist_ok=True)
     (OUT / name).write_text(json.dumps(value, indent=1, ensure_ascii=False) + "\n")
     print(f"wrote {name}")
 
@@ -164,6 +170,35 @@ def main():
     save("trade-fetch.json", {"result": entries})
 
 
+def main_poe2():
+    index = get(f"{NINJA2}/data/index-state")
+    leagues = [{"name": lg["name"], "indexed": lg.get("indexed")} for lg in index["economyLeagues"]]
+    save("poe2/ninja-index-state.json", {"economyLeagues": leagues})
+    league = next(lg["name"] for lg in leagues
+                  if lg["indexed"] is not False and not lg["name"].startswith(("HC ", "Hardcore"))
+                  and lg["name"] != "Standard")
+    q = urllib.parse.quote(league)
+
+    ex = get(f"{NINJA2}/economy/exchange/current/overview?league={q}&type=Currency")
+    save("poe2/ninja-exchange-currency.json", {
+        "core": slim(ex["core"]) | {"items": [slim(i) for i in ex["core"].get("items", [])]},
+        "lines": [slim(line) for line in ex["lines"] if line["id"] in CURRENCIES2],
+        "items": [slim(i) for i in ex["items"] if i["id"] in CURRENCIES2],
+    })
+
+    static = get(f"{TRADE2}/data/static")
+    save("poe2/trade-static.json", {"result": [
+        {"id": g["id"], "label": g.get("label"), "entries": [e for e in g["entries"] if e["id"] in CURRENCIES2]}
+        for g in static["result"] if g["id"] == "Currency"
+    ]})
+    filters = get(f"{TRADE2}/data/filters")
+    save("poe2/trade-filters.json", {"result": [
+        {"id": g["id"], "filters": [{"id": f["id"]} for f in g["filters"]]} for g in filters["result"]
+    ]})
+
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--poe2" not in sys.argv:
+        main()
+    main_poe2()

@@ -145,10 +145,7 @@ pub fn default_status() -> Status {
 
 impl Settings {
     fn path() -> PathBuf {
-        let base = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config"));
-        base.join("poe-waytrade").join("settings.json")
+        crate::game::config_dir().join("settings.json")
     }
 
     /// The saved settings, or the defaults. A file that can't be read is

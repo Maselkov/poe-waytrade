@@ -7,6 +7,8 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include "game.h"
+
 #include <utility>
 #include <vector>
 
@@ -20,8 +22,10 @@ struct PriceLine {
     std::string unique;
 };
 
-// The currency a poe.ninja price is shown in (and its icon): divine from 1 up.
-inline const char* price_icon(const PriceLine& p) { return p.divine >= 1.0 ? "divine" : "chaos"; }
+// The currency a poe.ninja price is shown in (and its icon): divine from 1
+// up, else the game's small unit (chaos, PoE2's exalted). `chaos` is in
+// that unit.
+inline const char* price_icon(const PriceLine& p) { return p.divine >= 1.0 ? "divine" : small_unit_id(); }
 
 struct TradeFilter {
     int index = 0;
