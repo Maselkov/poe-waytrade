@@ -162,8 +162,8 @@ body {
    and handles. With no maximum there's no right handle: the fill runs open
    to the end (pressing near the end still drags out a maximum). The handles
    centre on their value; the padding keeps both ends reachable. They're
-   10dp circles with the border counted inside (border-box), so they fit
-   within the 12dp strip. */
+   10dp circles drawn from a generated "disc:<fill>:<ring>" image (see
+   rml_renderer.cpp): RmlUi's border-radius looks square at this size. */
 .slider-row { padding: 0 0 3dp 0; margin-top: -2dp; }
 .range { height: 12dp; padding: 0 7dp; drag: drag; cursor: pointer; }
 .range-inner { position: relative; height: 12dp; }
@@ -176,16 +176,13 @@ body {
 .filter.on .range-roll { background-color: $accent-text; }
 .range-handle {
     position: absolute;
-    box-sizing: border-box;
     top: 1dp;
     width: 10dp;
     height: 10dp;
     margin-left: -5dp;
-    border-radius: 5dp;
-    background-color: $accent-text;
-    border: 2dp $accent;
+    decorator: image(disc:$accent-text:$accent);
 }
-.range:hover .range-handle { background-color: #ffffff; }
+.range:hover .range-handle { decorator: image(disc:#ffffff:$accent); }
 
 .section-label { font-size: 10dp; letter-spacing: 0.5dp; color: $text-faint; margin: 6dp 0 2dp; }
 
@@ -462,7 +459,7 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .filter.sec-fractured.on { border-left-color: #a88f52; background-color: #1a1710; }
 .filter.sec-fractured.off .mod, .filter.sec-fractured.off .mod-full { color: #8e7f57; }
 .filter.sec-fractured .range-fill { background-color: #a88f52; }
-.filter.sec-fractured .range-handle { border-color: #a88f52; background-color: #efe3c2; }
+.filter.sec-fractured .range-handle { decorator: image(disc:#efe3c2:#a88f52); }
 .pv-line.fractured { color: #c6b07a; }
 
 /* Crafted mods in PoE's crafted blue, like the listings' crafted lines. */
@@ -470,7 +467,7 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .filter.sec-crafted.on { border-left-color: #7a7ad6; background-color: #15152a; }
 .filter.sec-crafted.off .mod, .filter.sec-crafted.off .mod-full { color: #8585c0; }
 .filter.sec-crafted .range-fill { background-color: #7a7ad6; }
-.filter.sec-crafted .range-handle { border-color: #7a7ad6; background-color: #e2e2ff; }
+.filter.sec-crafted .range-handle { decorator: image(disc:#e2e2ff:#7a7ad6); }
 
 /* Eldritch implicits in their altar's colours: the Searing Exarch's ember
    orange-red, the Eater of Worlds' deep blue. */
@@ -478,12 +475,12 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .filter.sec-exarch.on { border-left-color: #d0512a; background-color: #22130d; }
 .filter.sec-exarch.off .mod, .filter.sec-exarch.off .mod-full { color: #b5694a; }
 .filter.sec-exarch .range-fill { background-color: #d0512a; }
-.filter.sec-exarch .range-handle { border-color: #d0512a; background-color: #ffd9c2; }
+.filter.sec-exarch .range-handle { decorator: image(disc:#ffd9c2:#d0512a); }
 .filter.sec-eater .mod, .filter.sec-eater .mod-full { color: #6fb4ec; }
 .filter.sec-eater.on { border-left-color: #2f78c4; background-color: #0e1724; }
 .filter.sec-eater.off .mod, .filter.sec-eater.off .mod-full { color: #5384b0; }
 .filter.sec-eater .range-fill { background-color: #2f78c4; }
-.filter.sec-eater .range-handle { border-color: #2f78c4; background-color: #cfe5fb; }
+.filter.sec-eater .range-handle { decorator: image(disc:#cfe5fb:#2f78c4); }
 
 /* Influence flags in their influence's color, only when ticked; unticked
    they look like any other filter. */
