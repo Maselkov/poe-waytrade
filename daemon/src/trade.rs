@@ -549,12 +549,12 @@ pub struct Trade {
     last_used: Instant,
 }
 
-/// Items worth a trade search: anything non-unique with mods, and white
-/// gear (searched as a base).
+/// Items worth a trade search: anything non-unique with mods, white gear
+/// (searched as a base), and white maps and invitations (by type).
 pub fn searchable(item: &Item) -> bool {
     match item.rarity.as_str() {
         "Rare" | "Magic" => !item.mods.is_empty() || item.links >= 5,
-        "Normal" => !item.mods.is_empty() || base_preset_available(item),
+        "Normal" => !item.mods.is_empty() || base_preset_available(item) || crate::mapcheck::is_map_like(item),
         // Identified uniques: searched by name, with their rolls. Also
         // unidentified ones once their art says which unique they are.
         "Unique" => item.name.is_some() && (!item.mods.is_empty() || item.unidentified),
@@ -3912,6 +3912,21 @@ mod tests {
         let q = query(&plain, &filters, &chosen, opts);
         assert_eq!(q["query"]["type"], "Desert Brigandine");
         assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["ilvl"]["min"], 84.0);
+
+        // A white invitation has no mods, but has listings: searched by type.
+        let invitation = crate::item::parse(
+            "Item Class: Misc Map Items\nRarity: Normal\nScreaming Invitation\n--------\n\
+             Modifiers to Item Quantity affect the amount of rewards dropped by the boss\n--------\n\
+             Open portals to Absence of Symmetry and Harmony by using this item in a personal Map Device.\n",
+        )
+        .unwrap();
+        assert!(invitation.mods.is_empty() && searchable(&invitation));
+        assert_eq!(default_preset(&invitation), Preset::Normal);
+        let filters = build_filters(&invitation, &test_data(), Preset::Normal);
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, None))).collect();
+        let q =
+            query(&invitation, &filters, &chosen, SearchOptions { base_only: false, preset: Preset::Normal, ..opts });
+        assert_eq!(q["query"]["type"], "Screaming Invitation");
 
         // A rare 5-link at 10% quality with local increased armour and
         // evasion: defences scaled to 20% quality, no links filter.
