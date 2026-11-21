@@ -65,12 +65,21 @@ fn exchange_types() -> &'static [&'static str] {
     }
 }
 
-/// PoE2's stash item lines (uniques) are priced in divines, with no chaos
-/// value: not read yet, so PoE2 has exchange prices only.
+/// PoE2's stash item categories: uniques, priced in divines.
+const POE2_ITEM_TYPES: &[&str] = &[
+    "UniqueWeapons",
+    "UniqueArmours",
+    "UniqueAccessories",
+    "UniqueFlasks",
+    "UniqueCharms",
+    "UniqueJewels",
+    "UniqueTablets",
+];
+
 fn item_types() -> &'static [&'static str] {
     match game::current() {
         Game::Poe1 => ITEM_TYPES,
-        Game::Poe2 => &[],
+        Game::Poe2 => POE2_ITEM_TYPES,
     }
 }
 
@@ -136,6 +145,8 @@ struct ExchangeItem {
 #[derive(Deserialize)]
 struct ItemOverview {
     lines: Vec<ItemLine>,
+    /// PoE2's: the currency `primaryValue`s are in, and its rates.
+    core: Option<ExchangeCore>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -151,8 +162,14 @@ pub struct ItemLine {
     /// Item level for base types (82-86, 86 meaning 86+) and cluster
     /// jewels (the bracket: 1, 50, 68, 75 or 84).
     pub level_required: Option<u32>,
+    /// In the game's small unit (PoE2's lines have only `primary_value`,
+    /// turned into this when read).
+    #[serde(default)]
     pub chaos_value: f64,
     pub divine_value: Option<f64>,
+    /// PoE2: the value in the overview's primary currency (divines).
+    #[serde(default)]
+    primary_value: Option<f64>,
     pub listing_count: Option<u32>,
     /// The item's art on web.poecdn.com (art.rs tells unidentified uniques
     /// apart by it).
@@ -245,7 +262,36 @@ impl PriceDb {
     }
 
     /// `kind`: the poe.ninja type the lines came from ("UniqueArmour", ...).
-    fn add_items(&mut self, kind: &str, ov: ItemOverview) {
+    /// `small`: the game's small unit, `chaos_value`'s unit.
+    fn add_items(&mut self, kind: &str, mut ov: ItemOverview, small: &str) {
+        // PoE2's lines are valued in the overview's primary currency
+        // (divines) and word mods with markup ("[Resistances]").
+        if let Some(core) = &ov.core {
+            let primary = core.primary.as_deref().unwrap_or(small);
+            let per = |c: &str| if c == primary { Some(1.0) } else { core.rates.get(c).copied().filter(|r| *r > 0.0) };
+            let (small_per, divine_per) = (per(small), per("divine"));
+            for line in &mut ov.lines {
+                let Some(value) = line.primary_value else { continue };
+                if let Some(s) = small_per {
+                    line.chaos_value = value * s;
+                }
+                if let Some(d) = divine_per {
+                    line.divine_value = Some(value * d);
+                }
+            }
+        }
+        for line in &mut ov.lines {
+            for m in line
+                .implicit_modifiers
+                .iter_mut()
+                .chain(&mut line.explicit_modifiers)
+                .chain(&mut line.mutated_modifiers)
+            {
+                if m.text.contains('[') {
+                    m.text = strip_markup(&m.text);
+                }
+            }
+        }
         // Named by their base or enchant, so they get maps of their own:
         // `items` is looked up by name, and a rare "Vaal Regalia" mustn't
         // find the plain base's price there.
@@ -270,6 +316,25 @@ impl PriceDb {
             self.items.entry(line.name.clone()).or_default().push(line);
         }
     }
+}
+
+/// PoE2 poe.ninja's mod markup: "[EnergyShield|Energy Shield]" -> "Energy
+/// Shield", "[Resistances]" -> "Resistances".
+fn strip_markup(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(open) = rest.find('[') {
+        out.push_str(&rest[..open]);
+        let Some(close) = rest[open..].find(']') else {
+            out.push_str(&rest[open..]);
+            return out;
+        };
+        let inner = &rest[open + 1..open + close];
+        out.push_str(inner.rsplit('|').next().unwrap_or(inner));
+        rest = &rest[open + close + 1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 fn get<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
@@ -330,7 +395,7 @@ pub fn fetch(league: &str) -> Result<PriceDb, String> {
     for kind in item_types() {
         let url = format!("{}/economy/stash/current/item/overview?league={league_q}&type={kind}", base());
         match get::<ItemOverview>(&url) {
-            Ok(ov) => db.add_items(kind, ov),
+            Ok(ov) => db.add_items(kind, ov, small),
             Err(e) => {
                 eprintln!("poe.ninja: {e}");
                 failures += 1;
@@ -379,9 +444,32 @@ pub(crate) mod tests {
         db.add_exchange(serde_json::from_str(EXCHANGE).expect("exchange overview"), "chaos");
         for (kind, json) in ITEMS {
             let ov: ItemOverview = serde_json::from_str(json).unwrap_or_else(|e| panic!("{kind} overview: {e}"));
-            db.add_items(kind, ov);
+            db.add_items(kind, ov, "chaos");
         }
         db
+    }
+
+    /// PoE2's price list from its fixtures, read as `fetch` reads them.
+    pub(crate) fn poe2_fixture_db() -> PriceDb {
+        let mut db = PriceDb::new("Fixture");
+        let exchange = include_str!("../fixtures/poe2/ninja-exchange-currency.json");
+        db.add_exchange(serde_json::from_str(exchange).unwrap(), "exalted");
+        let armours = include_str!("../fixtures/poe2/ninja-unique-armours.json");
+        db.add_items("UniqueArmours", serde_json::from_str(armours).unwrap(), "exalted");
+        db
+    }
+
+    #[test]
+    fn poe2_markup() {
+        assert_eq!(
+            strip_markup("+(100-150) to maximum [EnergyShield|Energy Shield]"),
+            "+(100-150) to maximum Energy Shield"
+        );
+        assert_eq!(
+            strip_markup("+(10-20)% to all [ElementalDamage|Elemental] [Resistances]"),
+            "+(10-20)% to all Elemental Resistances"
+        );
+        assert_eq!(strip_markup("no markup"), "no markup");
     }
 
     /// The fixture's own lines for one name, as raw JSON.

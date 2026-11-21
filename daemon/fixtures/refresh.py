@@ -203,6 +203,14 @@ def main_poe2():
         "items": [slim(i) for i in ex["items"] if i["id"] in CURRENCIES2],
     })
 
+    # Uniques: one on two bases (plain and Runemastered), and one listed once.
+    ov = get(f"{NINJA2}/economy/stash/current/item/overview?league={q}&type=UniqueArmours")
+    keep = [line for line in ov["lines"] if line["name"] in ("Black Sun Crest", "Atziri's Step")]
+    save("poe2/ninja-unique-armours.json", {
+        "core": slim(ov["core"]) | {"items": [slim(i) for i in ov["core"].get("items", [])]},
+        "lines": [slim(line, mods=True) for line in keep],
+    })
+
     static = get(f"{TRADE2}/data/static")
     save("poe2/trade-static.json", {"result": [
         {"id": g["id"], "label": g.get("label"), "entries": [e for e in g["entries"] if e["id"] in CURRENCIES2]}

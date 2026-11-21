@@ -1,0 +1,226 @@
+{
+ "core": {
+  "items": [
+   {
+    "id": "divine",
+    "name": "Divine Orb",
+    "category": "Currency",
+    "detailsId": "divine-orb"
+   },
+   {
+    "id": "exalted",
+    "name": "Exalted Orb",
+    "category": "Currency",
+    "detailsId": "exalted-orb"
+   },
+   {
+    "id": "chaos",
+    "name": "Chaos Orb",
+    "category": "Currency",
+    "detailsId": "chaos-orb"
+   }
+  ],
+  "rates": {
+   "exalted": 529.1,
+   "chaos": 11.38
+  },
+  "primary": "divine",
+  "secondary": "chaos"
+ },
+ "lines": [
+  {
+   "id": 662,
+   "itemId": "Atziri's Step Runemastered Cinched Boots",
+   "detailsId": "atziris-step-runemastered-cinched-boots",
+   "name": "Atziri's Step",
+   "baseType": "Runemastered Cinched Boots",
+   "levelRequired": 65,
+   "category": "Boots",
+   "primaryValue": 1.0,
+   "listingCount": 18,
+   "corrupted": false,
+   "propertyModifiers": [
+    {
+     "text": "[Evasion|Evasion Rating]: (320-420)",
+     "optional": false
+    },
+    {
+     "text": "[Ward|Runic Ward]: (74-99)",
+     "optional": false
+    }
+   ],
+   "requirementModifiers": [
+    {
+     "text": "Level: 65",
+     "optional": false
+    },
+    {
+     "text": "[Dexterity|Dex]: 86",
+     "optional": false
+    }
+   ],
+   "explicitModifiers": [
+    {
+     "text": "30% increased Movement Speed"
+    },
+    {
+     "text": "(80-120)% increased [Evasion|Evasion] Rating"
+    },
+    {
+     "text": "+(70-100) to maximum Life"
+    },
+    {
+     "text": "Gain [Deflect|Deflection Rating] equal to (40-60)% of [Evasion|Evasion Rating]"
+    },
+    {
+     "text": "-(12-6)% to amount of [Hit|Damage] Prevented by [Deflect|Deflection]"
+    },
+    {
+     "text": "Cannot be [LightStun|Light Stunned] by [Deflect|Deflected] [Hit|Hits]"
+    }
+   ]
+  },
+  {
+   "id": 100,
+   "itemId": "Atziri's Step Cinched Boots",
+   "detailsId": "atziris-step-cinched-boots",
+   "name": "Atziri's Step",
+   "baseType": "Cinched Boots",
+   "levelRequired": 65,
+   "category": "Boots",
+   "primaryValue": 0.00945,
+   "listingCount": 5389,
+   "corrupted": false,
+   "propertyModifiers": [
+    {
+     "text": "[Evasion|Evasion Rating]: (400-493)",
+     "optional": false
+    }
+   ],
+   "requirementModifiers": [
+    {
+     "text": "Level: 65",
+     "optional": false
+    },
+    {
+     "text": "[Dexterity|Dex]: 86",
+     "optional": false
+    }
+   ],
+   "explicitModifiers": [
+    {
+     "text": "30% increased Movement Speed"
+    },
+    {
+     "text": "(80-120)% increased [Evasion|Evasion] Rating"
+    },
+    {
+     "text": "+(70-100) to maximum Life"
+    },
+    {
+     "text": "Gain [Deflect|Deflection Rating] equal to (40-60)% of [Evasion|Evasion Rating]"
+    },
+    {
+     "text": "-(12-6)% to amount of [Hit|Damage] Prevented by [Deflect|Deflection]"
+    },
+    {
+     "text": "Cannot be [LightStun|Light Stunned] by [Deflect|Deflected] [Hit|Hits]"
+    }
+   ]
+  },
+  {
+   "id": 518,
+   "itemId": "Black Sun Crest Runemastered Wrapped Greathelm",
+   "detailsId": "black-sun-crest-runemastered-wrapped-greathelm",
+   "name": "Black Sun Crest",
+   "baseType": "Runemastered Wrapped Greathelm",
+   "levelRequired": 38,
+   "category": "Helmet",
+   "primaryValue": 0.00858,
+   "listingCount": 759,
+   "corrupted": false,
+   "propertyModifiers": [
+    {
+     "text": "[Armour]: (255-306)",
+     "optional": false
+    },
+    {
+     "text": "[Ward|Runic Ward]: 27",
+     "optional": false
+    }
+   ],
+   "requirementModifiers": [
+    {
+     "text": "Level: 38",
+     "optional": false
+    },
+    {
+     "text": "[Strength|Str]: 54",
+     "optional": false
+    }
+   ],
+   "explicitModifiers": [
+    {
+     "text": "(50-80)% increased [Armour|Armour]"
+    },
+    {
+     "text": "(5-15)% increased [Strength]"
+    },
+    {
+     "text": "(5-15)% increased [Dexterity]"
+    },
+    {
+     "text": "(5-15)% increased [Intelligence]"
+    },
+    {
+     "text": "20% reduced [LightRadius|Light Radius]"
+    }
+   ]
+  },
+  {
+   "id": 285,
+   "itemId": "Black Sun Crest Wrapped Greathelm",
+   "detailsId": "black-sun-crest-wrapped-greathelm",
+   "name": "Black Sun Crest",
+   "baseType": "Wrapped Greathelm",
+   "levelRequired": 16,
+   "category": "Helmet",
+   "primaryValue": 0.00209,
+   "listingCount": 5655,
+   "corrupted": false,
+   "propertyModifiers": [
+    {
+     "text": "[Armour]: (149-178)",
+     "optional": false
+    }
+   ],
+   "requirementModifiers": [
+    {
+     "text": "Level: (16-30)",
+     "optional": false
+    },
+    {
+     "text": "[Strength|Str]: 25",
+     "optional": false
+    }
+   ],
+   "explicitModifiers": [
+    {
+     "text": "(50-80)% increased [Armour|Armour]"
+    },
+    {
+     "text": "(5-15)% increased [Strength]"
+    },
+    {
+     "text": "(5-15)% increased [Dexterity]"
+    },
+    {
+     "text": "(5-15)% increased [Intelligence]"
+    },
+    {
+     "text": "20% reduced [LightRadius|Light Radius]"
+    }
+   ]
+  }
+ ]
+}

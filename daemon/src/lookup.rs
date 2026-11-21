@@ -4,6 +4,7 @@ use crate::item::Item;
 use crate::ninja::{ItemLine, PriceDb};
 use crate::trade::templatize;
 
+#[derive(Debug)]
 pub struct Price {
     pub label: String,
     pub chaos: f64,
@@ -311,10 +312,14 @@ fn line_price(db: &PriceDb, line: &ItemLine) -> Price {
 /// `named`: label each price with its unique's name (an unidentified item,
 /// which could be any of them).
 fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item, named: bool) -> Vec<Price> {
+    // PoE2 lists a unique on each of its bases ("Runemastered Wrapped
+    // Greathelm" and "Wrapped Greathelm"): the item's own, when listed.
+    let same_base: Vec<&ItemLine> = lines.iter().filter(|l| l.base_type.as_deref() == Some(&item.base)).collect();
+    let lines: Vec<&ItemLine> = if same_base.is_empty() { lines.iter().collect() } else { same_base };
     let want = if item.links >= 5 { Some(item.links) } else { None };
-    let mut matching: Vec<&ItemLine> = lines.iter().filter(|l| l.links.filter(|&n| n >= 5) == want).collect();
+    let mut matching: Vec<&ItemLine> = lines.iter().copied().filter(|l| l.links.filter(|&n| n >= 5) == want).collect();
     if matching.is_empty() {
-        matching = lines.iter().collect();
+        matching = lines;
     }
     let mut matching = matching_variants(matching, item);
     // Most-listed first: those prices are the most trustworthy.
@@ -848,6 +853,34 @@ mod tests {
             "Item Class: Body Armours\nRarity: {rarity}\nVaal Regalia\n--------\nItem Level: {ilvl}\n--------\n{extra}"
         );
         base_prices(&fixture_db(), &parse(&text).unwrap()).into_iter().map(|p| (p.label, p.chaos)).collect()
+    }
+
+    #[test]
+    fn poe2_unique_by_base() {
+        let db = crate::ninja::tests::poe2_fixture_db();
+        let raw: serde_json::Value =
+            serde_json::from_str(include_str!("../fixtures/poe2/ninja-unique-armours.json")).unwrap();
+        let per_divine = raw["core"]["rates"]["exalted"].as_f64().unwrap();
+        let line = |base: &str| {
+            raw["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|l| l["name"] == "Black Sun Crest" && l["baseType"] == base)
+                .cloned()
+        };
+        for base in ["Wrapped Greathelm", "Runemastered Wrapped Greathelm"] {
+            let Some(want) = line(base) else { continue };
+            let text =
+                format!("Item Class: Helmets\nRarity: Unique\nBlack Sun Crest\n{base}\n--------\nItem Level: 80\n");
+            let Outcome::Found { prices, .. } = lookup(&db, &crate::item::parse(&text).unwrap()) else {
+                panic!("no price for Black Sun Crest on {base}")
+            };
+            let divines = want["primaryValue"].as_f64().unwrap();
+            assert_eq!(prices.len(), 1, "{base}: {prices:?}");
+            assert!((prices[0].divine - divines).abs() < 1e-9, "{base}: {prices:?}");
+            assert!((prices[0].chaos - divines * per_divine).abs() < 1e-6, "in exalted: {prices:?}");
+        }
     }
 
     #[test]
