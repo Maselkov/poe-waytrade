@@ -27,6 +27,7 @@ struct GpuLabel {
     uint64_t id = 0;  // the tooltip's (ScreenScan)
     float plate_x = 0, plate_y = 0;
     float seen_x = 0, seen_y = 0;  // its last measured place (no prediction)
+    float vx = 0, vy = 0;          // its speed (pixels a second)
     std::array<float, 4> rect{};  // x0, y0, x1, y1 (swapchain pixels)
     std::shared_ptr<const ScreenScan::Plate> plate;
 };
@@ -62,11 +63,12 @@ private:
         bool timed = false;  // its queries hold a measurement to read
         int count = 0;       // labels it searched for
         std::vector<uint64_t> ids;  // their ids, by slot
+        std::vector<std::array<float, 2>> laid;  // and where they were laid out for
         std::chrono::steady_clock::time_point recorded_at;
     };
-    // Each label's last move from where the CPU put it, when found.
+    // Where each label's plate was last found.
     struct Correction {
-        float dx = 0, dy = 0;
+        float x = 0, y = 0;
         std::chrono::steady_clock::time_point at;
     };
     std::unordered_map<uint64_t, Correction> corrections_;

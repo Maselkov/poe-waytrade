@@ -92,6 +92,7 @@ public:
         // Where it last was in a copy, before predicting on: after a sharp
         // turn it's between here and plate_x/y.
         float seen_x = 0, seen_y = 0;
+        float vx = 0, vy = 0;  // its speed (pixels a second)
         std::shared_ptr<const Plate> plate;
     };
     std::vector<Label> labels() const;

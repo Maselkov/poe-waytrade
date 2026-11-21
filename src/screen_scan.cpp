@@ -958,6 +958,8 @@ std::vector<ScreenScan::Label> ScreenScan::labels() const {
         l.plate_y = t.y + t.vy * dt;
         l.seen_x = t.x;
         l.seen_y = t.y;
+        l.vx = t.moving ? t.vx : 0;
+        l.vy = t.moving ? t.vy : 0;
         l.plate = t.plate;
         l.x = l.plate_x + t.w / 2;
         l.y = l.plate_y;

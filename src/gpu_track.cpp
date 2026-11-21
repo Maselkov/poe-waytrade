@@ -38,9 +38,9 @@ constexpr uint32_t kFinePositions = 25;
 // Labels tracked at once, and the room for their plates (half-size grey
 // floats: a plate is ~200x32 of them at 1440p, ~300x48 at 4K).
 constexpr size_t kMaxLabels = 16;
-// A label whose plate isn't found (covered a moment, or a weak match) is
-// moved by its last correction this recent: the CPU's prediction is off
-// the same way from one frame to the next.
+// A label whose plate isn't found (covered a moment, or a weak match) goes
+// where its plate was last found, if this recently, moved on at its speed:
+// not back to the CPU's prediction, which may be off by more.
 constexpr auto kFallbackFor = std::chrono::milliseconds(150);
 constexpr size_t kTemplateFloats = 16384;
 
@@ -294,9 +294,10 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
     for (size_t i = 0; i < img.ids.size(); i++, r += 4) {
         if (r[3] < 0.9f) continue;
         Correction& c = corrections_[img.ids[i]];
-        if (img.recorded_at > c.at) c = {r[0], r[1], img.recorded_at};
+        if (img.recorded_at > c.at) c = {img.laid[i][0] + r[0], img.laid[i][1] + r[1], img.recorded_at};
     }
     img.ids.clear();
+    img.laid.clear();
     std::erase_if(corrections_, [&](const auto& c) { return now - c.second.at > kFallbackFor; });
 
     // The slots and their plates; the GPU is done with this image's last use.
@@ -317,9 +318,13 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
             continue;
         Slot& slot = slots[count++];
         img.ids.push_back(l.id);
-        auto c = corrections_.find(l.id);
-        slot.fallback[0] = c == corrections_.end() ? 0 : c->second.dx;
-        slot.fallback[1] = c == corrections_.end() ? 0 : c->second.dy;
+        img.laid.push_back({l.plate_x, l.plate_y});
+        slot.fallback[0] = slot.fallback[1] = 0;
+        if (auto c = corrections_.find(l.id); c != corrections_.end()) {
+            float dt = std::chrono::duration<float>(now - c->second.at).count();
+            slot.fallback[0] = c->second.x + l.vx * dt - l.plate_x;
+            slot.fallback[1] = c->second.y + l.vy * dt - l.plate_y;
+        }
         // Search between where it was measured and where it's predicted:
         // after a sudden turn it's somewhere in between, not ahead.
         slot.laid[0] = l.plate_x;
@@ -343,6 +348,7 @@ VkDescriptorSet GpuTracker::record(const void* key, uint32_t index, VkCommandBuf
     }
     if (count == 0) {
         img.ids.clear();
+        img.laid.clear();
         return VK_NULL_HANDLE;
     }
     img.count = count;
