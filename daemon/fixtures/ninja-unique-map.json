@@ -1,0 +1,88 @@
+{
+ "lines": [
+  {
+   "id": 118253,
+   "name": "Pillars of Arun",
+   "baseType": "Map (Tier 7)",
+   "itemClass": 3,
+   "chaosValue": 1.0,
+   "exaltedValue": 1.24,
+   "count": 399,
+   "detailsId": "pillars-of-arun-t0",
+   "listingCount": 1138,
+   "explicitModifiers": [
+    {
+     "text": "(100-200)% increased Experience gain"
+    },
+    {
+     "text": "Area contains unbridged gaps to cross"
+    },
+    {
+     "text": "Monsters have 50% chance to Avoid Ailments"
+    },
+    {
+     "text": "(20-25)% increased Monster Movement Speed"
+    },
+    {
+     "text": "(20-25)% increased Monster Attack Speed"
+    },
+    {
+     "text": "(20-25)% increased Monster Cast Speed"
+    },
+    {
+     "text": "Players have 200% increased Cooldown Recovery Rate for Movement Skills"
+    }
+   ]
+  },
+  {
+   "id": 135559,
+   "name": "Cortex",
+   "baseType": "Map (Tier 16)",
+   "itemClass": 3,
+   "chaosValue": 68.0,
+   "exaltedValue": 84.01,
+   "divineValue": 0.32,
+   "count": 399,
+   "detailsId": "cortex-t0",
+   "listingCount": 932
+  },
+  {
+   "id": 135906,
+   "name": "Replica Pillars of Arun",
+   "baseType": "Map (Tier 16)",
+   "itemClass": 3,
+   "chaosValue": 5.7,
+   "exaltedValue": 7.04,
+   "divineValue": 0.03,
+   "count": 19,
+   "detailsId": "replica-pillars-of-arun-t0",
+   "listingCount": 19,
+   "explicitModifiers": [
+    {
+     "text": "(100-200)% increased Experience gain"
+    },
+    {
+     "text": "Area contains unbridged gaps to cross"
+    },
+    {
+     "text": "Monsters have 50% chance to Avoid Ailments"
+    },
+    {
+     "text": "100% increased Monster Damage"
+    },
+    {
+     "text": "(20-25)% increased Monster Movement Speed"
+    },
+    {
+     "text": "(20-25)% increased Monster Attack Speed"
+    },
+    {
+     "text": "(20-25)% increased Monster Cast Speed"
+    },
+    {
+     "text": "Players have 200% increased Cooldown Recovery Rate for Movement Skills"
+    }
+   ]
+  }
+ ]
+}

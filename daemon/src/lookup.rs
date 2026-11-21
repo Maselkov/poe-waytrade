@@ -1,7 +1,7 @@
 //! Matching a parsed item against poe.ninja data.
 
 use crate::item::Item;
-use crate::ninja::{ItemLine, PriceDb};
+use crate::ninja::{ItemLine, PriceDb, unique_base};
 use crate::trade::templatize;
 
 #[derive(Debug)]
@@ -113,7 +113,7 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
     if item.rarity == "Unique" {
         let lines = match &item.name {
             Some(name) => db.items.get(name),
-            None => db.uniques_by_base.get(&item.base), // unidentified
+            None => db.uniques_by_base.get(unique_base(&item.base)), // unidentified
         };
         return match lines.map(|l| unique_prices(db, l, item, item.name.is_none())) {
             Some(prices) if !prices.is_empty() => found(title, prices),
@@ -306,7 +306,7 @@ fn cluster_bracket(ilvl: u32) -> u32 {
 pub fn unique_prices_named(db: &PriceDb, item: &Item, names: &[String]) -> Outcome {
     let lines: Vec<ItemLine> = db
         .uniques_by_base
-        .get(&item.base)
+        .get(unique_base(&item.base))
         .map(|lines| lines.iter().filter(|l| names.contains(&l.name)).cloned().collect())
         .unwrap_or_default();
     let prices = unique_prices(db, &lines, item, names.len() > 1);
@@ -324,7 +324,7 @@ pub fn unique_arts(db: &PriceDb, item: &Item) -> Vec<(String, Vec<String>)> {
         return Vec::new();
     }
     let mut arts: Vec<(String, Vec<String>)> = Vec::new();
-    for line in db.uniques_by_base.get(&item.base).into_iter().flatten() {
+    for line in db.uniques_by_base.get(unique_base(&item.base)).into_iter().flatten() {
         let Some(icon) = &line.icon else { return Vec::new() }; // can't rule that one out
         match arts.iter_mut().find(|(url, _)| url == icon) {
             Some((_, names)) if names.contains(&line.name) => {}
@@ -377,8 +377,10 @@ fn line_price(db: &PriceDb, line: &ItemLine) -> Price {
 /// which could be any of them).
 fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item, named: bool) -> Vec<Price> {
     // PoE2 lists a unique on each of its bases ("Runemastered Wrapped
-    // Greathelm" and "Wrapped Greathelm"): the item's own, when listed.
-    let same_base: Vec<&ItemLine> = lines.iter().filter(|l| l.base_type.as_deref() == Some(&item.base)).collect();
+    // Greathelm" and "Wrapped Greathelm"): the item's own, when listed. A
+    // unique map's tier doesn't count (see unique_base).
+    let same_base: Vec<&ItemLine> =
+        lines.iter().filter(|l| l.base_type.as_deref().map(unique_base) == Some(unique_base(&item.base))).collect();
     let lines: Vec<&ItemLine> = if same_base.is_empty() { lines.iter().collect() } else { same_base };
     let want = if item.links >= 5 { Some(item.links) } else { None };
     let mut matching: Vec<&ItemLine> = lines.iter().copied().filter(|l| l.links.filter(|&n| n >= 5) == want).collect();
@@ -412,7 +414,8 @@ fn unique_prices(db: &PriceDb, lines: &[ItemLine], item: &Item, named: bool) -> 
 /// of them when there's nothing to compare (an unidentified item, lines
 /// without mods).
 fn matching_variants<'a>(lines: Vec<&'a ItemLine>, item: &Item) -> Vec<&'a ItemLine> {
-    if lines.len() < 2 || item.mods.is_empty() {
+    // An unidentified item's "mods" are lines like "Monster Level: 83".
+    if lines.len() < 2 || item.unidentified || item.mods.is_empty() {
         return lines;
     }
     let have: Vec<(String, Vec<f64>)> = item
@@ -854,6 +857,38 @@ mod tests {
             parse("Item Class: Body Armours\nRarity: Unique\nSoul Mantle\nSpidersilk Robe\n--------\nItem Level: 84\n")
                 .unwrap();
         assert!(unique_arts(&db, &named).is_empty());
+    }
+
+    /// poe.ninja lists Pillars of Arun at Tier 7 and its Replica at Tier 16,
+    /// with the same art: a Tier 16 one could be either.
+    #[test]
+    fn unidentified_unique_map_any_tier() {
+        let item = parse(
+            "Item Class: Maps\nRarity: Unique\nMap (Tier 16)\n--------\nMap Tier: 16\n--------\nItem Level: 85\n\
+             --------\nMonster Level: 83\n--------\nUnidentified\n",
+        )
+        .unwrap();
+        let mut db = fixture_db();
+        for line in db.uniques_by_base.get_mut("Map").unwrap() {
+            let art = line.name.trim_start_matches("Replica ").replace(' ', "");
+            line.icon = Some(format!("https://web.poecdn.com/{art}.png"));
+        }
+        let arts = unique_arts(&db, &item);
+        let pillars = &arts.iter().find(|(url, _)| url.ends_with("/PillarsofArun.png")).unwrap().1;
+        assert_eq!(pillars, &["Pillars of Arun", "Replica Pillars of Arun"]);
+
+        let Outcome::Found { title, prices: got } = unique_prices_named(&db, &item, pillars) else {
+            panic!("not found")
+        };
+        assert_eq!(title, "Pillars of Arun / Replica Pillars of Arun");
+        let price = |name: &str| chaos(&line("UniqueMap", name, |_| true));
+        assert_eq!(
+            got.iter().map(|p| (p.label.as_str(), p.chaos)).collect::<Vec<_>>(),
+            [
+                ("Pillars of Arun", price("Pillars of Arun")),
+                ("Replica Pillars of Arun", price("Replica Pillars of Arun"))
+            ]
+        );
     }
 
     #[test]

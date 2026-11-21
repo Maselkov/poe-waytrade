@@ -135,6 +135,9 @@ def main():
         ("UniqueArmour", "ninja-unique-armour.json",
          lambda line: line["name"] in ("Queen of the Forest", "Foulborn Queen of the Forest", "Ralakesh's Impatience")
          or line.get("baseType") == "Spidersilk Robe"),
+        # Pillars of Arun's lines name different tiers but share their art.
+        ("UniqueMap", "ninja-unique-map.json",
+         lambda line: "Pillars of Arun" in line["name"] or line["name"] == "Cortex"),
         ("SkillGem", "ninja-skill-gem.json", lambda line: line["name"] == "Arc"),
         ("Map", "ninja-map.json", lambda line: line["name"] == "Nightmare Map"),
         ("Viscera", "ninja-viscera.json", lambda line: line["name"] == "Coven Queen's Crown"),
