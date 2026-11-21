@@ -1583,7 +1583,9 @@ void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
     }
     // Sockets go on the image, like in game; in words until it and the
     // socket images are here.
-    bool drawn = !u.item_icon.empty() && u.icon_w > 0 && icons_get(kSocketSprite);
+    // PoE2's rune sockets stay in words ("3 rune sockets"): the sprites are
+    // PoE1's.
+    bool drawn = !is_poe2() && !u.item_icon.empty() && u.icon_w > 0 && icons_get(kSocketSprite);
     if (drawn) place_sockets(sockets, u);
     for (const Rml::String& part : {ilvl, drawn ? "" : sockets, dps})
         if (!part.empty()) u.meta += (u.meta.empty() ? "" : " · ") + part;

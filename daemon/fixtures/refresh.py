@@ -28,6 +28,23 @@ NINJA2 = "https://poe.ninja/poe2/api"
 TRADE2 = "https://www.pathofexile.com/api/trade2"
 # PoE2's exchange currencies the tests use.
 CURRENCIES2 = {"exalted", "divine", "chaos", "alch", "regal", "annul", "vaal", "mirror", "transmute", "aug"}
+# PoE2 stat texts the tests' items use (fixtures/poe2/items), in every
+# group. PoE2's have no "+".
+STAT_TEXTS2 = {
+    "#% increased Physical Damage",
+    "# to Armour",
+    "# to Armour (Local)",
+    "#% increased Armour",
+    "#% increased Armour (Local)",
+    "#% increased Armour, Evasion and Energy Shield",
+    "# to Accuracy Rating",
+    "# to Accuracy Rating (Local)",
+    "#% to Critical Hit Chance",
+    "# to Spirit",
+    "# to Level of all Spell Skills",
+    "+# total maximum Life",
+    "+#% total Elemental Resistance",
+}
 
 # The exchange currencies the tests price things in.
 CURRENCIES = {"chaos", "divine", "alch", "exalted", "mirror", "alt", "chance", "fusing", "jew", "chrome", "vaal",
@@ -190,6 +207,11 @@ def main_poe2():
     save("poe2/trade-static.json", {"result": [
         {"id": g["id"], "label": g.get("label"), "entries": [e for e in g["entries"] if e["id"] in CURRENCIES2]}
         for g in static["result"] if g["id"] == "Currency"
+    ]})
+    stats = get(f"{TRADE2}/data/stats")
+    save("poe2/trade-stats.json", {"result": [
+        {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"] if e["text"] in STAT_TEXTS2]}
+        for g in stats["result"]
     ]})
     filters = get(f"{TRADE2}/data/filters")
     save("poe2/trade-filters.json", {"result": [

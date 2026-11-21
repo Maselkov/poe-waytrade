@@ -1,0 +1,388 @@
+{
+ "result": [
+  {
+   "id": "pseudo",
+   "label": "Pseudo",
+   "entries": [
+    {
+     "id": "pseudo.pseudo_total_elemental_resistance",
+     "text": "+#% total Elemental Resistance",
+     "type": "pseudo"
+    },
+    {
+     "id": "pseudo.pseudo_total_life",
+     "text": "+# total maximum Life",
+     "type": "pseudo"
+    }
+   ]
+  },
+  {
+   "id": "explicit",
+   "label": "Explicit",
+   "entries": [
+    {
+     "id": "explicit.stat_803737631",
+     "text": "# to Accuracy Rating",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_1509134228",
+     "text": "#% increased Physical Damage",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_3981240776",
+     "text": "# to Spirit",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_691932474",
+     "text": "# to Accuracy Rating (Local)",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_3484657501",
+     "text": "# to Armour (Local)",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_2866361420",
+     "text": "#% increased Armour",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_1062208444",
+     "text": "#% increased Armour (Local)",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_518292764",
+     "text": "#% to Critical Hit Chance",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_809229260",
+     "text": "# to Armour",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_124131830",
+     "text": "# to Level of all Spell Skills",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_3523867985",
+     "text": "#% increased Armour, Evasion and Energy Shield",
+     "type": "explicit"
+    },
+    {
+     "id": "explicit.stat_2704225257",
+     "text": "# to Spirit",
+     "type": "explicit"
+    }
+   ]
+  },
+  {
+   "id": "implicit",
+   "label": "Implicit",
+   "entries": [
+    {
+     "id": "implicit.stat_3981240776",
+     "text": "# to Spirit",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_803737631",
+     "text": "# to Accuracy Rating",
+     "type": "implicit"
+    },
+    {
+     "id": "implicit.stat_809229260",
+     "text": "# to Armour",
+     "type": "implicit"
+    }
+   ]
+  },
+  {
+   "id": "fractured",
+   "label": "Fractured",
+   "entries": [
+    {
+     "id": "fractured.stat_3981240776",
+     "text": "# to Spirit",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_518292764",
+     "text": "#% to Critical Hit Chance",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_124131830",
+     "text": "# to Level of all Spell Skills",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_1509134228",
+     "text": "#% increased Physical Damage",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_691932474",
+     "text": "# to Accuracy Rating (Local)",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_803737631",
+     "text": "# to Accuracy Rating",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_2866361420",
+     "text": "#% increased Armour",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_1062208444",
+     "text": "#% increased Armour (Local)",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_3484657501",
+     "text": "# to Armour (Local)",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_3523867985",
+     "text": "#% increased Armour, Evasion and Energy Shield",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_809229260",
+     "text": "# to Armour",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_2704225257",
+     "text": "# to Spirit",
+     "type": "fractured"
+    }
+   ]
+  },
+  {
+   "id": "crafted",
+   "label": "Crafted",
+   "entries": [
+    {
+     "id": "crafted.stat_124131830",
+     "text": "# to Level of all Spell Skills",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_518292764",
+     "text": "#% to Critical Hit Chance",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_3981240776",
+     "text": "# to Spirit",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_1062208444",
+     "text": "#% increased Armour (Local)",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_803737631",
+     "text": "# to Accuracy Rating",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_2866361420",
+     "text": "#% increased Armour",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_1509134228",
+     "text": "#% increased Physical Damage",
+     "type": "crafted"
+    },
+    {
+     "id": "crafted.stat_691932474",
+     "text": "# to Accuracy Rating (Local)",
+     "type": "crafted"
+    }
+   ]
+  },
+  {
+   "id": "enchant",
+   "label": "Enchant",
+   "entries": [
+    {
+     "id": "enchant.stat_3981240776",
+     "text": "# to Spirit",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_803737631",
+     "text": "# to Accuracy Rating",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_1509134228",
+     "text": "#% increased Physical Damage",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_1062208444",
+     "text": "#% increased Armour (Local)",
+     "type": "enchant"
+    },
+    {
+     "id": "enchant.stat_2866361420",
+     "text": "#% increased Armour",
+     "type": "enchant"
+    }
+   ]
+  },
+  {
+   "id": "rune",
+   "label": "Augment",
+   "entries": [
+    {
+     "id": "rune.stat_3523867985",
+     "text": "#% increased Armour, Evasion and Energy Shield",
+     "type": "augment"
+    },
+    {
+     "id": "rune.stat_1509134228",
+     "text": "#% increased Physical Damage",
+     "type": "augment"
+    },
+    {
+     "id": "rune.stat_124131830",
+     "text": "# to Level of all Spell Skills",
+     "type": "augment"
+    },
+    {
+     "id": "rune.stat_691932474",
+     "text": "# to Accuracy Rating (Local)",
+     "type": "augment"
+    },
+    {
+     "id": "rune.stat_3484657501",
+     "text": "# to Armour (Local)",
+     "type": "augment"
+    },
+    {
+     "id": "rune.stat_2704225257",
+     "text": "# to Spirit",
+     "type": "augment"
+    },
+    {
+     "id": "rune.stat_3981240776",
+     "text": "# to Spirit",
+     "type": "augment"
+    },
+    {
+     "id": "rune.stat_803737631",
+     "text": "# to Accuracy Rating",
+     "type": "augment"
+    },
+    {
+     "id": "rune.stat_518292764",
+     "text": "#% to Critical Hit Chance",
+     "type": "augment"
+    }
+   ]
+  },
+  {
+   "id": "desecrated",
+   "label": "Desecrated",
+   "entries": [
+    {
+     "id": "desecrated.stat_3981240776",
+     "text": "# to Spirit",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_1509134228",
+     "text": "#% increased Physical Damage",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_3484657501",
+     "text": "# to Armour (Local)",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_691932474",
+     "text": "# to Accuracy Rating (Local)",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_1062208444",
+     "text": "#% increased Armour (Local)",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_518292764",
+     "text": "#% to Critical Hit Chance",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_803737631",
+     "text": "# to Accuracy Rating",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_2704225257",
+     "text": "# to Spirit",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_2866361420",
+     "text": "#% increased Armour",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_124131830",
+     "text": "# to Level of all Spell Skills",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_809229260",
+     "text": "# to Armour",
+     "type": "desecrated"
+    },
+    {
+     "id": "desecrated.stat_3523867985",
+     "text": "#% increased Armour, Evasion and Energy Shield",
+     "type": "desecrated"
+    }
+   ]
+  },
+  {
+   "id": "sanctum",
+   "label": "Sanctum",
+   "entries": [
+    {
+     "id": "sanctum.stat_1737465970",
+     "text": "#% increased Armour",
+     "type": "sanctum"
+    },
+    {
+     "id": "sanctum.stat_1016362888",
+     "text": "#% increased Armour, Evasion and Energy Shield",
+     "type": "sanctum"
+    }
+   ]
+  },
+  {
+   "id": "skill",
+   "label": "Skill",
+   "entries": []
+  }
+ ]
+}
