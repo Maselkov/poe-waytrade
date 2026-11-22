@@ -52,6 +52,14 @@ void parse_week(const std::string& field, PriceLine& p) {
         p.week.push_back(day.empty() ? std::nullopt : std::optional<double>(strtod(day.c_str(), nullptr)));
 }
 
+// "<v>,<v>,,<v>": a value a day, none where empty.
+std::vector<std::optional<double>> parse_days(const std::string& field) {
+    std::vector<std::optional<double>> days;
+    for (const std::string& day : split(field, ','))
+        days.push_back(day.empty() ? std::nullopt : std::optional<double>(strtod(day.c_str(), nullptr)));
+    return days;
+}
+
 PriceReply parse_reply(const std::string& body) {
     PriceReply reply;
     for (const std::string& line : split(body, '\n')) {
@@ -60,12 +68,15 @@ PriceReply parse_reply(const std::string& body) {
         if (f[0] == "status") reply.status = f[1];
         else if (f[0] == "message") reply.message = f[1];
         else if (f[0] == "title") reply.title = f[1];
+        else if (f[0] == "history") reply.history.values = parse_days(f[1]);
+        else if (f[0] == "counts") reply.history.counts = parse_days(f[1]);
         else if (f[0] == "league") reply.league = f[1];
         else if (f[0] == "age") reply.age_minutes = atoi(f[1].c_str());
         else if (f[0] == "price" && f.size() >= 5) {
             PriceLine p{f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4],
                         f.size() >= 6 ? f[5] : ""};
             if (f.size() >= 7) parse_week(f[6], p);
+            if (f.size() >= 8) p.history_ref = f[7];
             reply.prices.push_back(std::move(p));
         }
         else if (f[0] == "filter" && f.size() >= 4) {

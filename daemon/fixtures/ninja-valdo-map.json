@@ -10,8 +10,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 634.2,
-   "exaltedValue": 740.8,
+   "chaosValue": 632.1,
+   "exaltedValue": 738.1,
    "divineValue": 3.0,
    "count": 1,
    "detailsId": "wraith-turf-t0",
@@ -27,8 +27,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 4,
    "detailsId": "stained-trap-t0",
@@ -52,8 +52,8 @@
      0
     ]
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 8,
    "detailsId": "revealed-point-t0",
@@ -69,8 +69,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 3,
    "detailsId": "enclosed-dwelling-t0",
@@ -86,8 +86,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 3,
    "detailsId": "agony-slag-t0",
@@ -103,16 +103,16 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 2,
    "detailsId": "raging-sanctum-t0",
    "listingCount": 2
   },
   {
-   "id": 136510,
-   "name": "Noxious Estate",
+   "id": 136579,
+   "name": "Squandered Abyss",
    "baseType": "Valdo Map",
    "variant": "Foil Watcher's Eye",
    "itemClass": 10,
@@ -120,12 +120,12 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
-   "count": 3,
-   "detailsId": "noxious-estate-t0",
-   "listingCount": 3
+   "count": 4,
+   "detailsId": "squandered-abyss-t0",
+   "listingCount": 4
   },
   {
    "id": 136612,
@@ -137,12 +137,37 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 4,
    "detailsId": "blood-dregs-t0",
    "listingCount": 4
+  },
+  {
+   "id": 136636,
+   "name": "Wraith Shelter",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     0
+    ]
+   },
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
+   "divineValue": 2.0,
+   "count": 5,
+   "detailsId": "wraith-shelter-t0",
+   "listingCount": 5
   },
   {
    "id": 136639,
@@ -154,8 +179,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 4,
    "detailsId": "subterranean-den-t0",
@@ -171,29 +196,12 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 4,
    "detailsId": "brutal-solitude-t0",
    "listingCount": 4
-  },
-  {
-   "id": 136657,
-   "name": "Iron Abode",
-   "baseType": "Valdo Map",
-   "variant": "Foil Watcher's Eye",
-   "itemClass": 10,
-   "sparkLine": {
-    "totalChange": 0,
-    "data": []
-   },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
-   "divineValue": 2.0,
-   "count": 1,
-   "detailsId": "iron-abode-t0",
-   "listingCount": 1
   },
   {
    "id": 136744,
@@ -205,8 +213,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 3,
    "detailsId": "wraith-trap-t0",
@@ -222,12 +230,12 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
-   "count": 3,
+   "count": 4,
    "detailsId": "hidden-corridors-t0",
-   "listingCount": 3
+   "listingCount": 4
   },
   {
    "id": 137216,
@@ -239,8 +247,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 1,
    "detailsId": "cursed-swathe-t0",
@@ -256,8 +264,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 1,
    "detailsId": "arid-swathe-t0",
@@ -281,8 +289,8 @@
      null
     ]
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 2,
    "detailsId": "squalid-zenith-t0",
@@ -298,16 +306,16 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
+   "chaosValue": 421.4,
+   "exaltedValue": 492.1,
    "divineValue": 2.0,
    "count": 1,
    "detailsId": "exposed-estate-t0",
    "listingCount": 1
   },
   {
-   "id": 137607,
-   "name": "Mystic Scum",
+   "id": 136611,
+   "name": "Tranquil Solitude",
    "baseType": "Valdo Map",
    "variant": "Foil Watcher's Eye",
    "itemClass": 10,
@@ -315,12 +323,37 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 422.8,
-   "exaltedValue": 493.9,
-   "divineValue": 2.0,
-   "count": 4,
-   "detailsId": "mystic-scum-t0",
-   "listingCount": 4
+   "chaosValue": 380.0,
+   "exaltedValue": 443.7,
+   "divineValue": 1.8,
+   "count": 1,
+   "detailsId": "tranquil-solitude-t0",
+   "listingCount": 1
+  },
+  {
+   "id": 136725,
+   "name": "Dream Haven",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 53.73,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     0,
+     93.98,
+     53.73
+    ]
+   },
+   "chaosValue": 337.1,
+   "exaltedValue": 393.6,
+   "divineValue": 1.6,
+   "count": 7,
+   "detailsId": "dream-haven-t0",
+   "listingCount": 7
   },
   {
    "id": 135751,
@@ -340,16 +373,16 @@
      0
     ]
    },
-   "chaosValue": 380.0,
-   "exaltedValue": 443.9,
-   "divineValue": 1.8,
-   "count": 7,
+   "chaosValue": 322.1,
+   "exaltedValue": 376.2,
+   "divineValue": 1.53,
+   "count": 9,
    "detailsId": "vortex-grounds-t0",
-   "listingCount": 7
+   "listingCount": 9
   },
   {
-   "id": 136611,
-   "name": "Tranquil Solitude",
+   "id": 136510,
+   "name": "Noxious Estate",
    "baseType": "Valdo Map",
    "variant": "Foil Watcher's Eye",
    "itemClass": 10,
@@ -357,87 +390,46 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 380.0,
-   "exaltedValue": 443.9,
-   "divineValue": 1.8,
-   "count": 1,
-   "detailsId": "tranquil-solitude-t0",
-   "listingCount": 1
+   "chaosValue": 273.9,
+   "exaltedValue": 319.8,
+   "divineValue": 1.3,
+   "count": 4,
+   "detailsId": "noxious-estate-t0",
+   "listingCount": 4
   },
   {
-   "id": 136725,
-   "name": "Dream Haven",
-   "baseType": "Valdo Map",
-   "variant": "Foil Watcher's Eye",
-   "itemClass": 10,
-   "sparkLine": {
-    "totalChange": 54.24,
-    "data": [
-     null,
-     null,
-     null,
-     null,
-     0,
-     93.98,
-     54.24
-    ]
-   },
-   "chaosValue": 338.2,
-   "exaltedValue": 395.1,
-   "divineValue": 1.6,
-   "count": 7,
-   "detailsId": "dream-haven-t0",
-   "listingCount": 7
-  },
-  {
-   "id": 136579,
-   "name": "Squandered Abyss",
+   "id": 137607,
+   "name": "Mystic Scum",
    "baseType": "Valdo Map",
    "variant": "Foil Watcher's Eye",
    "itemClass": 10,
    "sparkLine": {
     "totalChange": 0,
-    "data": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     0
-    ]
+    "data": []
    },
-   "chaosValue": 296.0,
-   "exaltedValue": 345.7,
-   "divineValue": 1.4,
-   "count": 5,
-   "detailsId": "squandered-abyss-t0",
-   "listingCount": 5
+   "chaosValue": 273.9,
+   "exaltedValue": 319.8,
+   "divineValue": 1.3,
+   "count": 4,
+   "detailsId": "mystic-scum-t0",
+   "listingCount": 4
   },
   {
-   "id": 136636,
-   "name": "Wraith Shelter",
+   "id": 136657,
+   "name": "Iron Abode",
    "baseType": "Valdo Map",
    "variant": "Foil Watcher's Eye",
    "itemClass": 10,
    "sparkLine": {
     "totalChange": 0,
-    "data": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     0
-    ]
+    "data": []
    },
-   "chaosValue": 296.0,
-   "exaltedValue": 345.7,
-   "divineValue": 1.4,
-   "count": 5,
-   "detailsId": "wraith-shelter-t0",
-   "listingCount": 5
+   "chaosValue": 231.8,
+   "exaltedValue": 270.6,
+   "divineValue": 1.1,
+   "count": 2,
+   "detailsId": "iron-abode-t0",
+   "listingCount": 2
   },
   {
    "id": 135123,
@@ -446,7 +438,7 @@
    "variant": "Foil Watcher's Eye",
    "itemClass": 10,
    "sparkLine": {
-    "totalChange": 101.6,
+    "totalChange": 101.0,
     "data": [
      null,
      0,
@@ -454,15 +446,15 @@
      101.4,
      105.4,
      103.0,
-     101.6
+     101.0
     ]
    },
-   "chaosValue": 211.4,
-   "exaltedValue": 246.9,
+   "chaosValue": 210.7,
+   "exaltedValue": 246.0,
    "divineValue": 1.0,
-   "count": 8,
+   "count": 9,
    "detailsId": "glimmering-waste-t0",
-   "listingCount": 8
+   "listingCount": 9
   },
   {
    "id": 136808,
@@ -474,8 +466,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 211.4,
-   "exaltedValue": 246.9,
+   "chaosValue": 210.7,
+   "exaltedValue": 246.0,
    "divineValue": 1.0,
    "count": 1,
    "detailsId": "revealed-nexus-t0",
@@ -491,8 +483,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 211.4,
-   "exaltedValue": 246.9,
+   "chaosValue": 210.7,
+   "exaltedValue": 246.0,
    "divineValue": 1.0,
    "count": 4,
    "detailsId": "far-view-t0",
@@ -508,8 +500,8 @@
     "totalChange": 0,
     "data": []
    },
-   "chaosValue": 211.4,
-   "exaltedValue": 246.9,
+   "chaosValue": 210.7,
+   "exaltedValue": 246.0,
    "divineValue": 1.0,
    "count": 4,
    "detailsId": "agony-mire-t0",
@@ -534,7 +526,7 @@
     ]
    },
    "chaosValue": 50.0,
-   "exaltedValue": 58.4,
+   "exaltedValue": 58.38,
    "divineValue": 0.24,
    "count": 33,
    "detailsId": "warped-alcove-t0",

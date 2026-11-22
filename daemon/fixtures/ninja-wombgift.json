@@ -6,7 +6,7 @@
    "levelRequired": 75,
    "itemClass": 5,
    "sparkLine": {
-    "totalChange": 1100,
+    "totalChange": 1200,
     "data": [
      0,
      0,
@@ -14,15 +14,15 @@
      100,
      800,
      900,
-     1100
+     1200
     ]
    },
-   "chaosValue": 12.0,
-   "exaltedValue": 14.02,
+   "chaosValue": 13.0,
+   "exaltedValue": 15.18,
    "divineValue": 0.06,
    "count": 399,
    "detailsId": "ancient-wombgift-75",
-   "listingCount": 3494
+   "listingCount": 3238
   },
   {
    "id": 130497,
@@ -46,7 +46,7 @@
    "divineValue": 0.07,
    "count": 399,
    "detailsId": "ancient-wombgift-84",
-   "listingCount": 1848
+   "listingCount": 1666
   },
   {
    "id": 130516,
@@ -54,7 +54,7 @@
    "levelRequired": 68,
    "itemClass": 5,
    "sparkLine": {
-    "totalChange": 900,
+    "totalChange": 1220,
     "data": [
      0,
      0,
@@ -62,15 +62,15 @@
      200,
      740,
      900,
-     900
+     1220
     ]
    },
-   "chaosValue": 10.0,
-   "exaltedValue": 11.68,
-   "divineValue": 0.05,
-   "count": 65,
+   "chaosValue": 13.2,
+   "exaltedValue": 15.41,
+   "divineValue": 0.06,
+   "count": 72,
    "detailsId": "ancient-wombgift-68",
-   "listingCount": 65
+   "listingCount": 72
   },
   {
    "id": 130519,
@@ -78,7 +78,7 @@
    "levelRequired": 40,
    "itemClass": 5,
    "sparkLine": {
-    "totalChange": 213.5,
+    "totalChange": 28.38,
     "data": [
      0,
      35.14,
@@ -86,15 +86,15 @@
      832.4,
      602.7,
      216.2,
-     213.5
+     28.38
     ]
    },
-   "chaosValue": 23.2,
-   "exaltedValue": 27.1,
-   "divineValue": 0.11,
-   "count": 43,
+   "chaosValue": 9.5,
+   "exaltedValue": 11.09,
+   "divineValue": 0.05,
+   "count": 38,
    "detailsId": "ancient-wombgift-40",
-   "listingCount": 43
+   "listingCount": 38
   }
  ]
 }

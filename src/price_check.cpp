@@ -69,6 +69,7 @@ PriceCheck::PriceCheck() {
         else if (item_) pending_purpose_ == Purpose::Map ? daemon_.request_map(item_text_) : daemon_.request(item_text_);
         pending_mode_ = Mode::Locked;
         demo_ = true;
+        if (const char* n = getenv("POE_WAYTRADE_DEMO_RANGE")) demo_range_clicks_ = atoi(n);
         open();
     }
 }
@@ -202,6 +203,7 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_he
         sender_.send_raw(outbox_.front());
         outbox_.pop_front();
     }
+    poll_history();
     if (icon_client_.poll(&reply)) {
         if (reply.status == "ok" && !reply.png.empty()) {
             icons_put(icon_pending_, base64_decode(reply.png));
@@ -637,6 +639,59 @@ void PriceCheck::check_as(const std::string& name) {
     other_reply_.reset();
     daemon_.request(item_text_);
     changed();
+}
+
+std::vector<int> PriceCheck::week_ranges(size_t days) {
+    std::vector<int> ranges = {0};
+    if (days > 30) ranges.push_back(1);
+    if (days > 7) ranges.push_back(2);
+    return ranges;
+}
+
+void PriceCheck::cycle_week_range(const std::string& ref) {
+    if (ref.empty()) return;
+    if (history(ref)) return advance_week_range();
+    // Fetched once, then each click moves on.
+    if (history_client_.busy()) return;
+    history_pending_ = ref;
+    advance_on_history_ = true;
+    week_check_ = check_id_;
+    history_client_.send_raw("HISTORY\n" + ref);
+    changed();  // "loading…"
+}
+
+void PriceCheck::advance_week_range() {
+    std::vector<int> ranges = week_ranges(history_ ? history_->values.size() : 0);
+    int now = week_range();
+    auto at = std::find(ranges.begin(), ranges.end(), now);
+    week_range_ = at == ranges.end() || at + 1 == ranges.end() ? 0 : *(at + 1);
+    week_check_ = check_id_;
+    changed();
+}
+
+void PriceCheck::poll_history() {
+    PriceReply reply;
+    if (history_client_.poll(&reply)) {
+        bool ok = reply.status == "ok" && !reply.history.values.empty();
+        if (ok) {
+            history_ref_ = history_pending_;
+            history_ = std::move(reply.history);
+        } else {
+            poe_log("history %s: %s", history_pending_.c_str(),
+                    reply.message.empty() ? reply.status.c_str() : reply.message.c_str());
+        }
+        if (std::exchange(advance_on_history_, false) && ok && week_check_ == check_id_) advance_week_range();
+        changed();
+    }
+    // POE_WAYTRADE_DEMO_RANGE=<n>: a demo item's graph clicked n times.
+    if (demo_ && demo_range_clicks_ > 0 && reply_ && !history_client_.busy()) {
+        for (const PriceLine& p : reply_->prices) {
+            if (p.history_ref.empty()) continue;
+            demo_range_clicks_--;
+            cycle_week_range(p.history_ref);
+            break;
+        }
+    }
 }
 
 void PriceCheck::pick_unique(int index) {

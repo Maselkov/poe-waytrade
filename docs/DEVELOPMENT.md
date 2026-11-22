@@ -164,6 +164,7 @@ POE_WAYTRADE_UI_DIR=$PWD/assets POE_WAYTRADE_DEMO_ITEM=item.txt \
 | `POE_WAYTRADE_DEMO_SEARCH=1` | A demo item searches by itself |
 | `POE_WAYTRADE_DEMO_EDIT=<filter index>[:max]` | Start typing into that filter's minimum (or maximum), as if it were clicked |
 | `POE_WAYTRADE_DEMO_PRESET=base` | Open a demo item on the Base item preset |
+| `POE_WAYTRADE_DEMO_RANGE=<n>` | Click a demo item's price graph `n` times: through 30 days and the league |
 | `POE_WAYTRADE_DEMO_SETTINGS=<0-4>` | Open the settings page on that tab |
 | `POE_WAYTRADE_ART_DUMP=<file.ppm>` | Save the pixels each art match sends the daemon (the cursor and cell size in a comment), to see what it compares |
 | `POE_WAYTRADE_SNAPSHOT=<file.ppm>` | Save one of the app's rendered frames (after 300 frames), for checking the UI without screenshots |

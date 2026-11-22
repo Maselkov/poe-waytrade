@@ -21,7 +21,7 @@
    "exaltedValue": 1.17,
    "count": 399,
    "detailsId": "pillars-of-arun-t0",
-   "listingCount": 1143,
+   "listingCount": 1170,
    "explicitModifiers": [
     {
      "text": "(100-200)% increased Experience gain"
@@ -64,11 +64,11 @@
     ]
    },
    "chaosValue": 65.0,
-   "exaltedValue": 75.93,
+   "exaltedValue": 75.9,
    "divineValue": 0.31,
    "count": 399,
    "detailsId": "cortex-t0",
-   "listingCount": 972
+   "listingCount": 993
   },
   {
    "id": 135906,
@@ -76,7 +76,7 @@
    "baseType": "Map (Tier 16)",
    "itemClass": 3,
    "sparkLine": {
-    "totalChange": 130,
+    "totalChange": 103.3,
     "data": [
      0,
      -13.33,
@@ -84,15 +84,15 @@
      33.33,
      76.67,
      66.67,
-     130
+     103.3
     ]
    },
-   "chaosValue": 6.9,
-   "exaltedValue": 8.06,
+   "chaosValue": 6.1,
+   "exaltedValue": 7.12,
    "divineValue": 0.03,
-   "count": 22,
+   "count": 24,
    "detailsId": "replica-pillars-of-arun-t0",
-   "listingCount": 22,
+   "listingCount": 24,
    "explicitModifiers": [
     {
      "text": "(100-200)% increased Experience gain"

@@ -43,7 +43,7 @@
                 <div class="trend-foot week-normal">{{r.week_foot}}</div>
                 <div class="trend-foot week-reading"></div>
             </div>
-            <div class="trend-side">
+            <div class="trend-side" data-class-cycles="r.week_cycles" data-class-loading="r.week_loading" data-event-click="week_range(r.history_ref)">
                 <div data-attr-class="r.week_up ? 'trend-badge up' : 'trend-badge down'">{{r.week_change}}</div>
                 <div class="trend-days">{{r.week_days}}</div>
             </div>

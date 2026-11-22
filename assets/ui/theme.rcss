@@ -244,6 +244,10 @@ sparkline { display: block; color: $mod; }
 .trend-badge.up { background-color: $good-bg; color: $good; }
 .trend-badge.down { background-color: $danger-bg; color: $error; }
 .trend-days { margin-top: 4dp; font-size: 10dp; color: $text-faint; }
+/* Clicked through: the week, the last 30 days, the league. */
+.trend-side.cycles { cursor: pointer; }
+.trend-side.cycles:hover .trend-days { color: $text; }
+.trend-side.loading .trend-days { color: $text-muted; }
 /* Trade search options */
 /* The chips sit at the right, where they are on every item: a rare's base
    toggle fills the space to their left, a unique has nothing there. */

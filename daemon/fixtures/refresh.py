@@ -152,6 +152,15 @@ def main():
         # Viscera have a line per implicit: the most listed are enough.
         lines.sort(key=lambda line: -(line.get("listingCount") or 0))
         save(name, {"lines": lines[:12]} if kind == "Viscera" else {"lines": lines})
+        if kind == "UniqueArmour":
+            # A line's whole history (history.rs): the most listed one's.
+            line = max(lines, key=lambda line: line.get("listingCount") or 0)
+            save("ninja-item-history.json",
+                 get(f"{NINJA}/economy/stash/current/item/history?league={q}&type={kind}&id={line['id']}"))
+
+    # A currency's history: the pairs of its details.
+    details = get(f"{NINJA}/economy/exchange/current/details?league={q}&type=Currency&id=divine-orb")
+    save("ninja-exchange-details.json", {"pairs": details["pairs"]})
 
     # Valdo maps: a line per map listed. Those of the reward with the most.
     ov = get(f"{NINJA}/economy/stash/current/item/overview?league={q}&type=ValdoMap")
@@ -220,6 +229,12 @@ def main_poe2():
         "core": slim(ov["core"]) | {"items": [slim(i) for i in ov["core"].get("items", [])]},
         "lines": [slim(line, mods=True) for line in keep],
     })
+    # Histories (history.rs): Atziri's Step's has days missing.
+    step = next(line for line in keep if line["name"] == "Atziri's Step")
+    save("poe2/ninja-item-history.json",
+         get(f"{NINJA2}/economy/stash/current/item/history?league={q}&type=UniqueArmours&id={step['id']}"))
+    details = get(f"{NINJA2}/economy/exchange/current/details?league={q}&type=Currency&id=divine-orb")
+    save("poe2/ninja-exchange-details.json", {"pairs": details["pairs"]})
 
     static = get(f"{TRADE2}/data/static")
     save("poe2/trade-static.json", {"result": [

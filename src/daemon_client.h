@@ -28,6 +28,17 @@ struct PriceLine {
     // A Divine Orb's own price: "1.0 div" would say nothing, so it's shown
     // in the small unit whatever it's worth.
     bool divine_orb = false;
+    // Where its whole history is, for HISTORY: "item:<type>:<id>" or
+    // "exchange:<type>:<details>"; empty when poe.ninja has none.
+    std::string history_ref;
+};
+
+// A price's history over the whole league (HISTORY): a day each, oldest
+// first, the last today; values in the small unit, counts the listings
+// (items only); none on a day without data.
+struct PriceHistory {
+    std::vector<std::optional<double>> values;
+    std::vector<std::optional<double>> counts;
 };
 
 // The currency a poe.ninja price is shown in (and its icon): divine from 1
@@ -109,6 +120,7 @@ struct PriceReply {
     std::string url;
     std::optional<TradeSummary> summary;
     std::string png;  // ICON reply, base64
+    PriceHistory history;  // HISTORY reply
     // Trade search options (see daemon/src/main.rs).
     std::string base_type;       // e.g. "Sapphire Ring"
     std::string category_label;  // e.g. "Ring"; empty: no base/category choice

@@ -120,6 +120,21 @@ public:
     // unique of the price at this index (its trade search, like an
     // identified one's). Locks the panel, since you're using it.
     void pick_unique(int index);
+
+    // The large price graph's range: 0 the week the price lists carry, 1 the
+    // last 30 days, 2 the whole league. Every new check opens on the week.
+    int week_range() const { return week_check_ == check_id_ ? week_range_ : 0; }
+    // The ranges a history of `days` days offers: the week; the last 30
+    // days, once the league is longer; the league, once it's past a week.
+    static std::vector<int> week_ranges(size_t days);
+    // The whole history of `ref` (a price line's history_ref), once fetched.
+    const PriceHistory* history(const std::string& ref) const {
+        return !ref.empty() && ref == history_ref_ && history_ ? &*history_ : nullptr;
+    }
+    bool history_loading() const { return history_client_.busy(); }
+    // A click on the graph's range: the next one `ref`'s history offers,
+    // after fetching it (HISTORY) the first time.
+    void cycle_week_range(const std::string& ref);
     // The unique(s) an unidentified item's art matched ("A / B" when they
     // share it); empty if none.
     const std::string& art_matched() const { return art_matched_; }
@@ -237,6 +252,18 @@ private:
     uint64_t art_check_ = 0;  // the check_id_ it was sent for
     std::string art_matched_;
     void match_art();
+    // The large graph's range and the history it's drawn from (HISTORY),
+    // fetched on the first click and kept for the last price asked about.
+    DaemonClient history_client_;
+    std::string history_ref_, history_pending_;
+    std::optional<PriceHistory> history_;
+    int week_range_ = 0;
+    uint64_t week_check_ = 0;  // the check_id_ week_range_ was set for
+    bool advance_on_history_ = false;
+    int demo_range_clicks_ = 0;  // POE_WAYTRADE_DEMO_RANGE
+    void advance_week_range();
+    void poll_history();
+
     // Checks the item again as the unique `name` (a name line added to its text).
     void check_as(const std::string& name);
 

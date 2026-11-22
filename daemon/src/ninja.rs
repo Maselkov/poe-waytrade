@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::thread;
 use std::time::{Duration, Instant};
 
-fn base() -> &'static str {
+pub(crate) fn base() -> &'static str {
     match game::current() {
         Game::Poe1 => "https://poe.ninja/poe1/api",
         Game::Poe2 => "https://poe.ninja/poe2/api",
@@ -146,6 +146,9 @@ struct ExchangeLine {
 struct ExchangeItem {
     id: String,
     name: String,
+    /// What poe.ninja's details (and the item's history) go by: "divine-orb".
+    #[serde(rename = "detailsId", default)]
+    details_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -158,6 +161,12 @@ struct ItemOverview {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemLine {
+    /// poe.ninja's id for the line, which its history goes by.
+    #[serde(default)]
+    pub id: Option<serde_json::Value>,
+    /// The poe.ninja type the line came from ("UniqueArmour"), set when read.
+    #[serde(skip)]
+    pub kind: String,
     pub name: String,
     pub base_type: Option<String>,
     pub variant: Option<String>,
@@ -213,6 +222,17 @@ pub struct NinjaMod {
 }
 
 impl ItemLine {
+    /// Where poe.ninja keeps the line's whole history (history.rs), as the
+    /// layer sends it back: "item:<type>:<id>".
+    pub fn history_ref(&self) -> Option<String> {
+        let id = match self.id.as_ref()? {
+            serde_json::Value::Number(n) => n.to_string(),
+            serde_json::Value::String(s) if !s.is_empty() => s.clone(),
+            _ => return None,
+        };
+        (!self.kind.is_empty()).then(|| format!("item:{}:{id}", self.kind))
+    }
+
     /// Every mod line, implicit, explicit and mutated (a multi-line mod
     /// split into its lines, as an item's text has them).
     pub fn mod_lines(&self) -> impl Iterator<Item = &str> {
@@ -232,6 +252,9 @@ pub struct PriceDb {
     pub exchange: HashMap<String, f64>,
     /// Exchange items by name -> their last week.
     pub exchange_spark: HashMap<String, Spark>,
+    /// Exchange items by name -> where their whole history is (history.rs):
+    /// "exchange:<type>:<details id>".
+    pub exchange_history: HashMap<String, String>,
     /// Item lines by name (unique name, gem name, map name, ...).
     pub items: HashMap<String, Vec<ItemLine>>,
     /// Unique item lines by base type, for unidentified uniques.
@@ -255,6 +278,7 @@ impl PriceDb {
             divine_rate: 0.0,
             exchange: HashMap::new(),
             exchange_spark: HashMap::new(),
+            exchange_history: HashMap::new(),
             items: HashMap::new(),
             uniques_by_base: HashMap::new(),
             bases: HashMap::new(),
@@ -267,8 +291,9 @@ impl PriceDb {
         chaos * self.divine_rate
     }
 
+    /// `kind`: the poe.ninja type the overview is of ("Currency").
     /// `small`: the game's small unit, the values' unit here.
-    fn add_exchange(&mut self, ov: ExchangeOverview, small: &str) {
+    fn add_exchange(&mut self, kind: &str, ov: ExchangeOverview, small: &str) {
         // An empty category (PoE2's Ultimatum, between leagues) has no rates.
         if ov.lines.is_empty() {
             return;
@@ -281,6 +306,11 @@ impl PriceDb {
         };
         if let Some(divine) = per("divine") {
             self.divine_rate = divine / scale;
+        }
+        for item in &ov.items {
+            if let Some(details) = &item.details_id {
+                self.exchange_history.insert(item.name.clone(), format!("exchange:{kind}:{details}"));
+            }
         }
         let names: HashMap<_, _> = ov.items.into_iter().map(|i| (i.id, i.name)).collect();
         for line in ov.lines {
@@ -313,6 +343,7 @@ impl PriceDb {
             }
         }
         for line in &mut ov.lines {
+            line.kind = kind.to_string();
             for m in line
                 .implicit_modifiers
                 .iter_mut()
@@ -388,7 +419,7 @@ fn strip_markup(text: &str) -> String {
     out
 }
 
-fn get<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
+pub(crate) fn get<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> {
     let resp = ureq::get(url)
         .set("User-Agent", USER_AGENT)
         .timeout(Duration::from_secs(30))
@@ -434,7 +465,7 @@ pub fn fetch(league: &str) -> Result<PriceDb, String> {
     for kind in exchange_types() {
         let url = format!("{}/economy/exchange/current/overview?league={league_q}&type={kind}", base());
         match get::<ExchangeOverview>(&url) {
-            Ok(ov) => db.add_exchange(ov, small),
+            Ok(ov) => db.add_exchange(kind, ov, small),
             Err(e) => {
                 eprintln!("poe.ninja: {e}");
                 failures += 1;
@@ -495,7 +526,7 @@ pub(crate) mod tests {
     /// A price list built from the fixtures the way `fetch` builds it.
     pub(crate) fn fixture_db() -> PriceDb {
         let mut db = PriceDb::new("Fixture");
-        db.add_exchange(serde_json::from_str(EXCHANGE).expect("exchange overview"), "chaos");
+        db.add_exchange("Currency", serde_json::from_str(EXCHANGE).expect("exchange overview"), "chaos");
         for (kind, json) in ITEMS {
             let ov: ItemOverview = serde_json::from_str(json).unwrap_or_else(|e| panic!("{kind} overview: {e}"));
             db.add_items(kind, ov, "chaos");
@@ -507,7 +538,7 @@ pub(crate) mod tests {
     pub(crate) fn poe2_fixture_db() -> PriceDb {
         let mut db = PriceDb::new("Fixture");
         let exchange = include_str!("../fixtures/poe2/ninja-exchange-currency.json");
-        db.add_exchange(serde_json::from_str(exchange).unwrap(), "exalted");
+        db.add_exchange("Currency", serde_json::from_str(exchange).unwrap(), "exalted");
         let armours = include_str!("../fixtures/poe2/ninja-unique-armours.json");
         db.add_items("UniqueArmours", serde_json::from_str(armours).unwrap(), "exalted");
         db
@@ -616,7 +647,7 @@ pub(crate) mod tests {
         let raw: serde_json::Value = serde_json::from_str(json).unwrap();
         let per_divine = raw["core"]["rates"]["exalted"].as_f64().unwrap();
         let mut db = PriceDb::new("Fixture");
-        db.add_exchange(serde_json::from_str(json).unwrap(), "exalted");
+        db.add_exchange("Currency", serde_json::from_str(json).unwrap(), "exalted");
         assert!((db.exchange["Exalted Orb"] - 1.0).abs() < 0.05, "an exalted is {}", db.exchange["Exalted Orb"]);
         assert!((db.exchange["Divine Orb"] - per_divine).abs() < 0.01 * per_divine);
         assert!((db.to_divine(db.exchange["Divine Orb"]) - 1.0).abs() < 0.01);

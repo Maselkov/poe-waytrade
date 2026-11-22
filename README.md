@@ -221,7 +221,9 @@ the change over the week. One item gets a large graph under its price.
 Several prices (variants, an unidentified unique's candidates) each get a
 small one in their row. Hover a graph to see a day's price. A week with
 missing days, or a price with few listings, is drawn dashed. One with fewer
-than three days gets no graph.
+than three days gets no graph. Click the change under the large graph to see
+the last 30 days or the whole league (fetched from poe.ninja on that first
+click), and again to go back. Every panel opens on the week.
 
 With a trade search (see below):
 

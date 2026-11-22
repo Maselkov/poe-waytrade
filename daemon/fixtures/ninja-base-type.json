@@ -4,7 +4,7 @@
    "id": 10165,
    "name": "Vaal Regalia",
    "levelRequired": 85,
-   "itemClass": 2,
+   "itemClass": 0,
    "sparkLine": {
     "totalChange": 0,
     "data": [
@@ -44,9 +44,9 @@
    "itemType": "Body Armour",
    "chaosValue": 1.0,
    "exaltedValue": 1.17,
-   "count": 262,
+   "count": 261,
    "detailsId": "vaal-regalia-84",
-   "listingCount": 262
+   "listingCount": 261
   },
   {
    "id": 48817,
@@ -54,7 +54,7 @@
    "levelRequired": 85,
    "itemClass": 2,
    "sparkLine": {
-    "totalChange": 231.4,
+    "totalChange": 206.7,
     "data": [
      0,
      48.95,
@@ -62,16 +62,16 @@
      209.6,
      145.4,
      137.7,
-     231.4
+     206.7
     ]
    },
    "itemType": "Amulet",
-   "chaosValue": 4439,
-   "exaltedValue": 5186,
-   "divineValue": 21.0,
-   "count": 252,
+   "chaosValue": 4109,
+   "exaltedValue": 4798,
+   "divineValue": 19.5,
+   "count": 246,
    "detailsId": "simplex-amulet-85",
-   "listingCount": 252
+   "listingCount": 246
   },
   {
    "id": 8555,
@@ -93,9 +93,9 @@
    "itemType": "Body Armour",
    "chaosValue": 1.0,
    "exaltedValue": 1.17,
-   "count": 199,
+   "count": 200,
    "detailsId": "vaal-regalia-83",
-   "listingCount": 199
+   "listingCount": 200
   },
   {
    "id": 8467,
@@ -145,9 +145,9 @@
    "chaosValue": 2.0,
    "exaltedValue": 2.34,
    "divineValue": 0.01,
-   "count": 100,
+   "count": 103,
    "detailsId": "vaal-regalia-85-elder",
-   "listingCount": 100
+   "listingCount": 103
   },
   {
    "id": 48801,
@@ -155,7 +155,7 @@
    "levelRequired": 86,
    "itemClass": 2,
    "sparkLine": {
-    "totalChange": 232.1,
+    "totalChange": 256.5,
     "data": [
      0,
      44.61,
@@ -163,16 +163,16 @@
      208.7,
      147.2,
      170.3,
-     232.1
+     256.5
     ]
    },
    "itemType": "Amulet",
-   "chaosValue": 4651,
-   "exaltedValue": 5433,
-   "divineValue": 22.0,
-   "count": 98,
+   "chaosValue": 4994,
+   "exaltedValue": 5831,
+   "divineValue": 23.7,
+   "count": 99,
    "detailsId": "simplex-amulet-86",
-   "listingCount": 98
+   "listingCount": 99
   },
   {
    "id": 8139,
@@ -194,9 +194,9 @@
    "itemType": "Body Armour",
    "chaosValue": 1.0,
    "exaltedValue": 1.17,
-   "count": 97,
+   "count": 95,
    "detailsId": "vaal-regalia-82",
-   "listingCount": 97
+   "listingCount": 95
   },
   {
    "id": 10033,
@@ -220,9 +220,9 @@
    "chaosValue": 2.0,
    "exaltedValue": 2.34,
    "divineValue": 0.01,
-   "count": 68,
+   "count": 67,
    "detailsId": "vaal-regalia-86-shaper",
-   "listingCount": 68
+   "listingCount": 67
   },
   {
    "id": 8610,
@@ -245,9 +245,9 @@
    "chaosValue": 15.0,
    "exaltedValue": 17.52,
    "divineValue": 0.07,
-   "count": 57,
+   "count": 61,
    "detailsId": "vaal-regalia-86",
-   "listingCount": 57
+   "listingCount": 61
   },
   {
    "id": 48778,
@@ -255,7 +255,7 @@
    "levelRequired": 84,
    "itemClass": 2,
    "sparkLine": {
-    "totalChange": 222.8,
+    "totalChange": 203.8,
     "data": [
      0,
      69.69,
@@ -263,16 +263,16 @@
      256.6,
      176.0,
      185.6,
-     222.8
+     203.8
     ]
    },
    "itemType": "Amulet",
-   "chaosValue": 3805,
-   "exaltedValue": 4445,
-   "divineValue": 18.0,
-   "count": 50,
+   "chaosValue": 3582,
+   "exaltedValue": 4183,
+   "divineValue": 17.0,
+   "count": 49,
    "detailsId": "simplex-amulet-84",
-   "listingCount": 50
+   "listingCount": 49
   },
   {
    "id": 28591,
@@ -374,9 +374,9 @@
    "chaosValue": 3.0,
    "exaltedValue": 3.5,
    "divineValue": 0.01,
-   "count": 29,
+   "count": 30,
    "detailsId": "vaal-regalia-85-redeemer",
-   "listingCount": 29
+   "listingCount": 30
   },
   {
    "id": 45783,
@@ -384,7 +384,7 @@
    "levelRequired": 83,
    "itemClass": 0,
    "sparkLine": {
-    "totalChange": 256.2,
+    "totalChange": 277.3,
     "data": [
      0,
      64.23,
@@ -392,16 +392,16 @@
      241.0,
      182.5,
      237.0,
-     256.2
+     277.3
     ]
    },
    "itemType": "Amulet",
-   "chaosValue": 4376,
-   "exaltedValue": 5112,
-   "divineValue": 20.7,
-   "count": 23,
+   "chaosValue": 4635,
+   "exaltedValue": 5413,
+   "divineValue": 22.0,
+   "count": 21,
    "detailsId": "simplex-amulet-83",
-   "listingCount": 23
+   "listingCount": 21
   },
   {
    "id": 51618,
@@ -410,7 +410,7 @@
    "variant": "Shaper/Warlord",
    "itemClass": 2,
    "sparkLine": {
-    "totalChange": 39.86,
+    "totalChange": 41.09,
     "data": [
      null,
      0,
@@ -418,16 +418,16 @@
      32.18,
      16.43,
      25.4,
-     39.86
+     41.09
     ]
    },
    "itemType": "Amulet",
-   "chaosValue": 5222,
-   "exaltedValue": 6099,
-   "divineValue": 24.7,
-   "count": 21,
+   "chaosValue": 5268,
+   "exaltedValue": 6151,
+   "divineValue": 25.0,
+   "count": 19,
    "detailsId": "simplex-amulet-85-shaper-warlord",
-   "listingCount": 21
+   "listingCount": 19
   },
   {
    "id": 9929,
@@ -482,6 +482,58 @@
    "listingCount": 11
   },
   {
+   "id": 49766,
+   "name": "Simplex Amulet",
+   "levelRequired": 85,
+   "variant": "Hunter",
+   "itemClass": 2,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     0
+    ]
+   },
+   "itemType": "Amulet",
+   "chaosValue": 8007,
+   "exaltedValue": 9349,
+   "divineValue": 38.0,
+   "count": 8,
+   "detailsId": "simplex-amulet-85-hunter",
+   "listingCount": 8
+  },
+  {
+   "id": 48969,
+   "name": "Simplex Amulet",
+   "levelRequired": 85,
+   "variant": "Shaper",
+   "itemClass": 2,
+   "sparkLine": {
+    "totalChange": 35.64,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     0,
+     46.36,
+     35.64
+    ]
+   },
+   "itemType": "Amulet",
+   "chaosValue": 5900,
+   "exaltedValue": 6889,
+   "divineValue": 28.0,
+   "count": 8,
+   "detailsId": "simplex-amulet-85-shaper",
+   "listingCount": 8
+  },
+  {
    "id": 35449,
    "name": "Vaal Regalia",
    "levelRequired": 86,
@@ -508,29 +560,29 @@
    "listingCount": 8
   },
   {
-   "id": 48969,
+   "id": 51908,
    "name": "Simplex Amulet",
-   "levelRequired": 85,
-   "variant": "Shaper",
+   "levelRequired": 86,
+   "variant": "Shaper/Warlord",
    "itemClass": 2,
    "sparkLine": {
-    "totalChange": 21.51,
+    "totalChange": -29.14,
     "data": [
      null,
      null,
      null,
      null,
+     null,
      0,
-     46.36,
-     21.51
+     -29.14
     ]
    },
    "itemType": "Amulet",
-   "chaosValue": 5285,
-   "exaltedValue": 6173,
-   "divineValue": 25.0,
+   "chaosValue": 4741,
+   "exaltedValue": 5536,
+   "divineValue": 22.5,
    "count": 7,
-   "detailsId": "simplex-amulet-85-shaper",
+   "detailsId": "simplex-amulet-86-shaper-warlord",
    "listingCount": 7
   },
   {
@@ -553,7 +605,7 @@
    },
    "itemType": "Body Armour",
    "chaosValue": 11.0,
-   "exaltedValue": 12.85,
+   "exaltedValue": 12.84,
    "divineValue": 0.05,
    "count": 7,
    "detailsId": "vaal-regalia-83-hunter",
@@ -586,39 +638,13 @@
    "listingCount": 7
   },
   {
-   "id": 49766,
-   "name": "Simplex Amulet",
-   "levelRequired": 85,
-   "variant": "Hunter",
-   "itemClass": 2,
-   "sparkLine": {
-    "totalChange": 0,
-    "data": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     null,
-     0
-    ]
-   },
-   "itemType": "Amulet",
-   "chaosValue": 7484,
-   "exaltedValue": 8741,
-   "divineValue": 35.4,
-   "count": 6,
-   "detailsId": "simplex-amulet-85-hunter",
-   "listingCount": 6
-  },
-  {
    "id": 49784,
    "name": "Simplex Amulet",
    "levelRequired": 85,
    "variant": "Warlord",
    "itemClass": 2,
    "sparkLine": {
-    "totalChange": 5.7,
+    "totalChange": 5.35,
     "data": [
      null,
      null,
@@ -626,41 +652,15 @@
      null,
      null,
      0,
-     5.7
+     5.35
     ]
    },
    "itemType": "Amulet",
-   "chaosValue": 5391,
-   "exaltedValue": 6297,
+   "chaosValue": 5373,
+   "exaltedValue": 6274,
    "divineValue": 25.5,
    "count": 6,
    "detailsId": "simplex-amulet-85-warlord",
-   "listingCount": 6
-  },
-  {
-   "id": 51908,
-   "name": "Simplex Amulet",
-   "levelRequired": 86,
-   "variant": "Shaper/Warlord",
-   "itemClass": 2,
-   "sparkLine": {
-    "totalChange": -29.22,
-    "data": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     0,
-     -29.22
-    ]
-   },
-   "itemType": "Amulet",
-   "chaosValue": 4735,
-   "exaltedValue": 5531,
-   "divineValue": 22.4,
-   "count": 6,
-   "detailsId": "simplex-amulet-86-shaper-warlord",
    "listingCount": 6
   },
   {
@@ -670,7 +670,7 @@
    "variant": "Shaper/Crusader",
    "itemClass": 2,
    "sparkLine": {
-    "totalChange": -23.75,
+    "totalChange": -8.81,
     "data": [
      null,
      null,
@@ -678,15 +678,41 @@
      null,
      0,
      null,
-     -23.75
+     -8.81
     ]
    },
    "itemType": "Amulet",
-   "chaosValue": 6342,
-   "exaltedValue": 7408,
-   "divineValue": 30.0,
+   "chaosValue": 7585,
+   "exaltedValue": 8857,
+   "divineValue": 36.0,
    "count": 5,
    "detailsId": "simplex-amulet-85-shaper-crusader",
+   "listingCount": 5
+  },
+  {
+   "id": 52993,
+   "name": "Simplex Amulet",
+   "levelRequired": 84,
+   "variant": "Shaper/Warlord",
+   "itemClass": 2,
+   "sparkLine": {
+    "totalChange": -27.47,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     0,
+     -27.47
+    ]
+   },
+   "itemType": "Amulet",
+   "chaosValue": 5857,
+   "exaltedValue": 6840,
+   "divineValue": 27.8,
+   "count": 5,
+   "detailsId": "simplex-amulet-84-shaper-warlord",
    "listingCount": 5
   },
   {
@@ -716,32 +742,6 @@
    "listingCount": 5
   },
   {
-   "id": 52993,
-   "name": "Simplex Amulet",
-   "levelRequired": 84,
-   "variant": "Shaper/Warlord",
-   "itemClass": 2,
-   "sparkLine": {
-    "totalChange": 0,
-    "data": [
-     null,
-     null,
-     null,
-     null,
-     null,
-     0,
-     null
-    ]
-   },
-   "itemType": "Amulet",
-   "chaosValue": 7970,
-   "exaltedValue": 9309,
-   "divineValue": 37.7,
-   "count": 4,
-   "detailsId": "simplex-amulet-84-shaper-warlord",
-   "listingCount": 4
-  },
-  {
    "id": 45678,
    "name": "Simplex Amulet",
    "levelRequired": 82,
@@ -751,8 +751,8 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 5919,
-   "exaltedValue": 6914,
+   "chaosValue": 5900,
+   "exaltedValue": 6889,
    "divineValue": 28.0,
    "count": 4,
    "detailsId": "simplex-amulet-82",
@@ -795,8 +795,8 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 6892,
-   "exaltedValue": 8050,
+   "chaosValue": 6869,
+   "exaltedValue": 8021,
    "divineValue": 32.6,
    "count": 3,
    "detailsId": "simplex-amulet-85-elder",
@@ -813,8 +813,8 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 4778,
-   "exaltedValue": 5581,
+   "chaosValue": 4762,
+   "exaltedValue": 5560,
    "divineValue": 22.6,
    "count": 3,
    "detailsId": "simplex-amulet-86-shaper-redeemer",
@@ -875,21 +875,21 @@
    "listingCount": 3
   },
   {
-   "id": 49479,
+   "id": 65692,
    "name": "Simplex Amulet",
-   "levelRequired": 86,
-   "variant": "Hunter",
+   "levelRequired": 83,
+   "variant": "Shaper/Warlord",
    "itemClass": 2,
    "sparkLine": {
     "totalChange": 0,
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 12050,
-   "exaltedValue": 14075,
-   "divineValue": 57.0,
+   "chaosValue": 46101,
+   "exaltedValue": 53831,
+   "divineValue": 218.8,
    "count": 2,
-   "detailsId": "simplex-amulet-86-hunter",
+   "detailsId": "simplex-amulet-83-shaper-warlord",
    "listingCount": 2
   },
   {
@@ -903,29 +903,29 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 10189,
-   "exaltedValue": 11902,
+   "chaosValue": 10156,
+   "exaltedValue": 11859,
    "divineValue": 48.2,
    "count": 2,
    "detailsId": "simplex-amulet-84-shaper-crusader",
    "listingCount": 2
   },
   {
-   "id": 49015,
+   "id": 49479,
    "name": "Simplex Amulet",
    "levelRequired": 86,
-   "variant": "Shaper",
+   "variant": "Hunter",
    "itemClass": 2,
    "sparkLine": {
     "totalChange": 0,
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 9259,
-   "exaltedValue": 10816,
-   "divineValue": 43.8,
+   "chaosValue": 9165,
+   "exaltedValue": 10702,
+   "divineValue": 43.5,
    "count": 2,
-   "detailsId": "simplex-amulet-86-shaper",
+   "detailsId": "simplex-amulet-86-hunter",
    "listingCount": 2
   },
   {
@@ -939,11 +939,29 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 8519,
-   "exaltedValue": 9951,
+   "chaosValue": 8491,
+   "exaltedValue": 9915,
    "divineValue": 40.3,
    "count": 2,
    "detailsId": "simplex-amulet-84-hunter",
+   "listingCount": 2
+  },
+  {
+   "id": 49015,
+   "name": "Simplex Amulet",
+   "levelRequired": 86,
+   "variant": "Shaper",
+   "itemClass": 2,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "itemType": "Amulet",
+   "chaosValue": 7901,
+   "exaltedValue": 9226,
+   "divineValue": 37.5,
+   "count": 2,
+   "detailsId": "simplex-amulet-86-shaper",
    "listingCount": 2
   },
   {
@@ -957,9 +975,9 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 7124,
-   "exaltedValue": 8322,
-   "divineValue": 33.7,
+   "chaosValue": 7374,
+   "exaltedValue": 8611,
+   "divineValue": 35.0,
    "count": 2,
    "detailsId": "simplex-amulet-85-redeemer",
    "listingCount": 2
@@ -975,8 +993,8 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 6236,
-   "exaltedValue": 7285,
+   "chaosValue": 6216,
+   "exaltedValue": 7258,
    "divineValue": 29.5,
    "count": 2,
    "detailsId": "simplex-amulet-84-redeemer",
@@ -993,8 +1011,8 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 5306,
-   "exaltedValue": 6198,
+   "chaosValue": 5289,
+   "exaltedValue": 6175,
    "divineValue": 25.1,
    "count": 2,
    "detailsId": "simplex-amulet-85-crusader",
@@ -1011,11 +1029,29 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 5285,
-   "exaltedValue": 6173,
+   "chaosValue": 5268,
+   "exaltedValue": 6151,
    "divineValue": 25.0,
    "count": 2,
    "detailsId": "simplex-amulet-86-warlord",
+   "listingCount": 2
+  },
+  {
+   "id": 50256,
+   "name": "Simplex Amulet",
+   "levelRequired": 85,
+   "variant": "Shaper/Redeemer",
+   "itemClass": 2,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "itemType": "Amulet",
+   "chaosValue": 5099,
+   "exaltedValue": 5954,
+   "divineValue": 24.2,
+   "count": 2,
+   "detailsId": "simplex-amulet-85-shaper-redeemer",
    "listingCount": 2
   },
   {
@@ -1030,7 +1066,7 @@
    },
    "itemType": "Body Armour",
    "chaosValue": 13.0,
-   "exaltedValue": 15.19,
+   "exaltedValue": 15.18,
    "divineValue": 0.06,
    "count": 2,
    "detailsId": "vaal-regalia-84-crusader",
@@ -1055,22 +1091,22 @@
    "listingCount": 2
   },
   {
-   "id": 65692,
-   "name": "Simplex Amulet",
-   "levelRequired": 83,
-   "variant": "Shaper/Warlord",
-   "itemClass": 2,
+   "id": 29864,
+   "name": "Vaal Regalia",
+   "levelRequired": 82,
+   "variant": "Redeemer",
+   "itemClass": 1,
    "sparkLine": {
     "totalChange": 0,
     "data": []
    },
-   "itemType": "Amulet",
-   "chaosValue": 65534,
-   "exaltedValue": 76549,
-   "divineValue": 310.0,
-   "count": 1,
-   "detailsId": "simplex-amulet-83-shaper-warlord",
-   "listingCount": 1
+   "itemType": "Body Armour",
+   "chaosValue": 2.3,
+   "exaltedValue": 2.69,
+   "divineValue": 0.01,
+   "count": 2,
+   "detailsId": "vaal-regalia-82-redeemer",
+   "listingCount": 2
   },
   {
    "id": 66555,
@@ -1083,9 +1119,9 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 36995,
-   "exaltedValue": 43213,
-   "divineValue": 175.0,
+   "chaosValue": 34766,
+   "exaltedValue": 40595,
+   "divineValue": 165.0,
    "count": 1,
    "detailsId": "simplex-amulet-83-shaper-crusader",
    "listingCount": 1
@@ -1101,9 +1137,9 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 12684,
-   "exaltedValue": 14816,
-   "divineValue": 60.0,
+   "chaosValue": 11167,
+   "exaltedValue": 13040,
+   "divineValue": 53.0,
    "count": 1,
    "detailsId": "simplex-amulet-85-elder-warlord",
    "listingCount": 1
@@ -1119,29 +1155,11 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 7399,
-   "exaltedValue": 8643,
+   "chaosValue": 7374,
+   "exaltedValue": 8611,
    "divineValue": 35.0,
    "count": 1,
    "detailsId": "simplex-amulet-86-elder",
-   "listingCount": 1
-  },
-  {
-   "id": 50256,
-   "name": "Simplex Amulet",
-   "levelRequired": 85,
-   "variant": "Shaper/Redeemer",
-   "itemClass": 2,
-   "sparkLine": {
-    "totalChange": 0,
-    "data": []
-   },
-   "itemType": "Amulet",
-   "chaosValue": 7399,
-   "exaltedValue": 8643,
-   "divineValue": 35.0,
-   "count": 1,
-   "detailsId": "simplex-amulet-85-shaper-redeemer",
    "listingCount": 1
   },
   {
@@ -1155,8 +1173,8 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 6131,
-   "exaltedValue": 7161,
+   "chaosValue": 6110,
+   "exaltedValue": 7135,
    "divineValue": 29.0,
    "count": 1,
    "detailsId": "simplex-amulet-83-elder-warlord",
@@ -1173,8 +1191,8 @@
     "data": []
    },
    "itemType": "Amulet",
-   "chaosValue": 4862,
-   "exaltedValue": 5679,
+   "chaosValue": 4846,
+   "exaltedValue": 5659,
    "divineValue": 23.0,
    "count": 1,
    "detailsId": "simplex-amulet-83-shaper-redeemer",
@@ -1192,7 +1210,7 @@
    },
    "itemType": "Body Armour",
    "chaosValue": 120.0,
-   "exaltedValue": 140.2,
+   "exaltedValue": 140.1,
    "divineValue": 0.57,
    "count": 1,
    "detailsId": "vaal-regalia-84-redeemer",
@@ -1210,7 +1228,7 @@
    },
    "itemType": "Body Armour",
    "chaosValue": 24.0,
-   "exaltedValue": 28.03,
+   "exaltedValue": 28.02,
    "divineValue": 0.11,
    "count": 1,
    "detailsId": "vaal-regalia-84-hunter",
@@ -1232,24 +1250,6 @@
    "divineValue": 0.02,
    "count": 1,
    "detailsId": "vaal-regalia-84-warlord",
-   "listingCount": 1
-  },
-  {
-   "id": 29864,
-   "name": "Vaal Regalia",
-   "levelRequired": 82,
-   "variant": "Redeemer",
-   "itemClass": 1,
-   "sparkLine": {
-    "totalChange": 0,
-    "data": []
-   },
-   "itemType": "Body Armour",
-   "chaosValue": 5.0,
-   "exaltedValue": 5.84,
-   "divineValue": 0.02,
-   "count": 1,
-   "detailsId": "vaal-regalia-82-redeemer",
    "listingCount": 1
   },
   {
