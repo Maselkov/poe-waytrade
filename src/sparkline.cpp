@@ -145,11 +145,13 @@ private:
         return ctx ? ctx->GetDensityIndependentPixelRatio() : 1.0f;
     }
     Vector2f size() { return GetBox().GetSize(Rml::BoxArea::Content); }
-    // Room left at the sides and ends for the line's width and the dot.
+    // Room above and below for the line's width and the dot. None at the
+    // sides: the first and last days sit on the box's edges, in line with
+    // the text around it, and the end dot hangs over into the margin.
     float pad() { return 3 * dp(); }
     float day_x(int i) {
-        float w = size().x, p = pad();
-        return points_.size() < 2 ? w / 2 : p + (w - 2 * p) * (float)i / (float)(points_.size() - 1);
+        float w = size().x;
+        return points_.size() < 2 ? w / 2 : w * (float)i / (float)(points_.size() - 1);
     }
 
     void hover(int day) {
