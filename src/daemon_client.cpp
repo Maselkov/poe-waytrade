@@ -139,6 +139,8 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "entered") reply.entered = atoll(f[1].c_str());
         else if (f[0] == "watch") reply.watch = f[1];
     }
+    if (reply.title == "Divine Orb")
+        for (PriceLine& p : reply.prices) p.divine_orb = true;
     return reply;
 }
 

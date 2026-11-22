@@ -374,7 +374,7 @@ void fill_week(UiPriceRow& r, const PriceLine& p) {
     for (const std::optional<double>& d : p.week) known += d.has_value();
     double start = 1 + p.week_change / 100;  // today's price against the week's start
     if (known < 3 || start <= 0) return;
-    bool divine = p.divine >= 1.0;
+    bool divine = in_divines(p);
     double now = divine ? p.divine : p.chaos;
     Rml::String unit = divine ? " div" : small_unit_suffix();
     double lo = 0, hi = 0;
@@ -423,7 +423,7 @@ void place_weeks(Rml::Vector<UiPriceRow>& rows, size_t n, bool compact) {
 UiPriceRow ninja_row(const PriceLine& p) {
     UiPriceRow r;
     r.label = p.label.empty() ? "poe.ninja" : capitalized(p.label);
-    bool divine = p.divine >= 1.0;
+    bool divine = in_divines(p);
     Rml::String amount = amount_text(divine ? p.divine : p.chaos);
     const char* id = price_icon(p);
     if (icons_get(id)) {

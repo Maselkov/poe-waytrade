@@ -25,12 +25,16 @@ struct PriceLine {
     // Empty when poe.ninja has no days for it.
     std::vector<std::optional<double>> week;
     double week_change = 0;  // over the whole week, in percent
+    // A Divine Orb's own price: "1.0 div" would say nothing, so it's shown
+    // in the small unit whatever it's worth.
+    bool divine_orb = false;
 };
 
 // The currency a poe.ninja price is shown in (and its icon): divine from 1
 // up, else the game's small unit (chaos, PoE2's exalted). `chaos` is in
 // that unit.
-inline const char* price_icon(const PriceLine& p) { return p.divine >= 1.0 ? "divine" : small_unit_id(); }
+inline bool in_divines(const PriceLine& p) { return p.divine >= 1.0 && !p.divine_orb; }
+inline const char* price_icon(const PriceLine& p) { return in_divines(p) ? "divine" : small_unit_id(); }
 
 struct TradeFilter {
     int index = 0;
