@@ -5,48 +5,96 @@
    "name": "Ancient Wombgift",
    "levelRequired": 75,
    "itemClass": 5,
-   "chaosValue": 19.0,
-   "exaltedValue": 23.36,
-   "divineValue": 0.09,
+   "sparkLine": {
+    "totalChange": 1100,
+    "data": [
+     0,
+     0,
+     100,
+     100,
+     800,
+     900,
+     1100
+    ]
+   },
+   "chaosValue": 12.0,
+   "exaltedValue": 14.02,
+   "divineValue": 0.06,
    "count": 399,
    "detailsId": "ancient-wombgift-75",
-   "listingCount": 723
+   "listingCount": 3494
   },
   {
    "id": 130497,
    "name": "Ancient Wombgift",
    "levelRequired": 84,
    "itemClass": 5,
-   "chaosValue": 19.9,
-   "exaltedValue": 24.47,
-   "divineValue": 0.09,
-   "count": 197,
+   "sparkLine": {
+    "totalChange": 600,
+    "data": [
+     0,
+     0,
+     0,
+     0,
+     400,
+     400,
+     600
+    ]
+   },
+   "chaosValue": 14.0,
+   "exaltedValue": 16.35,
+   "divineValue": 0.07,
+   "count": 399,
    "detailsId": "ancient-wombgift-84",
-   "listingCount": 197
-  },
-  {
-   "id": 130519,
-   "name": "Ancient Wombgift",
-   "levelRequired": 40,
-   "itemClass": 5,
-   "chaosValue": 23.4,
-   "exaltedValue": 28.77,
-   "divineValue": 0.11,
-   "count": 54,
-   "detailsId": "ancient-wombgift-40",
-   "listingCount": 54
+   "listingCount": 1848
   },
   {
    "id": 130516,
    "name": "Ancient Wombgift",
    "levelRequired": 68,
    "itemClass": 5,
-   "chaosValue": 14.0,
-   "exaltedValue": 17.21,
-   "divineValue": 0.07,
-   "count": 50,
+   "sparkLine": {
+    "totalChange": 900,
+    "data": [
+     0,
+     0,
+     100,
+     200,
+     740,
+     900,
+     900
+    ]
+   },
+   "chaosValue": 10.0,
+   "exaltedValue": 11.68,
+   "divineValue": 0.05,
+   "count": 65,
    "detailsId": "ancient-wombgift-68",
-   "listingCount": 50
+   "listingCount": 65
+  },
+  {
+   "id": 130519,
+   "name": "Ancient Wombgift",
+   "levelRequired": 40,
+   "itemClass": 5,
+   "sparkLine": {
+    "totalChange": 213.5,
+    "data": [
+     0,
+     35.14,
+     433.8,
+     832.4,
+     602.7,
+     216.2,
+     213.5
+    ]
+   },
+   "chaosValue": 23.2,
+   "exaltedValue": 27.1,
+   "divineValue": 0.11,
+   "count": 43,
+   "detailsId": "ancient-wombgift-40",
+   "listingCount": 43
   }
  ]
 }

@@ -39,6 +39,18 @@
    "primaryValue": 1.0,
    "listingCount": 18,
    "corrupted": false,
+   "sparkLine": {
+    "totalChange": -71.43,
+    "data": [
+     null,
+     0,
+     -48.57,
+     null,
+     -42.86,
+     -42.86,
+     -71.43
+    ]
+   },
    "propertyModifiers": [
     {
      "text": "[Evasion|Evasion Rating]: (320-420)",
@@ -91,6 +103,18 @@
    "primaryValue": 0.00945,
    "listingCount": 5389,
    "corrupted": false,
+   "sparkLine": {
+    "totalChange": 0.53,
+    "data": [
+     null,
+     0,
+     -1.7,
+     null,
+     134.6,
+     5.64,
+     0.53
+    ]
+   },
    "propertyModifiers": [
     {
      "text": "[Evasion|Evasion Rating]: (400-493)",
@@ -139,6 +163,18 @@
    "primaryValue": 0.00858,
    "listingCount": 759,
    "corrupted": false,
+   "sparkLine": {
+    "totalChange": -23.12,
+    "data": [
+     null,
+     0,
+     20.79,
+     null,
+     -7.8,
+     -19.35,
+     -23.12
+    ]
+   },
    "propertyModifiers": [
     {
      "text": "[Armour]: (255-306)",
@@ -188,6 +224,18 @@
    "primaryValue": 0.00209,
    "listingCount": 5655,
    "corrupted": false,
+   "sparkLine": {
+    "totalChange": 1061,
+    "data": [
+     null,
+     0,
+     2644,
+     null,
+     2544,
+     2600,
+     1061
+    ]
+   },
    "propertyModifiers": [
     {
      "text": "[Armour]: (149-178)",

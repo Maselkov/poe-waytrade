@@ -20,6 +20,11 @@ struct PriceLine {
     // On an unidentified unique's list of candidates: which unique this is,
     // so clicking it checks the item as that one (PriceCheck::pick_unique).
     std::string unique;
+    // The price over the last week, a day at a time: each day's change in
+    // percent against the week's start, none on a day with no listings.
+    // Empty when poe.ninja has no days for it.
+    std::vector<std::optional<double>> week;
+    double week_change = 0;  // over the whole week, in percent
 };
 
 // The currency a poe.ninja price is shown in (and its icon): divine from 1

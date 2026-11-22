@@ -1,32 +1,56 @@
 {
  "lines": [
   {
-   "id": 2796,
-   "name": "Arc",
-   "levelRequired": 12,
-   "variant": "1/20",
-   "itemClass": 4,
-   "gemLevel": 1,
-   "gemQuality": 20,
-   "chaosValue": 1.2,
-   "exaltedValue": 1.48,
-   "divineValue": 0.01,
-   "count": 311,
-   "detailsId": "arc-1-20",
-   "listingCount": 311
-  },
-  {
    "id": 61286,
    "name": "Arc",
    "levelRequired": 12,
    "variant": "1",
    "itemClass": 4,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
    "gemLevel": 1,
    "chaosValue": 1.0,
-   "exaltedValue": 1.23,
-   "count": 301,
+   "exaltedValue": 1.17,
+   "count": 292,
    "detailsId": "arc-1",
-   "listingCount": 301
+   "listingCount": 292
+  },
+  {
+   "id": 2796,
+   "name": "Arc",
+   "levelRequired": 12,
+   "variant": "1/20",
+   "itemClass": 4,
+   "sparkLine": {
+    "totalChange": 100,
+    "data": [
+     0,
+     0,
+     0,
+     0,
+     100,
+     100,
+     100
+    ]
+   },
+   "gemLevel": 1,
+   "gemQuality": 20,
+   "chaosValue": 2.0,
+   "exaltedValue": 2.34,
+   "divineValue": 0.01,
+   "count": 291,
+   "detailsId": "arc-1-20",
+   "listingCount": 291
   },
   {
    "id": 2645,
@@ -34,14 +58,26 @@
    "levelRequired": 72,
    "variant": "21c",
    "itemClass": 4,
+   "sparkLine": {
+    "totalChange": -33.33,
+    "data": [
+     0,
+     -33.33,
+     -33.33,
+     -33.33,
+     -30,
+     0,
+     -33.33
+    ]
+   },
    "corrupted": true,
    "gemLevel": 21,
-   "chaosValue": 3.0,
-   "exaltedValue": 3.69,
+   "chaosValue": 2.0,
+   "exaltedValue": 2.34,
    "divineValue": 0.01,
-   "count": 46,
+   "count": 50,
    "detailsId": "arc-21c",
-   "listingCount": 46
+   "listingCount": 50
   },
   {
    "id": 127090,
@@ -49,11 +85,23 @@
    "levelRequired": 12,
    "variant": "1/23c",
    "itemClass": 4,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
    "corrupted": true,
    "gemLevel": 1,
    "gemQuality": 23,
    "chaosValue": 2.0,
-   "exaltedValue": 2.46,
+   "exaltedValue": 2.34,
    "divineValue": 0.01,
    "count": 46,
    "detailsId": "arc-1-23c",
@@ -65,15 +113,27 @@
    "levelRequired": 72,
    "variant": "21/20c",
    "itemClass": 4,
+   "sparkLine": {
+    "totalChange": -38,
+    "data": [
+     0,
+     -35,
+     -50,
+     -35,
+     -34,
+     -21.25,
+     -38
+    ]
+   },
    "corrupted": true,
    "gemLevel": 21,
    "gemQuality": 20,
-   "chaosValue": 12.0,
-   "exaltedValue": 14.75,
+   "chaosValue": 12.4,
+   "exaltedValue": 14.48,
    "divineValue": 0.06,
-   "count": 37,
+   "count": 35,
    "detailsId": "arc-21-20c",
-   "listingCount": 37
+   "listingCount": 35
   },
   {
    "id": 3732,
@@ -81,44 +141,26 @@
    "levelRequired": 70,
    "variant": "20/20",
    "itemClass": 4,
+   "sparkLine": {
+    "totalChange": -62.62,
+    "data": [
+     0,
+     -54.83,
+     -56.39,
+     -61.68,
+     -23.36,
+     -53.27,
+     -62.62
+    ]
+   },
    "gemLevel": 20,
    "gemQuality": 20,
-   "chaosValue": 14.0,
-   "exaltedValue": 17.21,
-   "divineValue": 0.07,
-   "count": 32,
+   "chaosValue": 12.0,
+   "exaltedValue": 14.02,
+   "divineValue": 0.06,
+   "count": 34,
    "detailsId": "arc-20-20",
-   "listingCount": 32
-  },
-  {
-   "id": 4454,
-   "name": "Arc",
-   "levelRequired": 70,
-   "variant": "20/23c",
-   "itemClass": 4,
-   "corrupted": true,
-   "gemLevel": 20,
-   "gemQuality": 23,
-   "chaosValue": 8.5,
-   "exaltedValue": 10.45,
-   "divineValue": 0.04,
-   "count": 19,
-   "detailsId": "arc-20-23c",
-   "listingCount": 19
-  },
-  {
-   "id": 3122,
-   "name": "Arc",
-   "levelRequired": 70,
-   "variant": "20",
-   "itemClass": 4,
-   "gemLevel": 20,
-   "chaosValue": 2.4,
-   "exaltedValue": 2.95,
-   "divineValue": 0.01,
-   "count": 17,
-   "detailsId": "arc-20",
-   "listingCount": 17
+   "listingCount": 34
   },
   {
    "id": 3857,
@@ -126,15 +168,81 @@
    "levelRequired": 70,
    "variant": "20/20c",
    "itemClass": 4,
+   "sparkLine": {
+    "totalChange": -48.48,
+    "data": [
+     0,
+     -62.12,
+     -36.36,
+     -31.82,
+     -31.82,
+     -36.36,
+     -48.48
+    ]
+   },
    "corrupted": true,
    "gemLevel": 20,
    "gemQuality": 20,
-   "chaosValue": 7.6,
-   "exaltedValue": 9.34,
-   "divineValue": 0.04,
-   "count": 11,
+   "chaosValue": 6.8,
+   "exaltedValue": 7.94,
+   "divineValue": 0.03,
+   "count": 17,
    "detailsId": "arc-20-20c",
-   "listingCount": 11
+   "listingCount": 17
+  },
+  {
+   "id": 4454,
+   "name": "Arc",
+   "levelRequired": 70,
+   "variant": "20/23c",
+   "itemClass": 4,
+   "sparkLine": {
+    "totalChange": -32.43,
+    "data": [
+     0,
+     -39.19,
+     -39.19,
+     -39.19,
+     -38.51,
+     -38.51,
+     -32.43
+    ]
+   },
+   "corrupted": true,
+   "gemLevel": 20,
+   "gemQuality": 23,
+   "chaosValue": 10.0,
+   "exaltedValue": 11.68,
+   "divineValue": 0.05,
+   "count": 16,
+   "detailsId": "arc-20-23c",
+   "listingCount": 16
+  },
+  {
+   "id": 3122,
+   "name": "Arc",
+   "levelRequired": 70,
+   "variant": "20",
+   "itemClass": 4,
+   "sparkLine": {
+    "totalChange": 40,
+    "data": [
+     0,
+     -20,
+     -44,
+     -40,
+     -60,
+     -60,
+     40
+    ]
+   },
+   "gemLevel": 20,
+   "chaosValue": 7.0,
+   "exaltedValue": 8.18,
+   "divineValue": 0.03,
+   "count": 14,
+   "detailsId": "arc-20",
+   "listingCount": 14
   },
   {
    "id": 7152,
@@ -142,30 +250,19 @@
    "levelRequired": 72,
    "variant": "21/23c",
    "itemClass": 4,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
    "corrupted": true,
    "gemLevel": 21,
    "gemQuality": 23,
-   "chaosValue": 402.4,
-   "exaltedValue": 494.8,
+   "chaosValue": 402.3,
+   "exaltedValue": 469.9,
    "divineValue": 1.9,
    "count": 4,
    "detailsId": "arc-21-23c",
    "listingCount": 4
-  },
-  {
-   "id": 4038,
-   "name": "Arc",
-   "levelRequired": 70,
-   "variant": "20c",
-   "itemClass": 4,
-   "corrupted": true,
-   "gemLevel": 20,
-   "chaosValue": 4.0,
-   "exaltedValue": 4.92,
-   "divineValue": 0.02,
-   "count": 1,
-   "detailsId": "arc-20c",
-   "listingCount": 1
   }
  ]
 }

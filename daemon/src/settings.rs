@@ -36,6 +36,7 @@ pub const KEYS: &[&str] = &[
     "heist_watch",
     "startup_notice",
     "copy_check",
+    "compact_graph",
 ];
 
 /// Areas where the display price check starts by itself: mob-free rooms of
@@ -75,6 +76,9 @@ pub struct Settings {
     pub startup_notice: bool,
     /// The user's own Ctrl+C on an item opens a quick look, like Ctrl+D.
     pub copy_check: bool,
+    /// The price panel draws a single price's week as a small graph in its
+    /// row, as it does with several, instead of the large graph under it.
+    pub compact_graph: bool,
 }
 
 /// Each a key combination as the layer matches it: modifiers and an evdev
@@ -109,6 +113,7 @@ impl Default for Settings {
             heist_watch: true,
             startup_notice: true,
             copy_check: false,
+            compact_graph: false,
         }
     }
 }
@@ -231,6 +236,7 @@ impl Settings {
             "heist_watch" => if self.heist_watch { "on" } else { "off" }.to_string(),
             "startup_notice" => if self.startup_notice { "on" } else { "off" }.to_string(),
             "copy_check" => if self.copy_check { "on" } else { "off" }.to_string(),
+            "compact_graph" => if self.compact_graph { "on" } else { "off" }.to_string(),
             _ => String::new(),
         }
     }
@@ -303,6 +309,11 @@ impl Settings {
                 "on" => self.copy_check = true,
                 "off" => self.copy_check = false,
                 _ => return Err("Ctrl+C price checks are on or off".to_string()),
+            },
+            "compact_graph" => match value {
+                "on" => self.compact_graph = true,
+                "off" => self.compact_graph = false,
+                _ => return Err("The compact price graph is on or off".to_string()),
             },
             "tracking" => {
                 if !["gpu", "cpu"].contains(&value) {
@@ -401,6 +412,10 @@ mod tests {
         assert_eq!(s.get("copy_check"), "off");
         s.set("copy_check", "on").unwrap();
         assert!(s.copy_check);
+        assert_eq!(s.get("compact_graph"), "off");
+        s.set("compact_graph", "on").unwrap();
+        assert!(s.compact_graph);
+        assert_eq!(s.get("compact_graph"), "on");
         assert_eq!(s.get("tracking"), "cpu");
         assert_eq!(s.auto_watch_areas, ["Zealot's Vault", "Arkhon's Vault"]);
         assert_eq!(s.get("auto_watch_areas"), "Zealot's Vault;Arkhon's Vault");
@@ -428,6 +443,7 @@ mod tests {
             ("heist_watch", "maybe"),
             ("startup_notice", "maybe"),
             ("copy_check", "maybe"),
+            ("compact_graph", "maybe"),
             ("nonsense", "1"),
         ] {
             let before = s.clone();
@@ -448,6 +464,7 @@ mod tests {
         assert_eq!(s.cursor, "game", "missing from older files: the game's");
         assert!(s.auto_watch, "missing from older files: on");
         assert!(!s.copy_check, "missing from older files: off");
+        assert!(!s.compact_graph, "missing from older files: off");
         assert_eq!(s.auto_watch_areas.len(), DEFAULT_WATCH_AREAS.len());
         assert_eq!(s.hotkeys.displays, "ctrl+alt+33");
 

@@ -39,6 +39,7 @@ public:
         bool heist_watch = true;      // watch for curio displays in Heist
         bool startup_notice = true;   // the "Waytrade is running" toast
         bool copy_check = false;      // the user's own Ctrl+C opens a quick look
+        bool compact_graph = false;   // a single price's week as a small graph in its row
         static std::array<KeyCombo, kActions> defaults();
     };
 
@@ -108,6 +109,7 @@ public:
     void set_heist_watch(bool on);
     void set_startup_notice(bool on);
     void set_copy_check(bool on);
+    void set_compact_graph(bool on);
 
     // Price check
     void set_league(const std::string& league);

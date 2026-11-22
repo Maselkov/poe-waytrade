@@ -7,6 +7,7 @@
 #include "rml_renderer.h"
 #include "screen_scan.h"
 #include "settings_page.h"
+#include "sparkline.h"
 #include "version.h"
 
 #include <RmlUi/Core.h>
@@ -170,6 +171,17 @@ struct UiPriceRow {
     Rml::String meta, tag;
     bool answer = false, rule = false, stale = false;
     int pick = -1;  // an unidentified unique's candidate: its index, to click
+    // The price's last week (<sparkline>), when poe.ninja has 3 days of it:
+    // a small graph in the row, or a large one under it when the panel
+    // prices one item (place_weeks).
+    Rml::String week;         // the days, in percent: "0,33.8,,146.7"
+    Rml::String week_labels;  // each day's readout, '|' between: "3 days ago · 91.8 div"
+    Rml::String week_change;  // "▲ 267%"
+    Rml::String week_days;    // "7 days", or "3 of 7 days" with gaps
+    Rml::String week_foot;    // under the large graph: "low 37.2 · high 136.7"
+    Rml::String week_after;   // after the small graph's change, in the row's line: " 7d · 72 listed"
+    bool week_up = false, week_dashed = false;
+    bool week_mini = false, week_big = false;
 };
 struct UiFilter {
     int index = 0;
@@ -302,6 +314,7 @@ struct Model {
     bool s_displays = true;  // the item displays settings (PoE1's vaults and Heist)
     bool s_startup_notice = true;
     bool s_copy_check = false;
+    bool s_compact_graph = false;
     bool s_scaled = false;  // the output's scale isn't 1: Wine's cursor grows over the panels
     int s_profile = 1;
     bool s_reset_armed = false;
@@ -350,6 +363,62 @@ Rml::String joined(const std::vector<Rml::String>& parts) {
     return out;
 }
 
+bool thin(const std::string& listed);
+
+// A price's week for its row: the days, a readout for each ("3 days ago ·
+// 91.8 div", priced from today's price and the day's change against the
+// week's start), the change, and the low and high. Nothing with fewer than
+// three days: too few to draw. Prices in the row's own currency.
+void fill_week(UiPriceRow& r, const PriceLine& p) {
+    int known = 0;
+    for (const std::optional<double>& d : p.week) known += d.has_value();
+    double start = 1 + p.week_change / 100;  // today's price against the week's start
+    if (known < 3 || start <= 0) return;
+    bool divine = p.divine >= 1.0;
+    double now = divine ? p.divine : p.chaos;
+    Rml::String unit = divine ? " div" : small_unit_suffix();
+    double lo = 0, hi = 0;
+    bool first = true;
+    size_t n = p.week.size();
+    for (size_t i = 0; i < n; i++) {
+        size_t ago = n - 1 - i;
+        Rml::String day = ago == 0 ? "today" : ago == 1 ? "yesterday" : std::to_string(ago) + " days ago";
+        if (i > 0) r.week += ",", r.week_labels += "|";
+        if (!p.week[i]) {
+            r.week_labels += day + " \u00b7 no listings";
+            continue;
+        }
+        double v = now * (1 + *p.week[i] / 100) / start;
+        lo = first ? v : std::min(lo, v), hi = first ? v : std::max(hi, v);
+        first = false;
+        r.week += format("%.2f", *p.week[i]);
+        r.week_labels += day + " \u00b7 " + amount_text(v) + unit;
+    }
+    r.week_up = p.week_change >= 0;
+    r.week_change = (r.week_up ? "\u25b2 " : "\u25bc ") + format("%.0f", std::fabs(p.week_change)) + "%";
+    r.week_days = known < 7 ? std::to_string(known) + " of 7 days" : "7 days";
+    r.week_dashed = known < 7 || thin(p.listings);
+    r.week_foot = "low " + amount_text(lo) + " \u00b7 high " + amount_text(hi) + unit;
+}
+
+// Where the weeks go: one item priced (a single row, or a currency's each
+// and its stack, which share theirs) gets the large graph under its last
+// row, unless the setting asks for small ones; several get a small graph
+// each, its change in the row's line. `n`: the poe.ninja rows, first.
+void place_weeks(Rml::Vector<UiPriceRow>& rows, size_t n, bool compact) {
+    bool one = n == 1 || (n == 2 && rows[1].label.rfind("Stack of", 0) == 0);
+    if (one && !compact) {
+        rows[n - 1].week_big = !rows[n - 1].week.empty();
+        return;
+    }
+    for (size_t i = 0; i < n; i++) {
+        UiPriceRow& r = rows[i];
+        if (r.week.empty()) continue;
+        r.week_mini = true;
+        r.week_after = joined({" 7d", r.week_days == "7 days" ? "" : r.week_days, r.meta});
+    }
+}
+
 // A poe.ninja price: chaos, or divines (and their worth in chaos) from one up.
 UiPriceRow ninja_row(const PriceLine& p) {
     UiPriceRow r;
@@ -364,6 +433,7 @@ UiPriceRow ninja_row(const PriceLine& p) {
         r.main = amount + (divine ? " div" : small_unit_suffix());
     }
     if (divine) r.sub = chaos_text(p.chaos);
+    fill_week(r, p);
     return r;
 }
 
@@ -514,6 +584,7 @@ bool OverlayUi::Impl::init(RmlRenderer* renderer) {
     Rml::SetSystemInterface(&system);
     Rml::SetFileInterface(&files);
     if (!Rml::Initialise()) return false;
+    register_sparkline();
 
     const struct {
         const char* path;
@@ -559,6 +630,16 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("rule", &UiPriceRow::rule);
         h.RegisterMember("stale", &UiPriceRow::stale);
         h.RegisterMember("pick", &UiPriceRow::pick);
+        h.RegisterMember("week", &UiPriceRow::week);
+        h.RegisterMember("week_labels", &UiPriceRow::week_labels);
+        h.RegisterMember("week_change", &UiPriceRow::week_change);
+        h.RegisterMember("week_days", &UiPriceRow::week_days);
+        h.RegisterMember("week_foot", &UiPriceRow::week_foot);
+        h.RegisterMember("week_after", &UiPriceRow::week_after);
+        h.RegisterMember("week_up", &UiPriceRow::week_up);
+        h.RegisterMember("week_dashed", &UiPriceRow::week_dashed);
+        h.RegisterMember("week_mini", &UiPriceRow::week_mini);
+        h.RegisterMember("week_big", &UiPriceRow::week_big);
     }
     if (auto h = c.RegisterStruct<UiFilter>()) {
         h.RegisterMember("index", &UiFilter::index);
@@ -732,6 +813,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_displays", &model.s_displays);
     c.Bind("s_startup_notice", &model.s_startup_notice);
     c.Bind("s_copy_check", &model.s_copy_check);
+    c.Bind("s_compact_graph", &model.s_compact_graph);
     c.Bind("s_scaled", &model.s_scaled);
     c.Bind("s_profile", &model.s_profile);
     c.Bind("s_reset_armed", &model.s_reset_armed);
@@ -836,6 +918,7 @@ void OverlayUi::Impl::bind_model() {
     settings_event("heist_watch", [arg](SettingsPage& s, Args a) { s.set_heist_watch(arg(a) != 0); });
     settings_event("startup_notice", [arg](SettingsPage& s, Args a) { s.set_startup_notice(arg(a) != 0); });
     settings_event("copy_check", [arg](SettingsPage& s, Args a) { s.set_copy_check(arg(a) != 0); });
+    settings_event("compact_graph", [arg](SettingsPage& s, Args a) { s.set_compact_graph(arg(a) != 0); });
     settings_event("league_pick", [](SettingsPage& s, Args a) {
         if (!a.empty()) s.set_league(a[0].Get<Rml::String>());
     });
@@ -1101,6 +1184,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
                                 m.price_rows[0].label == "poe.ninja" ? "" : "poe.ninja",
                                 item && item->rarity == "Unique" ? "rolls not counted" : ""});
             if (thin(listed)) last.tag = "thin";
+            place_weeks(m.price_rows, m.price_rows.size(), sv.compact_graph);
         }
         // Groups in panel order; the top one takes its name from what's in it.
         auto has = [&](const char* section) {
@@ -1266,6 +1350,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             r.answer = m.price_rows.size() == 1 || r.label.rfind("Stack of", 0) == 0;
             r.rule = r.answer && i > 0;
         }
+        if (!m.price_rows.empty()) place_weeks(m.price_rows, m.price_rows.size(), sv.compact_graph);
         Rml::String listed = reply->prices.empty() ? "" : reply->prices[0].listings;
         bool named = std::any_of(m.price_rows.begin(), m.price_rows.end(),
                                  [](const UiPriceRow& r) { return r.label == "poe.ninja"; });
@@ -1342,6 +1427,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     m.s_displays = !is_poe2();
     m.s_startup_notice = v.startup_notice;
     m.s_copy_check = v.copy_check;
+    m.s_compact_graph = v.compact_graph;
     m.s_profile = s.map_profile();
     m.s_reset_armed = s.reset_armed();
 

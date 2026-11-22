@@ -84,6 +84,7 @@ add_library(VkLayer_poe_waytrade SHARED
   src/overlay.cpp
   src/rml_renderer.cpp
   src/ui.cpp
+  src/sparkline.cpp
   src/icons.cpp
   src/assets.c
   src/wl_input.cpp

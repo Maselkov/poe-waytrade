@@ -11,8 +11,11 @@
 //!     status   ok | not_found | unsupported | loading | error | bad_request
 //!     message  <text>                                  (optional)
 //!     title    <item name>                             (status ok)
-//!     price    <label> <chaos> <divine> <listings|""> [<unique>]  (status
-//!              ok, 1+; an unidentified unique's candidates name theirs)
+//!     price    <label> <chaos> <divine> <listings|""> [<unique|"">
+//!              [<week>]]  (status ok, 1+; an unidentified unique's
+//!              candidates name theirs; week: the price over the last week,
+//!              "<total change>;<day>,<day>,..." in percent against the
+//!              week's start, a day empty when it had no listings)
 //!     league   <name>
 //!     age      <minutes since prices were fetched>
 //!     art      <width> <height>   (an unidentified unique whose base has
@@ -978,9 +981,25 @@ fn write_lookup(out: &mut String, outcome: lookup::Outcome) {
 fn write_prices(out: &mut String, prices: Vec<lookup::Price>) {
     for p in prices {
         let listings = p.listings.map(|n| n.to_string()).unwrap_or_default();
-        let unique = p.unique.map(|u| format!("\t{}", clean(&u))).unwrap_or_default();
-        let _ = writeln!(out, "price\t{}\t{:.2}\t{:.4}\t{listings}{unique}", clean(&p.label), p.chaos, p.divine);
+        let week = p.spark.as_ref().map(week_field).unwrap_or_default();
+        let unique = p.unique.as_deref().map(clean).unwrap_or_default();
+        let tail = match (unique.is_empty(), week.is_empty()) {
+            (true, true) => String::new(),
+            (_, true) => format!("\t{unique}"),
+            _ => format!("\t{unique}\t{week}"),
+        };
+        let _ = writeln!(out, "price\t{}\t{:.2}\t{:.4}\t{listings}{tail}", clean(&p.label), p.chaos, p.divine);
     }
+}
+
+/// A price line's week: "<total change>;<day>,<day>,...", or empty when
+/// poe.ninja has no days for it.
+fn week_field(spark: &ninja::Spark) -> String {
+    if spark.data.iter().all(Option::is_none) {
+        return String::new();
+    }
+    let days: Vec<String> = spark.data.iter().map(|d| d.map(|v| format!("{v:.2}")).unwrap_or_default()).collect();
+    format!("{:.2};{}", spark.total_change, days.join(","))
 }
 
 // ---- item displays (scan.rs) ------------------------------------------------
@@ -1445,4 +1464,36 @@ fn query(args: &[String]) -> io::Result<()> {
     write_frame(&mut stream, &format!("{}\n{text}", if map { "MAPCHECK" } else { "PRICE" }))?;
     print!("{}", read_frame(&mut stream)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn price(unique: Option<&str>, spark: Option<ninja::Spark>) -> lookup::Price {
+        lookup::Price {
+            label: "each".into(),
+            chaos: 2.0,
+            divine: 0.01,
+            listings: Some(5),
+            unique: unique.map(String::from),
+            spark,
+        }
+    }
+
+    #[test]
+    fn price_lines_carry_the_week() {
+        let week = ninja::Spark { total_change: -54.01, data: vec![None, None, Some(0.0), Some(-17.87), Some(-54.01)] };
+        let mut out = String::new();
+        write_prices(
+            &mut out,
+            vec![price(None, None), price(Some("Kaom's Heart"), None), price(None, Some(week.clone()))],
+        );
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0], "price\teach\t2.00\t0.0100\t5");
+        assert_eq!(lines[1], "price\teach\t2.00\t0.0100\t5\tKaom's Heart");
+        assert_eq!(lines[2], "price\teach\t2.00\t0.0100\t5\t\t-54.01;,,0.00,-17.87,-54.01");
+        // No days at all: no week.
+        assert_eq!(week_field(&ninja::Spark { total_change: 0.0, data: vec![None; 7] }), "");
+    }
 }

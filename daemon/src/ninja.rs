@@ -138,6 +138,8 @@ struct ExchangeCore {
 struct ExchangeLine {
     id: String,
     primary_value: Option<f64>,
+    #[serde(default)]
+    sparkline: Option<Spark>,
 }
 
 #[derive(Deserialize)]
@@ -175,6 +177,9 @@ pub struct ItemLine {
     #[serde(default)]
     primary_value: Option<f64>,
     pub listing_count: Option<u32>,
+    /// The price over the last week.
+    #[serde(default)]
+    pub spark_line: Option<Spark>,
     /// The item's art on web.poecdn.com (art.rs tells unidentified uniques
     /// apart by it).
     pub icon: Option<String>,
@@ -187,6 +192,19 @@ pub struct ItemLine {
     /// Foulborn uniques' mutated mods.
     #[serde(default)]
     pub mutated_modifiers: Vec<NinjaMod>,
+}
+
+/// A price's last week as poe.ninja gives it: a point a day, each the
+/// change in percent against the price at the start of the week (`None`
+/// on a day with no listings), and the change over the whole week.
+/// Percentages, so the same whatever currency the price is in.
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Spark {
+    #[serde(default)]
+    pub total_change: f64,
+    #[serde(default)]
+    pub data: Vec<Option<f64>>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -212,6 +230,8 @@ pub struct PriceDb {
     pub divine_rate: f64,
     /// Exchange items by name -> chaos value.
     pub exchange: HashMap<String, f64>,
+    /// Exchange items by name -> their last week.
+    pub exchange_spark: HashMap<String, Spark>,
     /// Item lines by name (unique name, gem name, map name, ...).
     pub items: HashMap<String, Vec<ItemLine>>,
     /// Unique item lines by base type, for unidentified uniques.
@@ -234,6 +254,7 @@ impl PriceDb {
             fetched_at: Instant::now(),
             divine_rate: 0.0,
             exchange: HashMap::new(),
+            exchange_spark: HashMap::new(),
             items: HashMap::new(),
             uniques_by_base: HashMap::new(),
             bases: HashMap::new(),
@@ -265,6 +286,9 @@ impl PriceDb {
         for line in ov.lines {
             if let (Some(name), Some(value)) = (names.get(&line.id), line.primary_value) {
                 self.exchange.insert(name.clone(), value * scale);
+                if let Some(spark) = line.sparkline {
+                    self.exchange_spark.insert(name.clone(), spark);
+                }
             }
         }
     }
@@ -500,6 +524,48 @@ pub(crate) mod tests {
             "+(10-20)% to all Elemental Resistances"
         );
         assert_eq!(strip_markup("no markup"), "no markup");
+    }
+
+    /// A fixture line's week, as poe.ninja sent it.
+    fn raw_spark(v: &serde_json::Value) -> Spark {
+        Spark {
+            total_change: v["totalChange"].as_f64().unwrap(),
+            data: v["data"].as_array().unwrap().iter().map(serde_json::Value::as_f64).collect(),
+        }
+    }
+
+    #[test]
+    fn weeks() {
+        let db = fixture_db();
+        // Items: each line keeps its own.
+        let raw: serde_json::Value = serde_json::from_str(ITEMS[0].1).unwrap();
+        let first = &raw["lines"][0];
+        let line = db.items[first["name"].as_str().unwrap()]
+            .iter()
+            .find(|l| l.variant.as_deref() == first["variant"].as_str() && l.links.is_none())
+            .unwrap();
+        assert_eq!(line.spark_line, Some(raw_spark(&first["sparkLine"])));
+        // The exchange's, by name.
+        let raw: serde_json::Value = serde_json::from_str(EXCHANGE).unwrap();
+        let divine = raw["lines"].as_array().unwrap().iter().find(|l| l["id"] == "divine").unwrap();
+        assert_eq!(db.exchange_spark["Divine Orb"], raw_spark(&divine["sparkline"]));
+        assert_eq!(db.exchange_spark.len(), db.exchange.len());
+
+        // PoE2: the same, and a day without listings stays empty.
+        let db = poe2_fixture_db();
+        assert!(!db.exchange_spark.is_empty());
+        let weeks: Vec<&Spark> = db.items.values().flatten().filter_map(|l| l.spark_line.as_ref()).collect();
+        assert!(!weeks.is_empty());
+        let raw: serde_json::Value =
+            serde_json::from_str(include_str!("../fixtures/poe2/ninja-unique-armours.json")).unwrap();
+        let gaps = raw["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|l| l["sparkLine"]["data"].as_array().unwrap().contains(&serde_json::Value::Null));
+        if gaps {
+            assert!(weeks.iter().any(|w| w.data.contains(&None)));
+        }
     }
 
     /// The fixture's own lines for one name, as raw JSON.

@@ -90,7 +90,7 @@ STAT_TEXTS = {
 }
 
 # Fields the daemon doesn't read and that only make the files big.
-DROP = {"icon", "image", "sparkLine", "sparkline", "lowConfidenceSparkLine", "flavourText", "tradeInfo", "tradeFilter"}
+DROP = {"icon", "image", "lowConfidenceSparkLine", "flavourText", "tradeInfo", "tradeFilter"}
 # Mod lists: kept (as their texts) only for uniques, whose variants they tell apart.
 MODS = ("implicitModifiers", "explicitModifiers", "mutatedModifiers")
 

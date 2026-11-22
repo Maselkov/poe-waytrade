@@ -1,290 +1,544 @@
 {
  "lines": [
   {
-   "id": 137282,
-   "name": "Breeding Chambers",
+   "id": 136745,
+   "name": "Wraith Turf",
    "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
+   "variant": "Foil Watcher's Eye",
    "itemClass": 10,
-   "chaosValue": 230.0,
-   "exaltedValue": 282.8,
-   "divineValue": 1.08,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 634.2,
+   "exaltedValue": 740.8,
+   "divineValue": 3.0,
    "count": 1,
-   "detailsId": "breeding-chambers-t0",
+   "detailsId": "wraith-turf-t0",
    "listingCount": 1
   },
   {
-   "id": 137764,
-   "name": "Twisted Rubble",
+   "id": 135227,
+   "name": "Stained Trap",
    "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
+   "variant": "Foil Watcher's Eye",
    "itemClass": 10,
-   "chaosValue": 221.0,
-   "exaltedValue": 271.7,
-   "divineValue": 1.04,
-   "count": 2,
-   "detailsId": "twisted-rubble-t0",
-   "listingCount": 2
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 4,
+   "detailsId": "stained-trap-t0",
+   "listingCount": 4
   },
   {
-   "id": 136656,
-   "name": "Tempting Core",
+   "id": 136119,
+   "name": "Revealed Point",
    "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
+   "variant": "Foil Watcher's Eye",
    "itemClass": 10,
-   "chaosValue": 212.2,
-   "exaltedValue": 260.9,
-   "divineValue": 1.0,
-   "count": 2,
-   "detailsId": "tempting-core-t0",
-   "listingCount": 2
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     0
+    ]
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 8,
+   "detailsId": "revealed-point-t0",
+   "listingCount": 8
   },
   {
-   "id": 138259,
-   "name": "Dread Refuse",
+   "id": 136153,
+   "name": "Enclosed Dwelling",
    "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
+   "variant": "Foil Watcher's Eye",
    "itemClass": 10,
-   "chaosValue": 212.2,
-   "exaltedValue": 260.9,
-   "divineValue": 1.0,
-   "count": 1,
-   "detailsId": "dread-refuse-t0",
-   "listingCount": 1
-  },
-  {
-   "id": 138743,
-   "name": "Derelict Keep",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 212.2,
-   "exaltedValue": 260.9,
-   "divineValue": 1.0,
-   "count": 1,
-   "detailsId": "derelict-keep-t0",
-   "listingCount": 1
-  },
-  {
-   "id": 174421,
-   "name": "Murky Keep",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 212.2,
-   "exaltedValue": 260.9,
-   "divineValue": 1.0,
-   "count": 1,
-   "detailsId": "murky-keep-t0",
-   "listingCount": 1
-  },
-  {
-   "id": 135910,
-   "name": "Destiny Shelter",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 146.1,
-   "exaltedValue": 179.6,
-   "divineValue": 0.69,
-   "count": 6,
-   "detailsId": "destiny-shelter-t0",
-   "listingCount": 6
-  },
-  {
-   "id": 137350,
-   "name": "Stormy Grounds",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 102.2,
-   "exaltedValue": 125.7,
-   "divineValue": 0.48,
-   "count": 2,
-   "detailsId": "stormy-grounds-t0",
-   "listingCount": 2
-  },
-  {
-   "id": 137095,
-   "name": "Dire Landscape",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 82.94,
-   "exaltedValue": 102.0,
-   "divineValue": 0.39,
-   "count": 2,
-   "detailsId": "dire-landscape-t0",
-   "listingCount": 2
-  },
-  {
-   "id": 138422,
-   "name": "Dream Turf",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 70.0,
-   "exaltedValue": 86.07,
-   "divineValue": 0.33,
-   "count": 1,
-   "detailsId": "dream-turf-t0",
-   "listingCount": 1
-  },
-  {
-   "id": 136659,
-   "name": "Evil Bank",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 56.0,
-   "exaltedValue": 68.86,
-   "divineValue": 0.26,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
    "count": 3,
-   "detailsId": "evil-bank-t0",
+   "detailsId": "enclosed-dwelling-t0",
    "listingCount": 3
   },
   {
-   "id": 137137,
-   "name": "Nightmare Den",
+   "id": 136461,
+   "name": "Agony Slag",
    "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
+   "variant": "Foil Watcher's Eye",
    "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 3,
+   "detailsId": "agony-slag-t0",
+   "listingCount": 3
+  },
+  {
+   "id": 136469,
+   "name": "Raging Sanctum",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 2,
+   "detailsId": "raging-sanctum-t0",
+   "listingCount": 2
+  },
+  {
+   "id": 136510,
+   "name": "Noxious Estate",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 3,
+   "detailsId": "noxious-estate-t0",
+   "listingCount": 3
+  },
+  {
+   "id": 136612,
+   "name": "Blood Dregs",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 4,
+   "detailsId": "blood-dregs-t0",
+   "listingCount": 4
+  },
+  {
+   "id": 136639,
+   "name": "Subterranean Den",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 4,
+   "detailsId": "subterranean-den-t0",
+   "listingCount": 4
+  },
+  {
+   "id": 136643,
+   "name": "Brutal Solitude",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 4,
+   "detailsId": "brutal-solitude-t0",
+   "listingCount": 4
+  },
+  {
+   "id": 136657,
+   "name": "Iron Abode",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 1,
+   "detailsId": "iron-abode-t0",
+   "listingCount": 1
+  },
+  {
+   "id": 136744,
+   "name": "Wraith Trap",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 3,
+   "detailsId": "wraith-trap-t0",
+   "listingCount": 3
+  },
+  {
+   "id": 136892,
+   "name": "Hidden Corridors",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 3,
+   "detailsId": "hidden-corridors-t0",
+   "listingCount": 3
+  },
+  {
+   "id": 137216,
+   "name": "Cursed Swathe",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 1,
+   "detailsId": "cursed-swathe-t0",
+   "listingCount": 1
+  },
+  {
+   "id": 137292,
+   "name": "Arid Swathe",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 1,
+   "detailsId": "arid-swathe-t0",
+   "listingCount": 1
+  },
+  {
+   "id": 137399,
+   "name": "Squalid Zenith",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     0,
+     null
+    ]
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 2,
+   "detailsId": "squalid-zenith-t0",
+   "listingCount": 2
+  },
+  {
+   "id": 137459,
+   "name": "Exposed Estate",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 1,
+   "detailsId": "exposed-estate-t0",
+   "listingCount": 1
+  },
+  {
+   "id": 137607,
+   "name": "Mystic Scum",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 422.8,
+   "exaltedValue": 493.9,
+   "divineValue": 2.0,
+   "count": 4,
+   "detailsId": "mystic-scum-t0",
+   "listingCount": 4
+  },
+  {
+   "id": 135751,
+   "name": "Vortex Grounds",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     0
+    ]
+   },
+   "chaosValue": 380.0,
+   "exaltedValue": 443.9,
+   "divineValue": 1.8,
+   "count": 7,
+   "detailsId": "vortex-grounds-t0",
+   "listingCount": 7
+  },
+  {
+   "id": 136611,
+   "name": "Tranquil Solitude",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 380.0,
+   "exaltedValue": 443.9,
+   "divineValue": 1.8,
+   "count": 1,
+   "detailsId": "tranquil-solitude-t0",
+   "listingCount": 1
+  },
+  {
+   "id": 136725,
+   "name": "Dream Haven",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 54.24,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     0,
+     93.98,
+     54.24
+    ]
+   },
+   "chaosValue": 338.2,
+   "exaltedValue": 395.1,
+   "divineValue": 1.6,
+   "count": 7,
+   "detailsId": "dream-haven-t0",
+   "listingCount": 7
+  },
+  {
+   "id": 136579,
+   "name": "Squandered Abyss",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     0
+    ]
+   },
+   "chaosValue": 296.0,
+   "exaltedValue": 345.7,
+   "divineValue": 1.4,
+   "count": 5,
+   "detailsId": "squandered-abyss-t0",
+   "listingCount": 5
+  },
+  {
+   "id": 136636,
+   "name": "Wraith Shelter",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": [
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     0
+    ]
+   },
+   "chaosValue": 296.0,
+   "exaltedValue": 345.7,
+   "divineValue": 1.4,
+   "count": 5,
+   "detailsId": "wraith-shelter-t0",
+   "listingCount": 5
+  },
+  {
+   "id": 135123,
+   "name": "Glimmering Waste",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 101.6,
+    "data": [
+     null,
+     0,
+     67.94,
+     101.4,
+     105.4,
+     103.0,
+     101.6
+    ]
+   },
+   "chaosValue": 211.4,
+   "exaltedValue": 246.9,
+   "divineValue": 1.0,
+   "count": 8,
+   "detailsId": "glimmering-waste-t0",
+   "listingCount": 8
+  },
+  {
+   "id": 136808,
+   "name": "Revealed Nexus",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 211.4,
+   "exaltedValue": 246.9,
+   "divineValue": 1.0,
+   "count": 1,
+   "detailsId": "revealed-nexus-t0",
+   "listingCount": 1
+  },
+  {
+   "id": 137195,
+   "name": "Far View",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 211.4,
+   "exaltedValue": 246.9,
+   "divineValue": 1.0,
+   "count": 4,
+   "detailsId": "far-view-t0",
+   "listingCount": 4
+  },
+  {
+   "id": 137511,
+   "name": "Agony Mire",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": 0,
+    "data": []
+   },
+   "chaosValue": 211.4,
+   "exaltedValue": 246.9,
+   "divineValue": 1.0,
+   "count": 4,
+   "detailsId": "agony-mire-t0",
+   "listingCount": 4
+  },
+  {
+   "id": 136048,
+   "name": "Warped Alcove",
+   "baseType": "Valdo Map",
+   "variant": "Foil Watcher's Eye",
+   "itemClass": 10,
+   "sparkLine": {
+    "totalChange": -58.33,
+    "data": [
+     null,
+     0,
+     null,
+     62.5,
+     52.5,
+     -16,
+     -58.33
+    ]
+   },
    "chaosValue": 50.0,
-   "exaltedValue": 61.48,
+   "exaltedValue": 58.4,
    "divineValue": 0.24,
-   "count": 1,
-   "detailsId": "nightmare-den-t0",
-   "listingCount": 1
-  },
-  {
-   "id": 136907,
-   "name": "Insane Filth",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 47.24,
-   "exaltedValue": 58.08,
-   "divineValue": 0.22,
-   "count": 3,
-   "detailsId": "insane-filth-t0",
-   "listingCount": 3
-  },
-  {
-   "id": 137135,
-   "name": "Secluded Ziggurat",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 42.0,
-   "exaltedValue": 51.64,
-   "divineValue": 0.2,
-   "count": 9,
-   "detailsId": "secluded-ziggurat-t0",
-   "listingCount": 9
-  },
-  {
-   "id": 138701,
-   "name": "Cabal Frontier",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 34.5,
-   "exaltedValue": 42.42,
-   "divineValue": 0.16,
-   "count": 2,
-   "detailsId": "cabal-frontier-t0",
-   "listingCount": 2
-  },
-  {
-   "id": 136828,
-   "name": "Haunted Shard",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 27.0,
-   "exaltedValue": 33.2,
-   "divineValue": 0.13,
-   "count": 9,
-   "detailsId": "haunted-shard-t0",
-   "listingCount": 9
-  },
-  {
-   "id": 137030,
-   "name": "Forsaken Den",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 20.0,
-   "exaltedValue": 24.59,
-   "divineValue": 0.09,
-   "count": 1,
-   "detailsId": "forsaken-den-t0",
-   "listingCount": 1
-  },
-  {
-   "id": 138051,
-   "name": "Rotting Shadows",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 18.0,
-   "exaltedValue": 22.13,
-   "divineValue": 0.08,
-   "count": 3,
-   "detailsId": "rotting-shadows-t0",
-   "listingCount": 3
-  },
-  {
-   "id": 137138,
-   "name": "Twisted View",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 15.0,
-   "exaltedValue": 18.44,
-   "divineValue": 0.07,
-   "count": 3,
-   "detailsId": "twisted-view-t0",
-   "listingCount": 3
-  },
-  {
-   "id": 136185,
-   "name": "Rotting Remnant",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 12.8,
-   "exaltedValue": 15.74,
-   "divineValue": 0.06,
-   "count": 14,
-   "detailsId": "rotting-remnant-t0",
-   "listingCount": 14
-  },
-  {
-   "id": 138341,
-   "name": "Forlorn Corridors",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 10.0,
-   "exaltedValue": 12.3,
-   "divineValue": 0.05,
-   "count": 1,
-   "detailsId": "forlorn-corridors-t0",
-   "listingCount": 1
-  },
-  {
-   "id": 137136,
-   "name": "Haunted Monolith",
-   "baseType": "Valdo Map",
-   "variant": "Foil Aegis Aurora",
-   "itemClass": 10,
-   "chaosValue": 9.5,
-   "exaltedValue": 11.68,
-   "divineValue": 0.04,
-   "count": 6,
-   "detailsId": "haunted-monolith-t0",
-   "listingCount": 6
+   "count": 33,
+   "detailsId": "warped-alcove-t0",
+   "listingCount": 33
   }
  ]
 }

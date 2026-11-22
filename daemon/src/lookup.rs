@@ -1,7 +1,7 @@
 //! Matching a parsed item against poe.ninja data.
 
 use crate::item::Item;
-use crate::ninja::{ItemLine, PriceDb, unique_base};
+use crate::ninja::{ItemLine, PriceDb, Spark, unique_base};
 use crate::trade::templatize;
 
 #[derive(Debug)]
@@ -13,6 +13,8 @@ pub struct Price {
     /// The unique this price is for, on an unidentified unique's list of
     /// candidates: the panel checks the item as that one when it's clicked.
     pub unique: Option<String>,
+    /// How the price went over the last week, when poe.ninja says.
+    pub spark: Option<Spark>,
 }
 
 pub enum Outcome {
@@ -146,8 +148,15 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
 
     // Currency, fragments, essences, divination cards, omens, ...
     if let Some(&chaos) = db.exchange.get(&item.base) {
-        let mut prices =
-            vec![Price { label: "each".to_string(), chaos, divine: db.to_divine(chaos), listings: None, unique: None }];
+        let spark = db.exchange_spark.get(&item.base).cloned();
+        let mut prices = vec![Price {
+            label: "each".to_string(),
+            chaos,
+            divine: db.to_divine(chaos),
+            listings: None,
+            unique: None,
+            spark: spark.clone(),
+        }];
         if let Some(stack) = item.stack_size.filter(|&n| n > 1) {
             let total = chaos * stack as f64;
             prices.push(Price {
@@ -156,6 +165,7 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
                 divine: db.to_divine(total),
                 listings: None,
                 unique: None,
+                spark,
             });
         }
         return found(title, prices);
@@ -230,6 +240,9 @@ fn valdo_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
     let mut sorted: Vec<&ItemLine> = lines.iter().collect();
     sorted.sort_by(|a, b| a.chaos_value.total_cmp(&b.chaos_value));
     let priced = |line: &ItemLine, label: String| Price { label, ..line_price(db, line) };
+    // A median, lowest or highest is a different map from one week to the
+    // next: one map's week would pass for the reward's.
+    let summary = |line: &ItemLine, label: String| Price { spark: None, ..priced(line, label) };
     let mut prices = Vec::new();
     if let Some(own) = sorted.iter().find(|l| item.name.as_ref() == Some(&l.name)) {
         prices.push(priced(own, "this map".into()));
@@ -240,10 +253,10 @@ fn valdo_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
         1 => prices.push(priced(sorted[0], "the only one listed".into())),
         _ => {
             if n >= 3 {
-                prices.push(priced(sorted[(n - 1) / 2], format!("median of {n}")));
+                prices.push(summary(sorted[(n - 1) / 2], format!("median of {n}")));
             }
-            prices.push(priced(sorted[0], "lowest".into()));
-            prices.push(priced(sorted[n - 1], "highest".into()));
+            prices.push(summary(sorted[0], "lowest".into()));
+            prices.push(summary(sorted[n - 1], "highest".into()));
         }
     }
     prices
@@ -367,6 +380,7 @@ fn line_price(db: &PriceDb, line: &ItemLine) -> Price {
         divine: line.divine_value.unwrap_or_else(|| db.to_divine(line.chaos_value)),
         listings: line.listing_count,
         unique: None,
+        spark: line.spark_line.clone(),
     }
 }
 
@@ -953,6 +967,44 @@ mod tests {
         let got = look("Item Class: Stackable Currency\nRarity: Currency\nDivine Orb\n--------\nStack Size: 3/20\n");
         let each = fixture_db().exchange["Divine Orb"];
         assert_eq!(got, vec![("each".to_string(), each), ("stack of 3".to_string(), each * 3.0)]);
+    }
+
+    fn found_prices(text: &str) -> Vec<Price> {
+        match lookup(&fixture_db(), &parse(text).expect("item text")) {
+            Outcome::Found { prices, .. } => prices,
+            _ => panic!("no price for {text}"),
+        }
+    }
+
+    #[test]
+    fn weeks() {
+        let db = fixture_db();
+        // Currency: the exchange's week, on each and on the stack.
+        let got =
+            found_prices("Item Class: Stackable Currency\nRarity: Currency\nDivine Orb\n--------\nStack Size: 3/20\n");
+        let week = db.exchange_spark.get("Divine Orb");
+        assert!(week.is_some());
+        assert!(got.iter().all(|p| p.spark.as_ref() == week), "{got:?}");
+
+        // A unique: its line's.
+        let got = found_prices(&queen("G-G-G"));
+        let want: Vec<_> = db.items["Queen of the Forest"]
+            .iter()
+            .filter(|l| l.links.is_none())
+            .map(|l| (l.chaos_value, l.spark_line.clone()))
+            .collect();
+        for p in &got {
+            assert!(want.contains(&(p.chaos, p.spark.clone())), "{p:?}");
+        }
+        assert!(got.iter().any(|p| p.spark.is_some()));
+
+        // Valdo maps: only a map's own price has a week.
+        let json: Value = serde_json::from_str(include_str!("../fixtures/ninja-valdo-map.json")).unwrap();
+        let lines = json["lines"].as_array().unwrap();
+        let own = &lines[lines.len() / 2];
+        let got = found_prices(&valdo_map(own["name"].as_str().unwrap(), lines[0]["variant"].as_str().unwrap()));
+        assert_eq!(got[0].label, "this map");
+        assert!(got[1..].iter().all(|p| p.spark.is_none()));
     }
 
     #[test]
