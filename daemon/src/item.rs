@@ -367,6 +367,13 @@ pub fn parse(text: &str) -> Option<Item> {
         }
         _ => return None,
     }
+    // A synthesised item's base line reads "Synthesised Legion Gloves"; the
+    // trade site and poe.ninja know the base as "Legion Gloves", with
+    // synthesised as a filter of its own.
+    if let Some(base) = item.base.strip_prefix("Synthesised ") {
+        item.base = base.to_string();
+        item.synthesised = true;
+    }
     // Some items have no rarity (Viscera limbs), but every item has a class.
     if item.rarity.is_empty() && item.class.is_empty() {
         return None;
@@ -711,6 +718,28 @@ pub(crate) mod tests {
         assert_eq!(item.name.as_deref(), Some("Kaom's Heart"));
         assert_eq!(item.base, "Glorious Plate");
         assert_eq!(item.links, 6);
+    }
+
+    #[test]
+    fn synthesised_base() {
+        // The trade site rejects "Synthesised Legion Gloves" as an unknown
+        // base type; synthesised is its own filter.
+        let text = "Item Class: Gloves\nRarity: Unique\nOffering to the Serpent\nSynthesised Legion Gloves\n\
+                    --------\nArmour: 308\nEnergy Shield: 56\n--------\nItem Level: 85\n";
+        let item = parse(text).unwrap();
+        assert_eq!(item.name.as_deref(), Some("Offering to the Serpent"));
+        assert_eq!(item.base, "Legion Gloves");
+        assert!(item.synthesised);
+
+        let text = "Item Class: Rings\nRarity: Rare\nDoom Loop\nSynthesised Sapphire Ring\n--------\n\
+                    Item Level: 84\n--------\nSynthesised Item\n";
+        let item = parse(text).unwrap();
+        assert_eq!(item.base, "Sapphire Ring");
+        assert!(item.synthesised);
+
+        let text = "Item Class: Rings\nRarity: Normal\nSynthesised Sapphire Ring\n--------\nItem Level: 84\n";
+        let item = parse(text).unwrap();
+        assert_eq!((item.name, item.base.as_str(), item.synthesised), (None, "Sapphire Ring", true));
     }
 
     #[test]
