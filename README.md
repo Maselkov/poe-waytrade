@@ -18,7 +18,7 @@ PoE2's waystones get a check for dangerous mods.
 
 - **Price check on Ctrl+D:** poe.ninja prices for currency, uniques
   (unidentified ones recognised by their art), gems, maps, cluster jewels and
-  high item level bases.
+  high item level bases, with a graph of the price's last week.
 - **Trade search for rares:** filters built from the item's mods, with tier
   markers and sliders, searched only when you press Search and shown
   in the panel.
@@ -216,6 +216,15 @@ From poe.ninja:
   bracket.
 - Plain bases of item level 82+, by item level and influences.
 
+Each poe.ninja price comes with its last week, from poe.ninja: a graph and
+the change over the week. One item gets a large graph under its price.
+Several prices (variants, an unidentified unique's candidates) each get a
+small one in their row. Hover a graph to see a day's price. A week with
+missing days, or a price with few listings, is drawn dashed. One with fewer
+than three days gets no graph. Click the change under the large graph to see
+the last 30 days or the whole league (fetched from poe.ninja on that first
+click), and again to go back. Every panel opens on the week.
+
 With a trade search (see below):
 
 - Rare and magic items.
@@ -410,6 +419,8 @@ Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
     each new league.
   - Which listings a search starts with.
   - How far below your roll a ticked filter starts.
+  - Compact graph: a single price's week as a small graph in its row, rather
+    than a large one under it (off by default).
 - **Map check:** the active profile, and resetting its marks.
 - **About:** versions, where the logs are, and whether typing into panels works.
 

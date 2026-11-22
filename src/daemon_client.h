@@ -20,12 +20,32 @@ struct PriceLine {
     // On an unidentified unique's list of candidates: which unique this is,
     // so clicking it checks the item as that one (PriceCheck::pick_unique).
     std::string unique;
+    // The price over the last week, a day at a time: each day's change in
+    // percent against the week's start, none on a day with no listings.
+    // Empty when poe.ninja has no days for it.
+    std::vector<std::optional<double>> week;
+    double week_change = 0;  // over the whole week, in percent
+    // A Divine Orb's own price: "1.0 div" would say nothing, so it's shown
+    // in the small unit whatever it's worth.
+    bool divine_orb = false;
+    // Where its whole history is, for HISTORY: "item:<type>:<id>" or
+    // "exchange:<type>:<details>"; empty when poe.ninja has none.
+    std::string history_ref;
+};
+
+// A price's history over the whole league (HISTORY): a day each, oldest
+// first, the last today; values in the small unit, counts the listings
+// (items only); none on a day without data.
+struct PriceHistory {
+    std::vector<std::optional<double>> values;
+    std::vector<std::optional<double>> counts;
 };
 
 // The currency a poe.ninja price is shown in (and its icon): divine from 1
 // up, else the game's small unit (chaos, PoE2's exalted). `chaos` is in
 // that unit.
-inline const char* price_icon(const PriceLine& p) { return p.divine >= 1.0 ? "divine" : small_unit_id(); }
+inline bool in_divines(const PriceLine& p) { return p.divine >= 1.0 && !p.divine_orb; }
+inline const char* price_icon(const PriceLine& p) { return in_divines(p) ? "divine" : small_unit_id(); }
 
 struct TradeFilter {
     int index = 0;
@@ -100,6 +120,7 @@ struct PriceReply {
     std::string url;
     std::optional<TradeSummary> summary;
     std::string png;  // ICON reply, base64
+    PriceHistory history;  // HISTORY reply
     // Trade search options (see daemon/src/main.rs).
     std::string base_type;       // e.g. "Sapphire Ring"
     std::string category_label;  // e.g. "Ring"; empty: no base/category choice

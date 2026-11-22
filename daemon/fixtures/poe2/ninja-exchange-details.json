@@ -1,0 +1,808 @@
+{
+ "pairs": [
+  {
+   "id": "exalted",
+   "rate": 485.9,
+   "volumePrimaryValue": 227,
+   "history": [
+    {
+     "timestamp": "2026-11-22T00:00:00Z",
+     "rate": 485.9,
+     "volumePrimaryValue": 227
+    },
+    {
+     "timestamp": "2026-11-21T00:00:00Z",
+     "rate": 464.7,
+     "volumePrimaryValue": 265
+    },
+    {
+     "timestamp": "2026-11-20T00:00:00Z",
+     "rate": 504.4,
+     "volumePrimaryValue": 216
+    },
+    {
+     "timestamp": "2026-11-19T00:00:00Z",
+     "rate": 507.2,
+     "volumePrimaryValue": 257
+    },
+    {
+     "timestamp": "2026-11-18T00:00:00Z",
+     "rate": 485.9,
+     "volumePrimaryValue": 218
+    },
+    {
+     "timestamp": "2026-11-17T00:00:00Z",
+     "rate": 517.1,
+     "volumePrimaryValue": 241
+    },
+    {
+     "timestamp": "2026-11-16T00:00:00Z",
+     "rate": 530.4,
+     "volumePrimaryValue": 243
+    },
+    {
+     "timestamp": "2026-11-15T00:00:00Z",
+     "rate": 603.5,
+     "volumePrimaryValue": 281
+    },
+    {
+     "timestamp": "2026-11-14T00:00:00Z",
+     "rate": 587.9,
+     "volumePrimaryValue": 256
+    },
+    {
+     "timestamp": "2026-11-13T00:00:00Z",
+     "rate": 637.5,
+     "volumePrimaryValue": 266
+    },
+    {
+     "timestamp": "2026-11-12T00:00:00Z",
+     "rate": 629.9,
+     "volumePrimaryValue": 275
+    },
+    {
+     "timestamp": "2026-11-11T00:00:00Z",
+     "rate": 616.0,
+     "volumePrimaryValue": 255
+    },
+    {
+     "timestamp": "2026-11-10T00:00:00Z",
+     "rate": 640.2,
+     "volumePrimaryValue": 292
+    },
+    {
+     "timestamp": "2026-11-09T00:00:00Z",
+     "rate": 641.4,
+     "volumePrimaryValue": 353
+    },
+    {
+     "timestamp": "2026-11-08T00:00:00Z",
+     "rate": 645.5,
+     "volumePrimaryValue": 388
+    },
+    {
+     "timestamp": "2026-11-07T00:00:00Z",
+     "rate": 672.4,
+     "volumePrimaryValue": 372
+    },
+    {
+     "timestamp": "2026-11-06T00:00:00Z",
+     "rate": 660.7,
+     "volumePrimaryValue": 278
+    },
+    {
+     "timestamp": "2026-11-05T00:00:00Z",
+     "rate": 716.2,
+     "volumePrimaryValue": 354
+    },
+    {
+     "timestamp": "2026-11-04T00:00:00Z",
+     "rate": 697.9,
+     "volumePrimaryValue": 386
+    },
+    {
+     "timestamp": "2026-11-03T00:00:00Z",
+     "rate": 702.0,
+     "volumePrimaryValue": 432
+    },
+    {
+     "timestamp": "2026-11-02T00:00:00Z",
+     "rate": 687.0,
+     "volumePrimaryValue": 450
+    },
+    {
+     "timestamp": "2026-11-01T00:00:00Z",
+     "rate": 697.8,
+     "volumePrimaryValue": 548
+    },
+    {
+     "timestamp": "2026-10-31T00:00:00Z",
+     "rate": 694.5,
+     "volumePrimaryValue": 540
+    },
+    {
+     "timestamp": "2026-10-30T00:00:00Z",
+     "rate": 713.5,
+     "volumePrimaryValue": 522
+    },
+    {
+     "timestamp": "2026-10-29T00:00:00Z",
+     "rate": 696.5,
+     "volumePrimaryValue": 527
+    },
+    {
+     "timestamp": "2026-10-28T00:00:00Z",
+     "rate": 685.0,
+     "volumePrimaryValue": 589
+    },
+    {
+     "timestamp": "2026-10-27T00:00:00Z",
+     "rate": 669.1,
+     "volumePrimaryValue": 582
+    },
+    {
+     "timestamp": "2026-10-26T00:00:00Z",
+     "rate": 698.2,
+     "volumePrimaryValue": 687
+    },
+    {
+     "timestamp": "2026-10-25T00:00:00Z",
+     "rate": 689.3,
+     "volumePrimaryValue": 782
+    },
+    {
+     "timestamp": "2026-10-24T00:00:00Z",
+     "rate": 695.8,
+     "volumePrimaryValue": 837
+    },
+    {
+     "timestamp": "2026-10-23T00:00:00Z",
+     "rate": 696.0,
+     "volumePrimaryValue": 718
+    },
+    {
+     "timestamp": "2026-10-22T00:00:00Z",
+     "rate": 699.0,
+     "volumePrimaryValue": 863
+    },
+    {
+     "timestamp": "2026-10-21T00:00:00Z",
+     "rate": 690.3,
+     "volumePrimaryValue": 832
+    },
+    {
+     "timestamp": "2026-10-20T00:00:00Z",
+     "rate": 690.4,
+     "volumePrimaryValue": 846
+    },
+    {
+     "timestamp": "2026-10-19T00:00:00Z",
+     "rate": 705.8,
+     "volumePrimaryValue": 841
+    },
+    {
+     "timestamp": "2026-10-18T00:00:00Z",
+     "rate": 703.3,
+     "volumePrimaryValue": 1060
+    },
+    {
+     "timestamp": "2026-10-17T00:00:00Z",
+     "rate": 704.5,
+     "volumePrimaryValue": 915
+    },
+    {
+     "timestamp": "2026-10-16T00:00:00Z",
+     "rate": 738.9,
+     "volumePrimaryValue": 1038
+    },
+    {
+     "timestamp": "2026-10-15T00:00:00Z",
+     "rate": 721.3,
+     "volumePrimaryValue": 1037
+    },
+    {
+     "timestamp": "2026-10-14T00:00:00Z",
+     "rate": 723.6,
+     "volumePrimaryValue": 1185
+    },
+    {
+     "timestamp": "2026-10-13T00:00:00Z",
+     "rate": 725.2,
+     "volumePrimaryValue": 1108
+    },
+    {
+     "timestamp": "2026-10-12T00:00:00Z",
+     "rate": 756.3,
+     "volumePrimaryValue": 1408
+    },
+    {
+     "timestamp": "2026-10-11T00:00:00Z",
+     "rate": 747.6,
+     "volumePrimaryValue": 1388
+    },
+    {
+     "timestamp": "2026-10-10T00:00:00Z",
+     "rate": 762.6,
+     "volumePrimaryValue": 1478
+    },
+    {
+     "timestamp": "2026-10-09T00:00:00Z",
+     "rate": 768.3,
+     "volumePrimaryValue": 1352
+    },
+    {
+     "timestamp": "2026-10-08T00:00:00Z",
+     "rate": 740.9,
+     "volumePrimaryValue": 1519
+    },
+    {
+     "timestamp": "2026-10-07T00:00:00Z",
+     "rate": 725.0,
+     "volumePrimaryValue": 1609
+    },
+    {
+     "timestamp": "2026-10-06T00:00:00Z",
+     "rate": 679.4,
+     "volumePrimaryValue": 1753
+    },
+    {
+     "timestamp": "2026-10-05T00:00:00Z",
+     "rate": 674.6,
+     "volumePrimaryValue": 1973
+    },
+    {
+     "timestamp": "2026-10-04T00:00:00Z",
+     "rate": 667.3,
+     "volumePrimaryValue": 2450
+    },
+    {
+     "timestamp": "2026-10-03T00:00:00Z",
+     "rate": 669.0,
+     "volumePrimaryValue": 2152
+    },
+    {
+     "timestamp": "2026-10-02T00:00:00Z",
+     "rate": 682.1,
+     "volumePrimaryValue": 2142
+    },
+    {
+     "timestamp": "2026-10-01T00:00:00Z",
+     "rate": 687.1,
+     "volumePrimaryValue": 2209
+    },
+    {
+     "timestamp": "2026-09-30T00:00:00Z",
+     "rate": 643.9,
+     "volumePrimaryValue": 2809
+    },
+    {
+     "timestamp": "2026-09-29T00:00:00Z",
+     "rate": 547.5,
+     "volumePrimaryValue": 3590
+    },
+    {
+     "timestamp": "2026-09-28T00:00:00Z",
+     "rate": 506.7,
+     "volumePrimaryValue": 3520
+    },
+    {
+     "timestamp": "2026-09-27T00:00:00Z",
+     "rate": 503.3,
+     "volumePrimaryValue": 4591
+    },
+    {
+     "timestamp": "2026-09-26T00:00:00Z",
+     "rate": 499.0,
+     "volumePrimaryValue": 4747
+    },
+    {
+     "timestamp": "2026-09-25T00:00:00Z",
+     "rate": 499.8,
+     "volumePrimaryValue": 4268
+    },
+    {
+     "timestamp": "2026-09-24T00:00:00Z",
+     "rate": 498.8,
+     "volumePrimaryValue": 4917
+    },
+    {
+     "timestamp": "2026-09-23T00:00:00Z",
+     "rate": 494.2,
+     "volumePrimaryValue": 5197
+    },
+    {
+     "timestamp": "2026-09-22T00:00:00Z",
+     "rate": 493.0,
+     "volumePrimaryValue": 5648
+    },
+    {
+     "timestamp": "2026-09-21T00:00:00Z",
+     "rate": 462.6,
+     "volumePrimaryValue": 6117
+    },
+    {
+     "timestamp": "2026-09-20T00:00:00Z",
+     "rate": 461.1,
+     "volumePrimaryValue": 7392
+    },
+    {
+     "timestamp": "2026-09-19T00:00:00Z",
+     "rate": 468.9,
+     "volumePrimaryValue": 6998
+    },
+    {
+     "timestamp": "2026-09-18T00:00:00Z",
+     "rate": 437.1,
+     "volumePrimaryValue": 6752
+    },
+    {
+     "timestamp": "2026-09-17T00:00:00Z",
+     "rate": 447.8,
+     "volumePrimaryValue": 7993
+    },
+    {
+     "timestamp": "2026-09-16T00:00:00Z",
+     "rate": 429.4,
+     "volumePrimaryValue": 9428
+    },
+    {
+     "timestamp": "2026-09-15T00:00:00Z",
+     "rate": 415.3,
+     "volumePrimaryValue": 10789
+    },
+    {
+     "timestamp": "2026-09-14T00:00:00Z",
+     "rate": 363.7,
+     "volumePrimaryValue": 13586
+    },
+    {
+     "timestamp": "2026-09-13T00:00:00Z",
+     "rate": 333.4,
+     "volumePrimaryValue": 16343
+    },
+    {
+     "timestamp": "2026-09-12T00:00:00Z",
+     "rate": 281.2,
+     "volumePrimaryValue": 19146
+    },
+    {
+     "timestamp": "2026-09-11T00:00:00Z",
+     "rate": 260.0,
+     "volumePrimaryValue": 19348
+    },
+    {
+     "timestamp": "2026-09-10T00:00:00Z",
+     "rate": 255.7,
+     "volumePrimaryValue": 19883
+    },
+    {
+     "timestamp": "2026-09-09T00:00:00Z",
+     "rate": 219.8,
+     "volumePrimaryValue": 27631
+    },
+    {
+     "timestamp": "2026-09-08T00:00:00Z",
+     "rate": 142.9,
+     "volumePrimaryValue": 39686
+    },
+    {
+     "timestamp": "2026-09-07T00:00:00Z",
+     "rate": 108.5,
+     "volumePrimaryValue": 34823
+    },
+    {
+     "timestamp": "2026-09-06T00:00:00Z",
+     "rate": 79.89,
+     "volumePrimaryValue": 22668
+    },
+    {
+     "timestamp": "2026-09-05T00:00:00Z",
+     "rate": 57.58,
+     "volumePrimaryValue": 5982
+    }
+   ]
+  },
+  {
+   "id": "chaos",
+   "rate": 11.72,
+   "volumePrimaryValue": 13709,
+   "history": [
+    {
+     "timestamp": "2026-11-22T00:00:00Z",
+     "rate": 11.72,
+     "volumePrimaryValue": 13709
+    },
+    {
+     "timestamp": "2026-11-21T00:00:00Z",
+     "rate": 11.5,
+     "volumePrimaryValue": 12171
+    },
+    {
+     "timestamp": "2026-11-20T00:00:00Z",
+     "rate": 11.48,
+     "volumePrimaryValue": 10823
+    },
+    {
+     "timestamp": "2026-11-19T00:00:00Z",
+     "rate": 11.05,
+     "volumePrimaryValue": 12938
+    },
+    {
+     "timestamp": "2026-11-18T00:00:00Z",
+     "rate": 10.55,
+     "volumePrimaryValue": 10673
+    },
+    {
+     "timestamp": "2026-11-17T00:00:00Z",
+     "rate": 10.41,
+     "volumePrimaryValue": 13209
+    },
+    {
+     "timestamp": "2026-11-16T00:00:00Z",
+     "rate": 10.33,
+     "volumePrimaryValue": 13012
+    },
+    {
+     "timestamp": "2026-11-15T00:00:00Z",
+     "rate": 10.41,
+     "volumePrimaryValue": 15557
+    },
+    {
+     "timestamp": "2026-11-14T00:00:00Z",
+     "rate": 10.41,
+     "volumePrimaryValue": 12664
+    },
+    {
+     "timestamp": "2026-11-13T00:00:00Z",
+     "rate": 10.5,
+     "volumePrimaryValue": 16485
+    },
+    {
+     "timestamp": "2026-11-12T00:00:00Z",
+     "rate": 10.27,
+     "volumePrimaryValue": 16064
+    },
+    {
+     "timestamp": "2026-11-11T00:00:00Z",
+     "rate": 9.96,
+     "volumePrimaryValue": 16605
+    },
+    {
+     "timestamp": "2026-11-10T00:00:00Z",
+     "rate": 10.01,
+     "volumePrimaryValue": 19989
+    },
+    {
+     "timestamp": "2026-11-09T00:00:00Z",
+     "rate": 9.89,
+     "volumePrimaryValue": 21432
+    },
+    {
+     "timestamp": "2026-11-08T00:00:00Z",
+     "rate": 9.6,
+     "volumePrimaryValue": 24630
+    },
+    {
+     "timestamp": "2026-11-07T00:00:00Z",
+     "rate": 9.5,
+     "volumePrimaryValue": 27150
+    },
+    {
+     "timestamp": "2026-11-06T00:00:00Z",
+     "rate": 9.43,
+     "volumePrimaryValue": 20188
+    },
+    {
+     "timestamp": "2026-11-05T00:00:00Z",
+     "rate": 9.42,
+     "volumePrimaryValue": 29204
+    },
+    {
+     "timestamp": "2026-11-04T00:00:00Z",
+     "rate": 9.52,
+     "volumePrimaryValue": 29150
+    },
+    {
+     "timestamp": "2026-11-03T00:00:00Z",
+     "rate": 9.37,
+     "volumePrimaryValue": 35769
+    },
+    {
+     "timestamp": "2026-11-02T00:00:00Z",
+     "rate": 9.64,
+     "volumePrimaryValue": 32655
+    },
+    {
+     "timestamp": "2026-11-01T00:00:00Z",
+     "rate": 9.8,
+     "volumePrimaryValue": 40643
+    },
+    {
+     "timestamp": "2026-10-31T00:00:00Z",
+     "rate": 9.91,
+     "volumePrimaryValue": 36674
+    },
+    {
+     "timestamp": "2026-10-30T00:00:00Z",
+     "rate": 10.08,
+     "volumePrimaryValue": 39881
+    },
+    {
+     "timestamp": "2026-10-29T00:00:00Z",
+     "rate": 10.12,
+     "volumePrimaryValue": 36076
+    },
+    {
+     "timestamp": "2026-10-28T00:00:00Z",
+     "rate": 10.17,
+     "volumePrimaryValue": 38724
+    },
+    {
+     "timestamp": "2026-10-27T00:00:00Z",
+     "rate": 10.19,
+     "volumePrimaryValue": 39362
+    },
+    {
+     "timestamp": "2026-10-26T00:00:00Z",
+     "rate": 10.04,
+     "volumePrimaryValue": 47292
+    },
+    {
+     "timestamp": "2026-10-25T00:00:00Z",
+     "rate": 10.09,
+     "volumePrimaryValue": 46772
+    },
+    {
+     "timestamp": "2026-10-24T00:00:00Z",
+     "rate": 10.01,
+     "volumePrimaryValue": 55276
+    },
+    {
+     "timestamp": "2026-10-23T00:00:00Z",
+     "rate": 9.79,
+     "volumePrimaryValue": 49212
+    },
+    {
+     "timestamp": "2026-10-22T00:00:00Z",
+     "rate": 9.77,
+     "volumePrimaryValue": 54906
+    },
+    {
+     "timestamp": "2026-10-21T00:00:00Z",
+     "rate": 9.73,
+     "volumePrimaryValue": 52219
+    },
+    {
+     "timestamp": "2026-10-20T00:00:00Z",
+     "rate": 9.77,
+     "volumePrimaryValue": 59408
+    },
+    {
+     "timestamp": "2026-10-19T00:00:00Z",
+     "rate": 9.99,
+     "volumePrimaryValue": 54179
+    },
+    {
+     "timestamp": "2026-10-18T00:00:00Z",
+     "rate": 10.17,
+     "volumePrimaryValue": 66654
+    },
+    {
+     "timestamp": "2026-10-17T00:00:00Z",
+     "rate": 10.51,
+     "volumePrimaryValue": 59863
+    },
+    {
+     "timestamp": "2026-10-16T00:00:00Z",
+     "rate": 10.61,
+     "volumePrimaryValue": 66401
+    },
+    {
+     "timestamp": "2026-10-15T00:00:00Z",
+     "rate": 10.54,
+     "volumePrimaryValue": 65443
+    },
+    {
+     "timestamp": "2026-10-14T00:00:00Z",
+     "rate": 10.36,
+     "volumePrimaryValue": 76287
+    },
+    {
+     "timestamp": "2026-10-13T00:00:00Z",
+     "rate": 10.31,
+     "volumePrimaryValue": 71632
+    },
+    {
+     "timestamp": "2026-10-12T00:00:00Z",
+     "rate": 10.45,
+     "volumePrimaryValue": 84384
+    },
+    {
+     "timestamp": "2026-10-11T00:00:00Z",
+     "rate": 10.62,
+     "volumePrimaryValue": 87665
+    },
+    {
+     "timestamp": "2026-10-10T00:00:00Z",
+     "rate": 10.64,
+     "volumePrimaryValue": 95492
+    },
+    {
+     "timestamp": "2026-10-09T00:00:00Z",
+     "rate": 10.73,
+     "volumePrimaryValue": 87540
+    },
+    {
+     "timestamp": "2026-10-08T00:00:00Z",
+     "rate": 10.66,
+     "volumePrimaryValue": 92618
+    },
+    {
+     "timestamp": "2026-10-07T00:00:00Z",
+     "rate": 10.58,
+     "volumePrimaryValue": 95085
+    },
+    {
+     "timestamp": "2026-10-06T00:00:00Z",
+     "rate": 10.43,
+     "volumePrimaryValue": 94220
+    },
+    {
+     "timestamp": "2026-10-05T00:00:00Z",
+     "rate": 10.47,
+     "volumePrimaryValue": 105327
+    },
+    {
+     "timestamp": "2026-10-04T00:00:00Z",
+     "rate": 10.29,
+     "volumePrimaryValue": 117259
+    },
+    {
+     "timestamp": "2026-10-03T00:00:00Z",
+     "rate": 10.71,
+     "volumePrimaryValue": 107536
+    },
+    {
+     "timestamp": "2026-10-02T00:00:00Z",
+     "rate": 10.85,
+     "volumePrimaryValue": 108849
+    },
+    {
+     "timestamp": "2026-10-01T00:00:00Z",
+     "rate": 11.37,
+     "volumePrimaryValue": 107434
+    },
+    {
+     "timestamp": "2026-09-30T00:00:00Z",
+     "rate": 10.46,
+     "volumePrimaryValue": 133112
+    },
+    {
+     "timestamp": "2026-09-29T00:00:00Z",
+     "rate": 8.61,
+     "volumePrimaryValue": 150482
+    },
+    {
+     "timestamp": "2026-09-28T00:00:00Z",
+     "rate": 7.95,
+     "volumePrimaryValue": 149867
+    },
+    {
+     "timestamp": "2026-09-27T00:00:00Z",
+     "rate": 7.98,
+     "volumePrimaryValue": 169125
+    },
+    {
+     "timestamp": "2026-09-26T00:00:00Z",
+     "rate": 7.72,
+     "volumePrimaryValue": 182549
+    },
+    {
+     "timestamp": "2026-09-25T00:00:00Z",
+     "rate": 7.73,
+     "volumePrimaryValue": 166184
+    },
+    {
+     "timestamp": "2026-09-24T00:00:00Z",
+     "rate": 7.64,
+     "volumePrimaryValue": 178929
+    },
+    {
+     "timestamp": "2026-09-23T00:00:00Z",
+     "rate": 7.95,
+     "volumePrimaryValue": 171736
+    },
+    {
+     "timestamp": "2026-09-22T00:00:00Z",
+     "rate": 8.08,
+     "volumePrimaryValue": 192200
+    },
+    {
+     "timestamp": "2026-09-21T00:00:00Z",
+     "rate": 8.33,
+     "volumePrimaryValue": 178051
+    },
+    {
+     "timestamp": "2026-09-20T00:00:00Z",
+     "rate": 8.41,
+     "volumePrimaryValue": 201907
+    },
+    {
+     "timestamp": "2026-09-19T00:00:00Z",
+     "rate": 8.55,
+     "volumePrimaryValue": 190493
+    },
+    {
+     "timestamp": "2026-09-18T00:00:00Z",
+     "rate": 8.5,
+     "volumePrimaryValue": 174057
+    },
+    {
+     "timestamp": "2026-09-17T00:00:00Z",
+     "rate": 9.23,
+     "volumePrimaryValue": 175352
+    },
+    {
+     "timestamp": "2026-09-16T00:00:00Z",
+     "rate": 9.22,
+     "volumePrimaryValue": 176023
+    },
+    {
+     "timestamp": "2026-09-15T00:00:00Z",
+     "rate": 9.29,
+     "volumePrimaryValue": 176565
+    },
+    {
+     "timestamp": "2026-09-14T00:00:00Z",
+     "rate": 9.4,
+     "volumePrimaryValue": 171215
+    },
+    {
+     "timestamp": "2026-09-13T00:00:00Z",
+     "rate": 9.44,
+     "volumePrimaryValue": 168221
+    },
+    {
+     "timestamp": "2026-09-12T00:00:00Z",
+     "rate": 9.58,
+     "volumePrimaryValue": 152287
+    },
+    {
+     "timestamp": "2026-09-11T00:00:00Z",
+     "rate": 10.83,
+     "volumePrimaryValue": 116221
+    },
+    {
+     "timestamp": "2026-09-10T00:00:00Z",
+     "rate": 11.39,
+     "volumePrimaryValue": 93464
+    },
+    {
+     "timestamp": "2026-09-09T00:00:00Z",
+     "rate": 12.32,
+     "volumePrimaryValue": 80372
+    },
+    {
+     "timestamp": "2026-09-08T00:00:00Z",
+     "rate": 14.68,
+     "volumePrimaryValue": 53080
+    },
+    {
+     "timestamp": "2026-09-07T00:00:00Z",
+     "rate": 18.29,
+     "volumePrimaryValue": 26220
+    },
+    {
+     "timestamp": "2026-09-06T00:00:00Z",
+     "rate": 23.79,
+     "volumePrimaryValue": 8986
+    },
+    {
+     "timestamp": "2026-09-05T00:00:00Z",
+     "rate": 24.83,
+     "volumePrimaryValue": 1442
+    }
+   ]
+  }
+ ]
+}

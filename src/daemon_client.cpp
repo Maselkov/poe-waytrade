@@ -42,6 +42,24 @@ std::vector<std::string> split(const std::string& s, char sep) {
     }
 }
 
+// A price line's week: "<total change>;<day>,<day>,...", a day empty when
+// it had no listings.
+void parse_week(const std::string& field, PriceLine& p) {
+    size_t semi = field.find(';');
+    if (semi == std::string::npos) return;
+    p.week_change = strtod(field.c_str(), nullptr);
+    for (const std::string& day : split(field.substr(semi + 1), ','))
+        p.week.push_back(day.empty() ? std::nullopt : std::optional<double>(strtod(day.c_str(), nullptr)));
+}
+
+// "<v>,<v>,,<v>": a value a day, none where empty.
+std::vector<std::optional<double>> parse_days(const std::string& field) {
+    std::vector<std::optional<double>> days;
+    for (const std::string& day : split(field, ','))
+        days.push_back(day.empty() ? std::nullopt : std::optional<double>(strtod(day.c_str(), nullptr)));
+    return days;
+}
+
 PriceReply parse_reply(const std::string& body) {
     PriceReply reply;
     for (const std::string& line : split(body, '\n')) {
@@ -50,11 +68,17 @@ PriceReply parse_reply(const std::string& body) {
         if (f[0] == "status") reply.status = f[1];
         else if (f[0] == "message") reply.message = f[1];
         else if (f[0] == "title") reply.title = f[1];
+        else if (f[0] == "history") reply.history.values = parse_days(f[1]);
+        else if (f[0] == "counts") reply.history.counts = parse_days(f[1]);
         else if (f[0] == "league") reply.league = f[1];
         else if (f[0] == "age") reply.age_minutes = atoi(f[1].c_str());
-        else if (f[0] == "price" && f.size() >= 5)
-            reply.prices.push_back({f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4],
-                                    f.size() >= 6 ? f[5] : ""});
+        else if (f[0] == "price" && f.size() >= 5) {
+            PriceLine p{f[1], strtod(f[2].c_str(), nullptr), strtod(f[3].c_str(), nullptr), f[4],
+                        f.size() >= 6 ? f[5] : ""};
+            if (f.size() >= 7) parse_week(f[6], p);
+            if (f.size() >= 8) p.history_ref = f[7];
+            reply.prices.push_back(std::move(p));
+        }
         else if (f[0] == "filter" && f.size() >= 4) {
             TradeFilter t{atoi(f[1].c_str()), f[2] == "1", f[3], f.size() >= 5 ? f[4] : ""};
             if (f.size() >= 10) {
@@ -126,6 +150,8 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "entered") reply.entered = atoll(f[1].c_str());
         else if (f[0] == "watch") reply.watch = f[1];
     }
+    if (reply.title == "Divine Orb")
+        for (PriceLine& p : reply.prices) p.divine_orb = true;
     return reply;
 }
 

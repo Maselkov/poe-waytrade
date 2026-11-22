@@ -21,8 +21,8 @@
    }
   ],
   "rates": {
-   "exalted": 463.5,
-   "chaos": 11.51
+   "exalted": 485.9,
+   "chaos": 11.72
   },
   "primary": "divine",
   "secondary": "chaos"
@@ -30,73 +30,193 @@
  "lines": [
   {
    "id": "alch",
-   "primaryValue": 0.01477,
-   "volumePrimaryValue": 70.83,
+   "primaryValue": 0.01096,
+   "volumePrimaryValue": 47.17,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 67.68
+   "maxVolumeRate": 91.27,
+   "sparkline": {
+    "totalChange": -25.84,
+    "data": [
+     -15.72,
+     -32.85,
+     -35.36,
+     -44.39,
+     -40.56,
+     -30.27,
+     -25.84
+    ]
+   }
   },
   {
    "id": "exalted",
-   "primaryValue": 0.002158,
-   "volumePrimaryValue": 297.8,
+   "primaryValue": 0.002058,
+   "volumePrimaryValue": 227.0,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 463.5
+   "maxVolumeRate": 485.9,
+   "sparkline": {
+    "totalChange": 23.51,
+    "data": [
+     13.25,
+     16.17,
+     23.76,
+     18.37,
+     19.11,
+     29.18,
+     23.51
+    ]
+   }
   },
   {
    "id": "chaos",
-   "primaryValue": 0.08691,
-   "volumePrimaryValue": 14177,
+   "primaryValue": 0.08531,
+   "volumePrimaryValue": 13709,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 11.51
+   "maxVolumeRate": 11.72,
+   "sparkline": {
+    "totalChange": -11.21,
+    "data": [
+     0.77,
+     -0.04,
+     -1.36,
+     -5.56,
+     -9.3,
+     -9.46,
+     -11.21
+    ]
+   }
   },
   {
    "id": "divine",
    "primaryValue": 1,
-   "volumePrimaryValue": 14177,
+   "volumePrimaryValue": 13709,
    "maxVolumeCurrency": "chaos",
-   "maxVolumeRate": 0.08691
+   "maxVolumeRate": 0.08531,
+   "sparkline": {
+    "totalChange": 12.63,
+    "data": [
+     -0.76,
+     0.05,
+     1.38,
+     6.14,
+     10.26,
+     10.45,
+     12.63
+    ]
+   }
   },
   {
    "id": "annul",
-   "primaryValue": 0.2589,
-   "volumePrimaryValue": 1796,
+   "primaryValue": 0.272,
+   "volumePrimaryValue": 1133,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 3.86
+   "maxVolumeRate": 3.68,
+   "sparkline": {
+    "totalChange": -26.43,
+    "data": [
+     2.19,
+     -1.11,
+     -10.31,
+     -11.98,
+     -26.9,
+     -29.1,
+     -26.43
+    ]
+   }
   },
   {
    "id": "aug",
-   "primaryValue": 0.002064,
-   "volumePrimaryValue": 4.83,
+   "primaryValue": 0.001459,
+   "volumePrimaryValue": 4.5,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 484.5
+   "maxVolumeRate": 685.6,
+   "sparkline": {
+    "totalChange": -46.23,
+    "data": [
+     -17.01,
+     -26.24,
+     -22.46,
+     -21.63,
+     -30.43,
+     -23.37,
+     -46.23
+    ]
+   }
   },
   {
    "id": "regal",
-   "primaryValue": 0.009754,
-   "volumePrimaryValue": 22.83,
+   "primaryValue": 0.006801,
+   "volumePrimaryValue": 15.17,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 102.5
+   "maxVolumeRate": 147.0,
+   "sparkline": {
+    "totalChange": -61.86,
+    "data": [
+     -48.46,
+     -59.91,
+     -56.27,
+     -56.44,
+     -44.06,
+     -52.34,
+     -61.86
+    ]
+   }
   },
   {
    "id": "mirror",
-   "primaryValue": 5660,
-   "volumePrimaryValue": 36789,
+   "primaryValue": 5582,
+   "volumePrimaryValue": 39070,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 0.0001767
+   "maxVolumeRate": 0.0001792,
+   "sparkline": {
+    "totalChange": -9.9,
+    "data": [
+     -4.12,
+     -4.87,
+     -5.04,
+     -5.52,
+     -7.09,
+     -9.41,
+     -9.9
+    ]
+   }
   },
   {
    "id": "transmute",
-   "primaryValue": 0.003338,
-   "volumePrimaryValue": 10.83,
+   "primaryValue": 0.003333,
+   "volumePrimaryValue": 1.5,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 299.6
+   "maxVolumeRate": 300,
+   "sparkline": {
+    "totalChange": -64.42,
+    "data": [
+     -56.93,
+     -66.06,
+     -48.88,
+     -46.84,
+     -65.45,
+     -55.65,
+     -64.42
+    ]
+   }
   },
   {
    "id": "vaal",
-   "primaryValue": 0.0178,
-   "volumePrimaryValue": 601.5,
+   "primaryValue": 0.01855,
+   "volumePrimaryValue": 576.2,
    "maxVolumeCurrency": "divine",
-   "maxVolumeRate": 56.18
+   "maxVolumeRate": 53.92,
+   "sparkline": {
+    "totalChange": 14.04,
+    "data": [
+     3.14,
+     1.78,
+     17.74,
+     11.98,
+     -0.78,
+     10.29,
+     14.04
+    ]
+   }
   }
  ],
  "items": [

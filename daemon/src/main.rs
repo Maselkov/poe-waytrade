@@ -11,8 +11,13 @@
 //!     status   ok | not_found | unsupported | loading | error | bad_request
 //!     message  <text>                                  (optional)
 //!     title    <item name>                             (status ok)
-//!     price    <label> <chaos> <divine> <listings|""> [<unique>]  (status
-//!              ok, 1+; an unidentified unique's candidates name theirs)
+//!     price    <label> <chaos> <divine> <listings|""> [<unique|"">
+//!              [<week>]]  (status ok, 1+; an unidentified unique's
+//!              candidates name theirs; week: the price over the last week,
+//!              "<total change>;<day>,<day>,..." in percent against the
+//!              week's start, a day empty when it had no listings)
+//!              [<history>]: where the price's whole history is, for
+//!              HISTORY ("item:<type>:<id>", "exchange:<type>:<details>")
 //!     league   <name>
 //!     age      <minutes since prices were fetched>
 //!     art      <width> <height>   (an unidentified unique whose base has
@@ -119,6 +124,13 @@
 //!   request:  "ICON\n" + currency id, or a listed item's image URL (its
 //!             "icon" preview line): the PNG, as "png <base64>"
 //!
+//!   request:  "HISTORY\n" + a price line's history reference: the price
+//!             over the whole league (history.rs)
+//!   response: status ok (or error, loading, bad_request)
+//!     history  <day>,<day>,...  (oldest first, the last today; in the
+//!              small unit; a day empty without data)
+//!     counts   <n>,<n>,...      (listings a day, items only)
+//!
 //!   request:  "OPEN\n" + url: open a pathofexile.com trade URL in the
 //!             user's browser (the layer can't, from inside the game).
 //!
@@ -165,6 +177,7 @@ mod area;
 mod art;
 mod cdp;
 mod game;
+mod history;
 mod item;
 mod lookup;
 mod mapcheck;
@@ -213,6 +226,9 @@ struct State {
     rares: Mutex<Vec<(Instant, scan::ScreenItem)>>,
     /// The names screen reads are matched against, and when they were got.
     vocabulary: Mutex<Option<(Instant, Arc<scan::Vocabulary>)>>,
+    /// Prices' histories fetched for the panel's graph: (league, reference)
+    /// -> (when, the reply's lines).
+    histories: Mutex<std::collections::HashMap<(String, String), (Instant, String)>>,
 }
 
 fn main() {
@@ -259,6 +275,7 @@ fn main() {
         scanned: Mutex::new(std::collections::HashMap::new()),
         rares: Mutex::new(Vec::new()),
         vocabulary: Mutex::new(None),
+        histories: Mutex::new(std::collections::HashMap::new()),
     });
 
     let listener = match systemd {
@@ -483,6 +500,8 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
             Ok(png) => format!("status\tok\npng\t{}\n", base64(&png)),
             Err(e) => format!("status\terror\nmessage\t{}\n", clean(&e)),
         }
+    } else if let Some(what) = request.strip_prefix("HISTORY\n") {
+        history_reply(state, what.trim())
     } else if let Some(url) = request.strip_prefix("OPEN\n") {
         open_trade_url(url.trim())
     } else if let Some(text) = request.strip_prefix("MAPCHECK\n") {
@@ -609,6 +628,36 @@ fn base64(bytes: &[u8]) -> String {
         }
     }
     out
+}
+
+/// How long a fetched history is reused: poe.ninja adds a day at a time.
+const HISTORY_REUSE: Duration = Duration::from_secs(30 * 60);
+
+/// A price's whole history, for the panel's graph (history.rs).
+fn history_reply(state: &State, what: &str) -> String {
+    let Some(parsed) = history::HistoryRef::parse(what) else { return bad_request("Bad history reference") };
+    let Some(db) = state.db.read().unwrap().clone() else {
+        return "status\tloading\nmessage\tPrices aren't loaded yet\n".to_string();
+    };
+    let key = (db.league.clone(), what.to_string());
+    if let Some((at, lines)) = state.histories.lock().unwrap().get(&key)
+        && at.elapsed() < HISTORY_REUSE
+    {
+        return format!("status\tok\n{lines}");
+    }
+    match history::fetch(&db, &parsed, game::current().small_unit()) {
+        Ok(h) => {
+            let lines = history::reply_lines(&h);
+            let mut cache = state.histories.lock().unwrap();
+            cache.retain(|_, (at, _)| at.elapsed() < HISTORY_REUSE);
+            cache.insert(key, (Instant::now(), lines.clone()));
+            format!("status\tok\n{lines}")
+        }
+        Err(e) => {
+            eprintln!("poe.ninja history: {e}");
+            format!("status\terror\nmessage\t{}\n", clean(&e))
+        }
+    }
 }
 
 fn bad_request(message: &str) -> String {
@@ -978,9 +1027,28 @@ fn write_lookup(out: &mut String, outcome: lookup::Outcome) {
 fn write_prices(out: &mut String, prices: Vec<lookup::Price>) {
     for p in prices {
         let listings = p.listings.map(|n| n.to_string()).unwrap_or_default();
-        let unique = p.unique.map(|u| format!("\t{}", clean(&u))).unwrap_or_default();
-        let _ = writeln!(out, "price\t{}\t{:.2}\t{:.4}\t{listings}{unique}", clean(&p.label), p.chaos, p.divine);
+        // Trailing fields, each optional: written up to the last one set.
+        let mut tail = vec![
+            p.unique.as_deref().map(clean).unwrap_or_default(),
+            p.spark.as_ref().map(week_field).unwrap_or_default(),
+            p.history.as_deref().map(clean).unwrap_or_default(),
+        ];
+        while tail.last().is_some_and(String::is_empty) {
+            tail.pop();
+        }
+        let tail: String = tail.iter().map(|f| format!("\t{f}")).collect();
+        let _ = writeln!(out, "price\t{}\t{:.2}\t{:.4}\t{listings}{tail}", clean(&p.label), p.chaos, p.divine);
     }
+}
+
+/// A price line's week: "<total change>;<day>,<day>,...", or empty when
+/// poe.ninja has no days for it.
+fn week_field(spark: &ninja::Spark) -> String {
+    if spark.data.iter().all(Option::is_none) {
+        return String::new();
+    }
+    let days: Vec<String> = spark.data.iter().map(|d| d.map(|v| format!("{v:.2}")).unwrap_or_default()).collect();
+    format!("{:.2};{}", spark.total_change, days.join(","))
 }
 
 // ---- item displays (scan.rs) ------------------------------------------------
@@ -1445,4 +1513,43 @@ fn query(args: &[String]) -> io::Result<()> {
     write_frame(&mut stream, &format!("{}\n{text}", if map { "MAPCHECK" } else { "PRICE" }))?;
     print!("{}", read_frame(&mut stream)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn price(unique: Option<&str>, spark: Option<ninja::Spark>) -> lookup::Price {
+        lookup::Price {
+            label: "each".into(),
+            chaos: 2.0,
+            divine: 0.01,
+            listings: Some(5),
+            unique: unique.map(String::from),
+            spark,
+            history: None,
+        }
+    }
+
+    #[test]
+    fn price_lines_carry_the_week() {
+        let week = ninja::Spark { total_change: -54.01, data: vec![None, None, Some(0.0), Some(-17.87), Some(-54.01)] };
+        let mut out = String::new();
+        write_prices(
+            &mut out,
+            vec![price(None, None), price(Some("Kaom's Heart"), None), price(None, Some(week.clone()))],
+        );
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0], "price\teach\t2.00\t0.0100\t5");
+        assert_eq!(lines[1], "price\teach\t2.00\t0.0100\t5\tKaom's Heart");
+        assert_eq!(lines[2], "price\teach\t2.00\t0.0100\t5\t\t-54.01;,,0.00,-17.87,-54.01");
+        // A history reference after the week, the fields before it kept.
+        let mut out = String::new();
+        let mut p = price(None, None);
+        p.history = Some("item:UniqueArmour:1".into());
+        write_prices(&mut out, vec![p]);
+        assert_eq!(out, "price\teach\t2.00\t0.0100\t5\t\t\titem:UniqueArmour:1\n");
+        // No days at all: no week.
+        assert_eq!(week_field(&ninja::Spark { total_change: 0.0, data: vec![None; 7] }), "");
+    }
 }

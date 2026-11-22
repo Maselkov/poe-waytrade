@@ -16,21 +16,38 @@
     <div class="status" data-if="state == 'status'" data-class-error="status_error">{{status}}</div>
 
     <div class="price-card" data-class-alone="state == 'prices'" data-if="(state == 'prices' || state == 'trade') &amp;&amp; price_rows.size > 0">
-        <div data-for="r : price_rows" data-attr-class="'price-row' + (r.answer ? ' answer' : '') + (r.rule ? ' rule' : '') + (r.stale ? ' stale' : '') + (r.pick >= 0 ? ' pick' : '')"
+        <div data-for="r : price_rows">
+        <div data-attr-class="'price-row week-scope' + (r.answer ? ' answer' : '') + (r.rule ? ' rule' : '') + (r.stale ? ' stale' : '') + (r.pick >= 0 ? ' pick' : '') + (r.week_mini ? ' week-row' : '')"
              data-event-click="pick_unique(r.pick)">
             <div class="pr-text">
                 <div class="pr-label">{{r.label}}</div>
-                <div class="pr-meta" data-if="r.meta != '' || r.tag != ''">
-                    <div class="pr-meta-text">{{r.meta}}</div>
+                <div class="pr-meta" data-if="r.meta != '' || r.tag != '' || r.week_mini">
+                    <div class="pr-meta-text week-normal" data-if="!r.week_mini">{{r.meta}}</div>
+                    <div class="pr-meta-text week-normal" data-if="r.week_mini"><span data-attr-class="r.week_up ? 'week-change up' : 'week-change down'">{{r.week_change}}</span>{{r.week_after}}</div>
+                    <div class="pr-meta-text week-reading"></div>
                     <div class="tag" data-if="r.tag != ''">{{r.tag}}</div>
                 </div>
             </div>
+            <sparkline class="spark-mini" data-if="r.week_mini" data-attr-points="r.week" data-attr-labels="r.week_labels" data-attr-dashed="r.week_dashed ? '1' : ''"/>
             <div class="pr-value" data-if="r.main != ''">
                 <div class="pr-amount">{{r.main}}</div>
                 <div class="pr-icon-box" data-if="r.icon != ''"><img class="pr-icon" data-attr-src="'icon:' + r.icon"/></div>
                 <div class="pr-sub" data-if="r.sub != ''">· {{r.sub}}</div>
             </div>
             <div class="pr-note" data-if="r.main == ''">{{r.note}}</div>
+        </div>
+        <!-- One item's week, large, under its price. -->
+        <div class="trend" data-if="r.week_big" data-class-stale="r.stale">
+            <div class="trend-chart week-scope">
+                <sparkline class="spark-big" data-attr-points="r.week" data-attr-labels="r.week_labels" data-attr-dashed="r.week_dashed ? '1' : ''" baseline="1"/>
+                <div class="trend-foot week-normal">{{r.week_foot}}</div>
+                <div class="trend-foot week-reading"></div>
+            </div>
+            <div class="trend-side" data-class-cycles="r.week_cycles" data-class-loading="r.week_loading" data-event-click="week_range(r.history_ref)">
+                <div data-attr-class="r.week_up ? 'trend-badge up' : 'trend-badge down'">{{r.week_change}}</div>
+                <div class="trend-days">{{r.week_days}}</div>
+            </div>
+        </div>
         </div>
         <div class="pr-meta pr-foot" data-if="price_foot != ''">
             <div class="pr-meta-text">{{price_foot}}</div>

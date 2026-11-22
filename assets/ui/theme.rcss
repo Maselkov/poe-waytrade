@@ -217,6 +217,37 @@ body {
 .pr-meta-text { flex: 1; min-width: 0; }
 .pr-meta .tag { margin: 0 0 0 8dp; font-size: 10dp; padding: 0 6dp; }
 .pr-foot { margin-top: 4dp; }
+
+/* A price's last week (<sparkline>, sparkline.cpp): the line takes the
+   element's colour, neutral whichever way the price went; only the change
+   is green or red, and its arrow says which. Small in a row (several
+   prices, or the compact setting), large under one item's price. Hovering a
+   graph shows the day under the pointer in place of the text marked
+   week-normal, in the same box, so nothing moves. */
+sparkline { display: block; color: $mod; }
+.week-reading { display: none; }
+.reading .week-normal { display: none; }
+.reading .week-reading { display: block; color: $text; }
+.week-change.up { color: $good; }
+.week-change.down { color: $error; }
+.spark-mini { flex-shrink: 0; width: 56dp; height: 20dp; margin-right: 10dp; }
+/* The prices' column a fixed width, so rows' graphs line up. */
+.week-row .pr-value { min-width: 96dp; justify-content: flex-end; }
+/* Part of the price above it: no rule of its own. */
+.trend { display: flex; align-items: center; margin-top: 4dp; padding-bottom: 2dp; }
+.trend.stale { opacity: 0.45; }
+.trend-chart { flex: 1; min-width: 0; margin-right: 12dp; }
+.spark-big { width: 100%; height: 40dp; }
+.trend-foot { margin-top: 4dp; font-size: 10dp; color: $text-faint; white-space: nowrap; overflow: hidden; }
+.trend-side { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+.trend-badge { border-radius: 6dp; padding: 2dp 8dp; font-weight: 500; }
+.trend-badge.up { background-color: $good-bg; color: $good; }
+.trend-badge.down { background-color: $danger-bg; color: $error; }
+.trend-days { margin-top: 4dp; font-size: 10dp; color: $text-faint; }
+/* Clicked through: the week, the last 30 days, the league. */
+.trend-side.cycles { cursor: pointer; }
+.trend-side.cycles:hover .trend-days { color: $text; }
+.trend-side.loading .trend-days { color: $text-muted; }
 /* Trade search options */
 /* The chips sit at the right, where they are on every item: a rare's base
    toggle fills the space to their left, a unique has nothing there. */
