@@ -239,7 +239,7 @@ sparkline { display: block; color: $mod; }
 .trend-chart { flex: 1; min-width: 0; margin-right: 12dp; }
 .spark-big { width: 100%; height: 40dp; }
 .trend-foot { margin-top: 4dp; font-size: 10dp; color: $text-faint; white-space: nowrap; overflow: hidden; }
-.trend-side { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+.trend-side { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
 .trend-badge { border-radius: 6dp; padding: 2dp 8dp; font-weight: 500; }
 .trend-badge.up { background-color: $good-bg; color: $good; }
 .trend-badge.down { background-color: $danger-bg; color: $error; }
