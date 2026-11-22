@@ -51,6 +51,9 @@ pub enum Section {
     /// Eldritch implicits, under the implicits: the layer colors them.
     Exarch,
     Eater,
+    /// Implicits from corruption (a Vaal Orb), under the implicits: the
+    /// layer colors them.
+    Corruption,
     Enchant,
     /// A fractured mod, searched as fractured: always shown.
     Fractured,
@@ -77,6 +80,7 @@ impl Section {
             Section::Implicit => "implicit",
             Section::Exarch => "exarch",
             Section::Eater => "eater",
+            Section::Corruption => "corruption",
             Section::Enchant => "enchant",
             Section::Fractured => "fractured",
             Section::Crafted => "crafted",
@@ -1901,11 +1905,13 @@ fn kind_section(kind: ModKind, section: Section) -> Section {
     }
 }
 
-/// A mod's section by its kind, an eldritch implicit's by its altar.
+/// A mod's section by its kind, an eldritch implicit's by its altar, a
+/// corruption implicit's as its own.
 fn mod_section(m: &ModLine, section: Section) -> Section {
     match (kind_section(m.kind, section), m.eldritch) {
         (Section::Implicit, Some(Eldritch::Exarch)) => Section::Exarch,
         (Section::Implicit, Some(Eldritch::Eater)) => Section::Eater,
+        (Section::Implicit, None) if m.corruption => Section::Corruption,
         (section, _) => section,
     }
 }
@@ -3081,6 +3087,10 @@ mod tests {
             "implicit.strike".into(),
         );
         stats.insert(("implicit".into(), "#% of Cold Damage Leeched as Life".into()), "implicit.cold_leech".into());
+        stats.insert(
+            ("implicit".into(), "Curse Enemies with Conductivity on Hit".into()),
+            "implicit.conductivity".into(),
+        );
         let mut transfigured = HashMap::new();
         transfigured.insert("Arc of Oscillating".to_string(), ("Arc".to_string(), "alt_y".to_string()));
         TradeData {
@@ -3389,6 +3399,26 @@ mod tests {
         );
         let strike = filters.iter().find(|f| f.label.starts_with("Non-Vaal")).unwrap();
         assert_eq!(strike.target, Target::Stat("implicit.strike".into()));
+    }
+
+    /// A Vaal Orb's implicit has a header of its own in advanced copy: it's
+    /// still an implicit to search, in its own section for the layer to
+    /// color. Its reminder text isn't a mod.
+    #[test]
+    fn corruption_implicit_row() {
+        let text = "Item Class: Gloves\nRarity: Rare\nBlood Fist\nSatin Gloves\n--------\nItem Level: 57\n--------\n\
+                    { Corruption Implicit Modifier \u{2014} Caster, Curse }\n\
+                    Curse Enemies with Conductivity on Hit \u{2014} Unscalable Value\n\
+                    (Conductivity is a Hex which inflicts -17% to Lightning Resistance. It lasts 8 seconds)\n--------\n\
+                    { Prefix Modifier \"Stout\" (Tier: 5) \u{2014} Life }\n+55(55-69) to maximum Life\n--------\nCorrupted\n";
+        let item = crate::item::parse(text).unwrap();
+        let implicits: Vec<_> = item.mods.iter().filter(|m| m.kind == ModKind::Implicit).collect();
+        assert_eq!(implicits.len(), 1);
+        assert!(implicits[0].corruption);
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let row = filters.iter().find(|f| f.label == "Curse Enemies with Conductivity on Hit").unwrap();
+        assert_eq!(row.section, Section::Corruption);
+        assert_eq!(row.target, Target::Stat("implicit.conductivity".into()));
     }
 
     #[test]
