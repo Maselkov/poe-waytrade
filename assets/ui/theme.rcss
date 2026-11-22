@@ -233,7 +233,8 @@ sparkline { display: block; color: $mod; }
 .spark-mini { flex-shrink: 0; width: 56dp; height: 20dp; margin-right: 10dp; }
 /* The prices' column a fixed width, so rows' graphs line up. */
 .week-row .pr-value { min-width: 96dp; justify-content: flex-end; }
-.trend { display: flex; align-items: center; margin-top: 6dp; padding-top: 8dp; border-top: 1dp $panel-border; }
+/* Part of the price above it: no rule of its own. */
+.trend { display: flex; align-items: center; margin-top: 4dp; padding-bottom: 2dp; }
 .trend.stale { opacity: 0.45; }
 .trend-chart { flex: 1; min-width: 0; margin-right: 12dp; }
 .spark-big { width: 100%; height: 40dp; }
