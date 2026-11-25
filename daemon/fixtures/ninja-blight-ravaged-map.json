@@ -1,0 +1,28 @@
+{
+ "lines": [
+  {
+   "id": 135704,
+   "name": "Blight-ravaged Map (Tier 16)",
+   "variant": "Gen-24",
+   "itemClass": 0,
+   "sparkLine": {
+    "totalChange": 233.3,
+    "data": [
+     0,
+     116.7,
+     98.33,
+     96.67,
+     100,
+     232.3,
+     233.3
+    ]
+   },
+   "chaosValue": 100.0,
+   "exaltedValue": 108.4,
+   "divineValue": 0.56,
+   "count": 399,
+   "detailsId": "blight-ravaged-map-tier-16-t0-gen-24",
+   "listingCount": 1864
+  }
+ ]
+}

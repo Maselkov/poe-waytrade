@@ -649,6 +649,22 @@ mod tests {
         )
     }
 
+    fn corpse(name: &str) -> String {
+        format!(
+            "Item Class: Corpses\nRarity: Currency\n{name}\n--------\nCorpse Level: 83\n\
+             Monster Category: Construct\n--------\nItem Level: 83\n--------\nCyclones\nLacerates\n\
+             Rains down blades\n--------\nRight click this item to create this corpse.\n"
+        )
+    }
+
+    #[test]
+    fn corpses_by_tier() {
+        for name in ["Imperfect Dancing Sword", "Dancing Sword", "Perfect Dancing Sword"] {
+            let want = chaos(&line("Corpse", name, |_| true));
+            assert_eq!(look(&corpse(name)).iter().map(|p| p.1).collect::<Vec<_>>(), vec![want], "{name}");
+        }
+    }
+
     #[test]
     fn wombgifts_by_item_level() {
         let at = |level: u64| chaos(&line("Wombgift", "Ancient Wombgift", |l| l["levelRequired"] == level));
@@ -1020,6 +1036,16 @@ mod tests {
     fn map_by_name() {
         let got = look("Item Class: Maps\nRarity: Normal\nNightmare Map\n--------\nItem Level: 84\n");
         let l = line("Map", "Nightmare Map", |_| true);
+        assert_eq!(got, vec![(l["variant"].as_str().unwrap().to_string(), chaos(&l))]);
+    }
+
+    #[test]
+    fn blight_ravaged_map_by_name() {
+        let got = look(
+            "Item Class: Maps\nRarity: Normal\nBlight-ravaged Map (Tier 16)\n--------\nMap Tier: 16\n--------\n\
+             Item Level: 83\n--------\nArea is infested with Fungal Growths\n",
+        );
+        let l = line("BlightRavagedMap", "Blight-ravaged Map (Tier 16)", |_| true);
         assert_eq!(got, vec![(l["variant"].as_str().unwrap().to_string(), chaos(&l))]);
     }
 

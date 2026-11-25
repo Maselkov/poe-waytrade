@@ -98,6 +98,7 @@ const ITEM_TYPES: &[&str] = &[
     "SkillGem",
     "Map",
     "BlightedMap",
+    "BlightRavagedMap",
     "Invitation",
     "Beast",
     "Viscera",
@@ -105,6 +106,7 @@ const ITEM_TYPES: &[&str] = &[
     "BaseType",
     "Wombgift",
     "ValdoMap",
+    "Corpse",
 ];
 
 #[derive(Deserialize)]
@@ -521,6 +523,8 @@ pub(crate) mod tests {
         ("BaseType", include_str!("../fixtures/ninja-base-type.json")),
         ("Wombgift", include_str!("../fixtures/ninja-wombgift.json")),
         ("ValdoMap", include_str!("../fixtures/ninja-valdo-map.json")),
+        ("Corpse", include_str!("../fixtures/ninja-corpse.json")),
+        ("BlightRavagedMap", include_str!("../fixtures/ninja-blight-ravaged-map.json")),
     ];
 
     /// A price list built from the fixtures the way `fetch` builds it.
