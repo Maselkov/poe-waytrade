@@ -146,6 +146,10 @@ def main():
         ("BaseType", "ninja-base-type.json",
          lambda line: line["name"] in ("Vaal Regalia", "Simplex Amulet")),
         ("Wombgift", "ninja-wombgift.json", lambda line: line["name"] == "Ancient Wombgift"),
+        # Corpses: a line per tier, each by its full name.
+        ("Corpse", "ninja-corpse.json", lambda line: line["name"].endswith("Dancing Sword")),
+        ("BlightRavagedMap", "ninja-blight-ravaged-map.json",
+         lambda line: line["name"] == "Blight-ravaged Map (Tier 16)"),
     ]:
         ov = get(f"{NINJA}/economy/stash/current/item/overview?league={q}&type={kind}")
         lines = [slim(line, mods=kind.startswith("Unique")) for line in ov["lines"] if keep(line)]
