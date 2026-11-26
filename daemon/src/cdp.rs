@@ -129,7 +129,9 @@ pub fn launch_window(binary: &str, profile: &Path, url: &str) -> Result<Child, S
 }
 
 impl Browser {
-    pub fn launch(binary: &str, profile: &Path) -> Result<Browser, String> {
+    /// `forget_session`: delete a pathofexile.com session left in the
+    /// profile before any page opens, so it's never sent.
+    pub fn launch(binary: &str, profile: &Path, forget_session: bool) -> Result<Browser, String> {
         let err = |what: &str, e: io::Error| format!("{what}: {e}");
         private_profile(profile).map_err(|e| err("profile dir", e))?;
         let (cmd_read, cmd_write) = pipe().map_err(|e| err("pipe", e))?;
@@ -180,6 +182,10 @@ impl Browser {
             next_id: 0,
             session: String::new(),
         };
+        if forget_session && browser.has_session()? {
+            eprintln!("trade: deleting the pathofexile.com session an earlier version left (travel is off)");
+            browser.clear_cookies()?;
+        }
         browser.open_origin_page()?;
         Ok(browser)
     }
