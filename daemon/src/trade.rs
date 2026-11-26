@@ -369,11 +369,6 @@ pub struct Listing {
     /// What they have of the search's enabled filters (the same for all
     /// of them: only listings alike in these are grouped).
     pub values: Values,
-    /// The first one's travel to the seller's hideout: `None` unless it's
-    /// an instant buyout (a merchant tab); then the token to send with
-    /// `Trade::travel`, or empty when the trade site gave none because
-    /// we're not logged in.
-    pub travel: Option<String>,
 }
 
 /// A one-line answer: what the item would sell for (see `estimate_index`).
@@ -391,9 +386,6 @@ pub struct Summary {
 
 pub struct TradeResult {
     pub listings: Vec<Listing>,
-    /// Whether we're logged in to pathofexile.com, as far as the listings
-    /// tell: only a logged-in search gets travel tokens.
-    pub logged_in: Option<bool>,
     pub summary: Option<Summary>,
     pub total: u64,
     pub url: String,
@@ -578,54 +570,7 @@ pub struct Trade {
     data: Option<(TradeData, Instant)>,
     limiter: RateLimiter,
     last_used: Instant,
-    /// The window the user is logging in to pathofexile.com in, while it's
-    /// open (see `login`).
-    login_window: Option<std::process::Child>,
-    /// Whether we're logged in, once known: from the profile's cookies, or
-    /// what the last search's listings or a travel said.
-    logged_in: Option<bool>,
 }
-
-/// Where we are with pathofexile.com (see `Trade::account`).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Account {
-    /// The login window is open.
-    LoggingIn,
-    LoggedIn,
-    LoggedOut,
-    /// `TRAVEL` is off: no login is offered.
-    Disabled,
-}
-
-impl Account {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Account::LoggingIn => "logging_in",
-            Account::LoggedIn => "in",
-            Account::LoggedOut => "out",
-            Account::Disabled => "disabled",
-        }
-    }
-}
-
-/// Why a travel didn't happen.
-#[derive(Debug, PartialEq)]
-pub enum TravelError {
-    /// The trade site wants a login (or a new one: the session ended).
-    LoggedOut,
-    Failed(String),
-}
-
-/// Travelling to hideouts, and the pathofexile.com login it needs. Off: an
-/// account was locked (2026-11-27) after its session was used like this,
-/// from headless Chromium, possibly looking like a stolen session cookie.
-/// While off, no login is offered, searches report no travel tokens, and a
-/// session an earlier version left in the profile is deleted, so it's never
-/// sent from here.
-pub const TRAVEL: bool = false;
-
-/// Where the login window opens.
-const LOGIN_URL: &str = "https://www.pathofexile.com/login";
 
 /// Items worth a trade search: anything non-unique with mods, white gear
 /// (searched as a base), and white maps and invitations (by type).
@@ -675,100 +620,7 @@ fn default_corrupted(item: &Item) -> Corrupted {
 
 impl Trade {
     pub fn new() -> Trade {
-        Trade {
-            browser: None,
-            data: None,
-            limiter: RateLimiter::default(),
-            last_used: Instant::now(),
-            login_window: None,
-            logged_in: None,
-        }
-    }
-
-    /// Opens a browser window on our profile at pathofexile.com's login
-    /// page, closing the headless browser that uses the profile; searches
-    /// wait until the user closes it. Already open: nothing to do.
-    pub fn login(&mut self) -> Result<(), String> {
-        if !TRAVEL {
-            return Err("Logging in to pathofexile.com is turned off in this version".into());
-        }
-        if self.login_window_open() {
-            return Ok(());
-        }
-        let binary = cdp::find_binary().ok_or("Logging in needs Chromium or Chrome installed")?;
-        self.browser = None;
-        eprintln!("trade: opening the login window");
-        self.login_window = Some(cdp::launch_window(&binary, &profile_dir(), LOGIN_URL)?);
-        self.logged_in = None;
-        Ok(())
-    }
-
-    /// Whether the login window is still open; once it's closed, whether
-    /// that logged us in is read from the profile again.
-    fn login_window_open(&mut self) -> bool {
-        let Some(window) = self.login_window.as_mut() else { return false };
-        if matches!(window.try_wait(), Ok(None)) {
-            return true;
-        }
-        eprintln!("trade: login window closed");
-        self.login_window = None;
-        self.logged_in = None;
-        false
-    }
-
-    /// Logged in to pathofexile.com, out, or logging in now.
-    pub fn account(&mut self) -> Result<Account, String> {
-        if !TRAVEL {
-            return Ok(Account::Disabled);
-        }
-        if self.login_window_open() {
-            return Ok(Account::LoggingIn);
-        }
-        let logged_in = match self.logged_in {
-            Some(known) => known,
-            None => {
-                let has = self.browser()?.has_session()?;
-                self.logged_in = Some(has);
-                has
-            }
-        };
-        Ok(if logged_in { Account::LoggedIn } else { Account::LoggedOut })
-    }
-
-    /// Forgets the pathofexile.com session (every cookie in our profile),
-    /// closing the login window if it's open.
-    pub fn logout(&mut self) -> Result<(), String> {
-        if let Some(mut window) = self.login_window.take() {
-            let _ = window.kill();
-            let _ = window.wait();
-        }
-        self.browser()?.clear_cookies()?;
-        self.logged_in = Some(false);
-        eprintln!("trade: logged out");
-        Ok(())
-    }
-
-    /// Sends the player to the hideout of a listing's seller (an instant
-    /// buyout's token, `Listing::travel`): the trade site tells the game.
-    pub fn travel(&mut self, token: &str) -> Result<(), TravelError> {
-        if !TRAVEL {
-            return Err(TravelError::Failed("Travelling to hideouts is turned off in this version".into()));
-        }
-        self.last_used = Instant::now();
-        let body = json!({ "token": token }).to_string();
-        let path = format!("{}/whisper", game::current().trade_api());
-        match self.request("whisper", "POST", &path, Some(&body)) {
-            Ok(resp) if serde_json::from_str::<Value>(&resp.body).is_ok_and(|v| v["success"] == true) => {
-                self.logged_in = Some(true);
-                Ok(())
-            }
-            Ok(resp) => Err(TravelError::Failed(format!("pathofexile.com said {}", resp.body.trim()))),
-            Err(e) if e.starts_with("Trade API error 401") || e.starts_with("Trade API error 403") => {
-                self.logged_in = Some(false);
-                Err(TravelError::LoggedOut)
-            }
-            Err(e) => Err(TravelError::Failed(e)),
-        }
+        Trade { browser: None, data: None, limiter: RateLimiter::default(), last_used: Instant::now() }
     }
 
     pub fn close_if_idle(&mut self) {
@@ -835,11 +687,6 @@ impl Trade {
     ) -> Result<TradeResult, String> {
         self.last_used = Instant::now();
         let result = self.search_inner(item, enabled, options, league, prices);
-        if let Ok(r) = &result
-            && r.logged_in.is_some()
-        {
-            self.logged_in = r.logged_in;
-        }
         // A dead or confused browser gets relaunched next time.
         if result.is_err() && !self.browser.as_mut().is_some_and(|b| b.alive()) {
             self.browser = None;
@@ -935,13 +782,10 @@ impl Trade {
     }
 
     fn browser(&mut self) -> Result<&mut Browser, String> {
-        if self.login_window_open() {
-            return Err("Finish logging in to pathofexile.com first: close the login window".into());
-        }
         if !self.browser.as_mut().is_some_and(|b| b.alive()) {
             let binary = cdp::find_binary().ok_or("Trade search needs Chromium or Chrome installed")?;
             eprintln!("trade: starting {binary}");
-            self.browser = Some(Browser::launch(&binary, &profile_dir(), !TRAVEL)?);
+            self.browser = Some(Browser::launch(&binary, &cache_dir().join("chromium"))?);
         }
         Ok(self.browser.as_mut().unwrap())
     }
@@ -1055,32 +899,9 @@ fn parse_fetch(
         let minutes = listing["indexed"].as_str().and_then(parse_utc).map(|then| (now - then).max(0) / 60);
         let item = &entry["item"];
         let values = columns.iter().filter_map(|(i, t)| listing_value(item, t).map(|v| (*i, v))).collect();
-        singles.push((amount, currency.to_string(), name, chaos, minutes, item_preview(item), values, travel(listing)));
+        singles.push((amount, currency.to_string(), name, chaos, minutes, item_preview(item), values));
     }
     Ok(singles)
-}
-
-/// A listing's travel token (see `Listing::travel`). Instant buyouts carry
-/// a gold fee; logged in, they carry a "hideout_token" too.
-fn travel(listing: &Value) -> Option<String> {
-    let token = listing["hideout_token"].as_str();
-    if token.is_none() && listing.get("fee").is_none() {
-        return None;
-    }
-    Some(token.unwrap_or("").to_string())
-}
-
-/// Logged in if any listing has a token, out if an instant buyout has none,
-/// unknown without instant buyouts.
-fn logged_in<'a>(travels: impl Iterator<Item = &'a Option<String>>) -> Option<bool> {
-    let mut seen = None;
-    for t in travels.flatten() {
-        if !t.is_empty() {
-            return Some(true);
-        }
-        seen = Some(false);
-    }
-    seen
 }
 
 fn gem_line(preview: &Preview) -> Option<&str> {
@@ -1089,9 +910,8 @@ fn gem_line(preview: &Preview) -> Option<&str> {
 
 /// Listings at the same price grouped, with the estimate.
 fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -> TradeResult {
-    let logged_in = logged_in(singles.iter().map(|s| &s.7));
     let summary = estimate_index(&singles).map(|(i, capped)| {
-        let (amount, id, name, chaos, ..) = &singles[i];
+        let (amount, id, name, chaos, _, _, _) = &singles[i];
         let same_currency = singles.iter().all(|s| s.1 == *id);
         let (first, last) = (&singles[0], &singles[singles.len() - 1]);
         let range = if same_currency {
@@ -1105,7 +925,7 @@ fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -
 
     let mut listings: Vec<Listing> = Vec::new();
     let mut ages: Vec<Vec<i64>> = Vec::new();
-    for (amount, id, name, chaos, minutes, preview, values, travel) in singles {
+    for (amount, id, name, chaos, minutes, preview, values) in singles {
         match listings.last_mut() {
             // Gems at one price but different levels or quality stay apart,
             // and so do items with different values in the filters' columns.
@@ -1128,7 +948,6 @@ fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -
                     age: String::new(),
                     preview,
                     values,
-                    travel,
                 });
                 ages.push(minutes.into_iter().collect());
             }
@@ -1144,13 +963,7 @@ fn trade_result(singles: Vec<Single>, total: u64, id: &str, league_path: &str) -
         };
     }
 
-    TradeResult {
-        listings,
-        summary,
-        logged_in,
-        total,
-        url: format!("{}/{league_path}/{id}", game::current().trade_site()),
-    }
+    TradeResult { listings, summary, total, url: format!("{}/{league_path}/{id}", game::current().trade_site()) }
 }
 
 /// An item's image on web.poecdn.com (a listed item's, or a unique's art
@@ -1217,12 +1030,6 @@ fn download_image(url: &str, path: &std::path::Path) -> Result<Vec<u8>, String> 
 
 pub(crate) fn cache_dir() -> PathBuf {
     game::cache_dir()
-}
-
-/// The browser's profile: its cookies, the pathofexile.com session among
-/// them once the user logs in.
-fn profile_dir() -> PathBuf {
-    cache_dir().join("chromium")
 }
 
 /// A listing this old has had time to sell and hasn't: it's overpriced.
@@ -2600,9 +2407,8 @@ fn no_life_filter(item: &Item, data: &TradeData) -> Option<Filter> {
 }
 
 /// One fetched listing: amount, currency id, currency name, chaos value,
-/// minutes since it was listed, the item, its values, and its travel token
-/// (see `Listing::travel`).
-type Single = (f64, String, String, Option<f64>, Option<i64>, Preview, Values, Option<String>);
+/// minutes since it was listed, the item.
+type Single = (f64, String, String, Option<f64>, Option<i64>, Preview, Values);
 
 /// A listed item's values for the search's enabled filters, by filter index,
 /// as shown in the layer's columns: "158", "81%".
@@ -3431,16 +3237,7 @@ mod tests {
     #[test]
     fn estimates() {
         let single = |amount: f64, minutes: i64| -> Single {
-            (
-                amount,
-                "chaos".into(),
-                "Chaos Orb".into(),
-                Some(amount),
-                Some(minutes),
-                Preview::default(),
-                Values::new(),
-                None,
-            )
+            (amount, "chaos".into(), "Chaos Orb".into(), Some(amount), Some(minutes), Preview::default(), Values::new())
         };
         let fresh = |prices: &[f64]| prices.iter().map(|&p| single(p, 60)).collect::<Vec<_>>();
         assert_eq!(estimate_index(&[]), None);
@@ -5195,7 +4992,7 @@ mod tests {
         let prices = crate::ninja::tests::fixture_db();
         let singles = parse_fetch(FETCH, &real_data(), &prices, fetch_now(), &[]).unwrap();
         assert_eq!(singles.len(), LISTINGS, "every captured listing is priced");
-        for (amount, id, name, chaos, minutes, preview, ..) in &singles {
+        for (amount, id, name, chaos, minutes, preview, _) in &singles {
             // Currency names from the static list, chaos values from poe.ninja.
             match id.as_str() {
                 "chaos" => assert_eq!((name.as_str(), *chaos), ("Chaos Orb", Some(*amount))),
@@ -5255,7 +5052,7 @@ mod tests {
         let columns = [(0, &total_life), (1, &life), (4, &ilvl), (7, &flag)];
         let singles = parse_fetch(FETCH, &real_data(), &prices, fetch_now(), &columns).unwrap();
         let fetched: Value = serde_json::from_str(FETCH).unwrap();
-        for ((.., values, _), entry) in singles.iter().zip(fetched["result"].as_array().unwrap()) {
+        for ((.., values), entry) in singles.iter().zip(fetched["result"].as_array().unwrap()) {
             let item = &entry["item"];
             let get = |i: usize| values.iter().find(|v| v.0 == i).map(|v| v.1.clone());
             // The search asked for 60 total life and the fetch for the total.
@@ -5296,78 +5093,11 @@ mod tests {
         assert_eq!(listing_value(&item, &Target::Stat("explicit.stat_9".into())), Some("45".into()));
     }
 
-    /// The capture is anonymous and trimmed (refresh.py): a logged-in
-    /// instant buyout adds a gold fee and a hideout token, as captured by
-    /// hand on 2026-11-26.
-    #[test]
-    fn fetch_reply_travel_tokens() {
-        let prices = crate::ninja::tests::fixture_db();
-        let mut fetched: Value = serde_json::from_str(FETCH).unwrap();
-        let results = fetched["result"].as_array_mut().unwrap();
-        results[0]["listing"]["fee"] = json!(2800);
-        results[0]["listing"]["hideout_token"] = json!("eyJ0eXAi.token");
-        results[1]["listing"]["fee"] = json!(7165);
-        results[2]["listing"]["whisper_token"] = json!("eyJ0eXAi.whisper");
-        let singles = parse_fetch(&fetched.to_string(), &real_data(), &prices, fetch_now(), &[]).unwrap();
-        let travels: Vec<Option<&str>> = singles.iter().take(3).map(|s| s.7.as_deref()).collect();
-        // A token; an instant buyout without one (logged out); not an instant
-        // buyout (a whisper is for someone online in person).
-        assert_eq!(travels, vec![Some("eyJ0eXAi.token"), Some(""), None]);
-        assert!(singles[3..].iter().all(|s| s.7.is_none()));
-    }
-
-    /// While travel is off, nothing logs in or sends a session (no browser
-    /// starts for these either).
-    #[test]
-    fn travel_off_offers_no_login() {
-        if TRAVEL {
-            return;
-        }
-        let mut trade = Trade::new();
-        assert_eq!(trade.account(), Ok(Account::Disabled));
-        assert!(trade.login().is_err());
-        assert!(trade.login_window.is_none());
-        assert!(matches!(trade.travel("token"), Err(TravelError::Failed(_))));
-        assert!(trade.browser.is_none());
-    }
-
-    #[test]
-    fn login_from_listings() {
-        let t = |s: &str| Some(s.to_string());
-        assert_eq!(logged_in([None, t(""), t("tok")].iter()), Some(true));
-        assert_eq!(logged_in([None, t("")].iter()), Some(false));
-        // Nothing bought instantly says nothing either way.
-        assert_eq!(logged_in([None, None].iter()), None);
-        assert_eq!(logged_in([].iter()), None);
-    }
-
-    #[test]
-    fn rows_keep_the_first_listings_travel() {
-        let single = |amount: f64, travel: Option<&str>| -> Single {
-            let p = Preview::default();
-            (
-                amount,
-                "chaos".into(),
-                "Chaos Orb".into(),
-                Some(amount),
-                Some(60),
-                p,
-                Values::new(),
-                travel.map(Into::into),
-            )
-        };
-        let singles = vec![single(1.0, Some("a")), single(1.0, Some("b")), single(2.0, None)];
-        let r = trade_result(singles, 3, "id", "Covens");
-        let got: Vec<(usize, Option<&str>)> = r.listings.iter().map(|l| (l.count, l.travel.as_deref())).collect();
-        assert_eq!(got, vec![(2, Some("a")), (1, None)]);
-        assert_eq!(r.logged_in, Some(true));
-    }
-
     #[test]
     fn rows_with_different_values_stay_apart() {
         let single = |amount: f64, life: &str| -> Single {
             let values = vec![(0, life.to_string())];
-            (amount, "chaos".into(), "Chaos Orb".into(), Some(amount), Some(60), Preview::default(), values, None)
+            (amount, "chaos".into(), "Chaos Orb".into(), Some(amount), Some(60), Preview::default(), values)
         };
         let singles = vec![single(1.0, "158"), single(1.0, "158"), single(1.0, "171"), single(2.0, "171")];
         let rows = trade_result(singles, 4, "id", "Covens").listings;

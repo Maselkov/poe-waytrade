@@ -107,10 +107,6 @@
 //!     value    <filter index> <text, e.g. "158" or "81%">   (what the listing
 //!              above has of an enabled filter; listings are only grouped
 //!              when these match)
-//!     travel   <token|"">   (the listing above is an instant buyout: the
-//!              token for TRAVEL to its seller's hideout, or empty when
-//!              we're not logged in to pathofexile.com; none while
-//!              trade::TRAVEL is off)
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
 //!   request:  "TRADE\n" + comma-separated enabled filters, each "index",
@@ -155,20 +151,6 @@
 //!   request:  "MAPPROFILE\n" + profile        (both answer "status ok")
 //!   request:  "MAPRESET\n" + profile: that profile's marks back to the
 //!             defaults ("status ok")
-//!
-//!   request:  "ACCOUNT\n": whether we're logged in to pathofexile.com
-//!   response: status ok (or error)
-//!     account  <in|out|logging_in|disabled>   (logging_in: the login
-//!              window is open; disabled: trade::TRAVEL is off, so no login)
-//!   request:  "LOGIN\n": opens a browser window at pathofexile.com's login
-//!             page; trade searches wait until the user closes it. Replies
-//!             like ACCOUNT, at once.
-//!   request:  "LOGOUT\n": forgets the pathofexile.com session. Replies
-//!             like ACCOUNT.
-//!   request:  "TRAVEL\n" + a listing's travel token: the trade site sends
-//!             the player to that seller's hideout
-//!   response: status ok | logged_out (log in again) | error
-//!     message  <text>   (error)
 //!
 //!   request:  "SETTINGS\n": the settings (settings.rs), and what the
 //!             settings page shows with them
@@ -520,31 +502,6 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
     } else if let Some(n) = request.strip_prefix("MAPRESET\n") {
         let mut marks = state.map_marks.lock().unwrap();
         if marks.reset(n.trim().parse().unwrap_or(0)) { save_marks(&marks) } else { bad_request("Bad profile") }
-    } else if request == "ACCOUNT\n" {
-        account_reply(state.trade.lock().unwrap().account())
-    } else if request == "LOGIN\n" {
-        let mut trade = state.trade.lock().unwrap();
-        match trade.login() {
-            Ok(()) => account_reply(trade.account()),
-            Err(e) => format!("status\terror\nmessage\t{}\n", clean(&e)),
-        }
-    } else if request == "LOGOUT\n" {
-        let mut trade = state.trade.lock().unwrap();
-        match trade.logout() {
-            Ok(()) => account_reply(trade.account()),
-            Err(e) => format!("status\terror\nmessage\t{}\n", clean(&e)),
-        }
-    } else if let Some(token) = request.strip_prefix("TRAVEL\n") {
-        match state.trade.lock().unwrap().travel(token.trim()) {
-            Ok(()) => "status\tok\n".to_string(),
-            Err(trade::TravelError::LoggedOut) => {
-                "status\tlogged_out\nmessage\tLog in to pathofexile.com again\n".to_string()
-            }
-            Err(trade::TravelError::Failed(e)) => {
-                eprintln!("trade: travel: {e}");
-                format!("status\terror\nmessage\t{}\n", clean(&e))
-            }
-        }
     } else if request == "SETTINGS\n" {
         settings_reply(state)
     } else if let Some(changes) = request.strip_prefix("SET\n") {
@@ -556,13 +513,6 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         "status\tbad_request\nmessage\tUnknown request\n".to_string()
     };
     write_frame(&mut stream, &response)
-}
-
-fn account_reply(account: Result<trade::Account, String>) -> String {
-    match account {
-        Ok(a) => format!("status\tok\naccount\t{}\n", a.as_str()),
-        Err(e) => format!("status\terror\nmessage\t{}\n", clean(&e)),
-    }
 }
 
 /// `setting` lines, then what the settings page shows besides:
@@ -906,11 +856,6 @@ fn trade_response(
                 }
                 for (index, text) in &l.values {
                     let _ = writeln!(out, "value\t{index}\t{}", clean(text));
-                }
-                if trade::TRAVEL
-                    && let Some(token) = &l.travel
-                {
-                    let _ = writeln!(out, "travel\t{}", clean(token));
                 }
             }
             let _ = writeln!(out, "total\t{}\nurl\t{}", r.total, clean(&r.url));
