@@ -117,6 +117,10 @@
 //!             + "\n" + "6" (6-linked only) or "any" + "\n" + "unid"
 //!             (unidentified only) or "any" + "\n" + item text: search with
 //!             those filters and options.
+//!   request:  "TRADEOPEN\n" + the same as "TRADE": opens that search on
+//!             the trade site in the browser (the query in its address,
+//!             unticked filters there unticked), without searching.
+//!   response: status ok (or error, bad_request)
 //!   request:  "PREPARE\n" + normal|base + "\n" + item text: the trade
 //!             filters for that preset, without searching ("base": the item
 //!             as a crafting base, like APT's "Base item" preset).
@@ -455,38 +459,11 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         let (preset, text) = rest.split_once('\n').unwrap_or((rest, ""));
         respond(state, text, None, trade::Preset::parse(preset))
     } else if let Some(rest) = request.strip_prefix("TRADE\n") {
-        let mut parts = rest.splitn(8, '\n');
-        let (indices, base, corrupted, preset, status, links, identified, text) = (
-            parts.next().unwrap_or(""),
-            parts.next().unwrap_or(""),
-            parts.next().unwrap_or(""),
-            parts.next().unwrap_or(""),
-            parts.next().unwrap_or(""),
-            parts.next().unwrap_or(""),
-            parts.next().unwrap_or(""),
-            parts.next().unwrap_or(""),
-        );
-        let search = TradeRequest {
-            enabled: indices
-                .split(',')
-                .filter_map(|s| {
-                    let mut f = s.trim().split(':');
-                    let index = f.next()?.parse().ok()?;
-                    let min = f.next().and_then(|m| m.parse().ok());
-                    let max = f.next().and_then(|m| m.parse().ok());
-                    Some(trade::Choice { index, min, max })
-                })
-                .collect(),
-            options: trade::SearchOptions {
-                base_only: base == "base",
-                corrupted: trade::Corrupted::parse(corrupted),
-                preset: trade::Preset::parse(preset),
-                status: trade::Status::parse(status),
-                six_link: links == "6",
-                unidentified: identified == "unid",
-            },
-        };
+        let (search, text) = trade_request(rest);
         respond(state, text, Some(&search), search.options.preset)
+    } else if let Some(rest) = request.strip_prefix("TRADEOPEN\n") {
+        let (search, text) = trade_request(rest);
+        open_trade_search(state, &search, text)
     } else if let Some(rest) = request.strip_prefix("MATCHART\n") {
         match_art(state, rest)
     } else if let Some(rest) = request.strip_prefix("SCANFIND\n") {
@@ -704,6 +681,56 @@ fn map_check(state: &State, text: &str) -> String {
         write_prices(&mut out, prices);
     }
     out
+}
+
+/// A "TRADE" or "TRADEOPEN" request's filters and options, and its item text.
+fn trade_request(rest: &str) -> (TradeRequest, &str) {
+    let mut parts = rest.splitn(8, '\n');
+    let (indices, base, corrupted, preset, status, links, identified, text) = (
+        parts.next().unwrap_or(""),
+        parts.next().unwrap_or(""),
+        parts.next().unwrap_or(""),
+        parts.next().unwrap_or(""),
+        parts.next().unwrap_or(""),
+        parts.next().unwrap_or(""),
+        parts.next().unwrap_or(""),
+        parts.next().unwrap_or(""),
+    );
+    let search = TradeRequest {
+        enabled: indices
+            .split(',')
+            .filter_map(|s| {
+                let mut f = s.trim().split(':');
+                let index = f.next()?.parse().ok()?;
+                let min = f.next().and_then(|m| m.parse().ok());
+                let max = f.next().and_then(|m| m.parse().ok());
+                Some(trade::Choice { index, min, max })
+            })
+            .collect(),
+        options: trade::SearchOptions {
+            base_only: base == "base",
+            corrupted: trade::Corrupted::parse(corrupted),
+            preset: trade::Preset::parse(preset),
+            status: trade::Status::parse(status),
+            six_link: links == "6",
+            unidentified: identified == "unid",
+        },
+    };
+    (search, text)
+}
+
+/// Opens the search for these filters on the trade site, without searching.
+fn open_trade_search(state: &State, search: &TradeRequest, text: &str) -> String {
+    let Some(item) = item::parse(text) else {
+        return "status\tbad_request\nmessage\tNot PoE item text\n".to_string();
+    };
+    let Some(league) = state.db.read().unwrap().as_ref().map(|db| db.league.clone()) else {
+        return "status\terror\nmessage\tStill loading league data, try again in a moment\n".to_string();
+    };
+    match state.trade.lock().unwrap().site_url(&item, &search.enabled, search.options, &league) {
+        Ok(url) => open_trade_url(&url),
+        Err(e) => format!("status\terror\nmessage\t{}\n", clean(&e)),
+    }
 }
 
 /// Only trade search URLs, so a local client can't make us open anything.

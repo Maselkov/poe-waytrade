@@ -157,15 +157,15 @@ PriceReply parse_reply(const std::string& body) {
 
 }  // namespace
 
-void DaemonClient::request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
-                                 const std::string& corrupted, const std::string& preset,
-                                 const std::string& listing_status, bool six_link, bool unidentified,
-                                 const std::string& item_text) {
+std::string DaemonClient::trade_body(const std::vector<TradeFilter>& enabled, bool base_only,
+                                     const std::string& corrupted, const std::string& preset,
+                                     const std::string& listing_status, bool six_link, bool unidentified,
+                                     const std::string& item_text) {
     std::string indices;
     for (const TradeFilter& f : enabled)
         indices += (indices.empty() ? "" : ",") + std::to_string(f.index) + ":" + f.min + ":" + f.max;
-    start("TRADE\n" + indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + preset + "\n" + listing_status +
-          "\n" + (six_link ? "6" : "any") + "\n" + (unidentified ? "unid" : "any") + "\n" + item_text);
+    return indices + "\n" + (base_only ? "base" : "category") + "\n" + corrupted + "\n" + preset + "\n" + listing_status +
+           "\n" + (six_link ? "6" : "any") + "\n" + (unidentified ? "unid" : "any") + "\n" + item_text;
 }
 
 void DaemonClient::start(const std::string& body) {

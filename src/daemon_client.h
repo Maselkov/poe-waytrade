@@ -191,13 +191,22 @@ public:
     void request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                        const std::string& corrupted, const std::string& preset,
                        const std::string& listing_status, bool six_link, bool unidentified,
-                       const std::string& item_text);
+                       const std::string& item_text) {
+        start("TRADE\n" + trade_body(enabled, base_only, corrupted, preset, listing_status, six_link, unidentified,
+                                     item_text));
+    }
+    // Open the same search on the trade site in the user's browser, without
+    // searching.
+    void open_trade(const std::vector<TradeFilter>& enabled, bool base_only, const std::string& corrupted,
+                    const std::string& preset, const std::string& listing_status, bool six_link, bool unidentified,
+                    const std::string& item_text) {
+        start("TRADEOPEN\n" + trade_body(enabled, base_only, corrupted, preset, listing_status, six_link,
+                                         unidentified, item_text));
+    }
     // Trade filters for a preset (normal | base), without searching.
     void request_prepare(const std::string& preset, const std::string& item_text) {
         start("PREPARE\n" + preset + "\n" + item_text);
     }
-    // Ask the daemon to open a trade search URL in the user's browser.
-    void open_url(const std::string& url) { start("OPEN\n" + url); }
     bool busy() const { return fd_ >= 0; }
     // Drops the request in flight, if any: its reply is never reported.
     void cancel() {
@@ -210,6 +219,10 @@ public:
     bool poll(PriceReply* out);
 
 private:
+    static std::string trade_body(const std::vector<TradeFilter>& enabled, bool base_only,
+                                  const std::string& corrupted, const std::string& preset,
+                                  const std::string& listing_status, bool six_link, bool unidentified,
+                                  const std::string& item_text);
     void start(const std::string& body);
     bool fail(PriceReply* out, const std::string& message);
     void close_socket();
