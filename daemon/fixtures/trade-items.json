@@ -18,6 +18,17 @@
      "disc": "alt_x"
     }
    ]
+  },
+  {
+   "id": "map",
+   "label": "Maps",
+   "entries": [
+    {
+     "type": "AbyssalTemplar",
+     "text": "Mercenary Warrant (Chaplain of the Well)",
+     "disc": "mercenary_warrant"
+    }
+   ]
   }
  ]
 }

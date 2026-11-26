@@ -122,13 +122,13 @@
      "type": "explicit"
     },
     {
-     "id": "explicit.stat_3372524247",
-     "text": "+#% to Fire Resistance",
+     "id": "explicit.stat_1050105434",
+     "text": "+# to maximum Mana",
      "type": "explicit"
     },
     {
-     "id": "explicit.stat_1050105434",
-     "text": "+# to maximum Mana",
+     "id": "explicit.stat_3372524247",
+     "text": "+#% to Fire Resistance",
      "type": "explicit"
     },
     {
@@ -167,13 +167,13 @@
      "type": "explicit"
     },
     {
-     "id": "explicit.stat_4079888060",
-     "text": "# Added Passive Skills are Jewel Sockets",
+     "id": "explicit.stat_3023957681",
+     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
      "type": "explicit"
     },
     {
-     "id": "explicit.stat_3023957681",
-     "text": "#% chance to gain Onslaught for 4 seconds on Kill",
+     "id": "explicit.stat_4079888060",
+     "text": "# Added Passive Skills are Jewel Sockets",
      "type": "explicit"
     },
     {
@@ -279,23 +279,23 @@
      "type": "fractured"
     },
     {
-     "id": "fractured.stat_3372524247",
-     "text": "+#% to Fire Resistance",
-     "type": "fractured"
-    },
-    {
      "id": "fractured.stat_4220027924",
      "text": "+#% to Cold Resistance",
      "type": "fractured"
     },
     {
-     "id": "fractured.stat_328541901",
-     "text": "+# to Intelligence",
+     "id": "fractured.stat_3372524247",
+     "text": "+#% to Fire Resistance",
      "type": "fractured"
     },
     {
      "id": "fractured.stat_1050105434",
      "text": "+# to maximum Mana",
+     "type": "fractured"
+    },
+    {
+     "id": "fractured.stat_328541901",
+     "text": "+# to Intelligence",
      "type": "fractured"
     },
     {
@@ -486,7 +486,33 @@
   {
    "id": "mercenary",
    "label": "Mercenary",
-   "entries": []
+   "entries": [
+    {
+     "id": "mercenary.skill_56180",
+     "text": "Flame Dash",
+     "type": "mercenary"
+    },
+    {
+     "id": "mercenary.skill_50122",
+     "text": "Abyssal Spray",
+     "type": "mercenary"
+    },
+    {
+     "id": "mercenary.support_10608",
+     "text": "Greater Cooldown Recovery (Tier 3)",
+     "type": "mercenary"
+    },
+    {
+     "id": "mercenary.support_61471",
+     "text": "Critical Chance (Tier 2)",
+     "type": "mercenary"
+    },
+    {
+     "id": "mercenary.support_27970",
+     "text": "Greater Pierce (Tier 3)",
+     "type": "mercenary"
+    }
+   ]
   },
   {
    "id": "veiled",

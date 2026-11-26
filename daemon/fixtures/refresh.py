@@ -50,6 +50,10 @@ STAT_TEXTS2 = {
 CURRENCIES = {"chaos", "divine", "alch", "exalted", "mirror", "alt", "chance", "fusing", "jew", "chrome", "vaal",
               "regal", "scour", "gcp", "chisel", "regret", "annul", "blessed", "transmute", "aug"}
 
+# A Mercenary Warrant's skills and supports (trade.rs's warrant test).
+MERCENARY_TEXTS = {"Abyssal Spray", "Greater Pierce (Tier 3)", "Critical Chance (Tier 2)", "Flame Dash",
+                   "Greater Cooldown Recovery (Tier 3)"}
+
 # Stat texts the tests' items use (trade.rs RING), in every group, and the
 # pseudo totals trade.rs looks up by name.
 STAT_TEXTS = {
@@ -174,13 +178,16 @@ def main():
 
     stats = get(f"{TRADE}/data/stats")
     save("trade-stats.json", {"result": [
-        {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"] if e["text"] in STAT_TEXTS]}
+        {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"]
+                                                if e["text"] in (MERCENARY_TEXTS if g["id"] == "mercenary" else STAT_TEXTS)]}
         for g in stats["result"]
     ]})
     items = get(f"{TRADE}/data/items")
     save("trade-items.json", {"result": [
-        {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"] if e.get("type") == "Arc"]}
-        for g in items["result"] if g["id"] == "gem"
+        {"id": g["id"], "label": g["label"], "entries": [
+            e for e in g["entries"]
+            if e.get("type") == "Arc" or e.get("text") == "Mercenary Warrant (Chaplain of the Well)"]}
+        for g in items["result"] if g["id"] in ("gem", "map")
     ]})
     static = get(f"{TRADE}/data/static")
     save("trade-static.json", {"result": [
