@@ -108,6 +108,7 @@
             <div data-if="!searched">
                 <div class="actions">
                     <div class="button" data-event-click="search">{{searching ? 'Searching…' : 'Search'}}</div>
+                    <div class="button secondary" data-event-click="open_trade">Open on trade site</div>
                 </div>
             </div>
             <div data-if="searched">
@@ -156,7 +157,7 @@
                 </div>
                 <div class="actions">
                     <div data-attr-class="stale ? 'button' : 'button secondary'" data-event-click="search">{{searching ? 'Searching…' : 'Search again'}}</div>
-                    <div class="button secondary" data-if="has_url" data-event-click="open_trade">Open on trade site</div>
+                    <div class="button secondary" data-event-click="open_trade">Open on trade site</div>
                 </div>
             </div>
         </div>
