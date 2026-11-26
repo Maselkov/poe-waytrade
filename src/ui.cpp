@@ -271,7 +271,7 @@ struct Model {
     Rml::String name, base, subtitle, rarity;
     Rml::String state;  // status | prices | trade
     Rml::String status, total, hint;
-    bool status_error = false, searching = false, has_url = false, closable = false;
+    bool status_error = false, searching = false, closable = false;
     // Trade search options
     // The base and corruption chips name the item's own base and state, and
     // are lit when the search keeps to it (dim: any base of the category, any
@@ -847,7 +847,6 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("map_mods", &model.map_mods);
     c.Bind("profile", &model.profile);
     c.Bind("searching", &model.searching);
-    c.Bind("has_url", &model.has_url);
     c.Bind("price_rows", &model.price_rows);
     c.Bind("price_foot", &model.price_foot);
     c.Bind("foot_tag", &model.foot_tag);
@@ -1232,7 +1231,6 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.state = "trade";
         m.status = pc.status();
         m.total = reply->total;
-        m.has_url = !reply->url.empty();
         m.searched = reply->searched;
         m.stale = pc.stale();
         m.base_only = reply->base_only;

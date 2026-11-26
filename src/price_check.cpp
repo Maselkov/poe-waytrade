@@ -710,11 +710,16 @@ void PriceCheck::toggle_unidentified() {
     changed();
 }
 
-void PriceCheck::search() {
-    if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
+std::vector<TradeFilter> PriceCheck::enabled_filters() const {
     std::vector<TradeFilter> enabled;
     for (const TradeFilter& f : reply_->filters)
         if (f.enabled) enabled.push_back(f);
+    return enabled;
+}
+
+void PriceCheck::search() {
+    if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
+    std::vector<TradeFilter> enabled = enabled_filters();
     status_.clear();
     daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, reply_->preset, reply_->listing_status,
                           reply_->six_link, reply_->unidentified, item_text_);
@@ -742,6 +747,9 @@ void PriceCheck::set_profile(int profile) {
     changed();
 }
 
+// The filters as they are now, searched or not.
 void PriceCheck::open_trade() {
-    if (reply_ && !reply_->url.empty()) opener_.open_url(reply_->url);
+    if (!reply_ || reply_->status != "trade") return;
+    opener_.open_trade(enabled_filters(), reply_->base_only, reply_->corrupted, reply_->preset, reply_->listing_status,
+                       reply_->six_link, reply_->unidentified, item_text_);
 }

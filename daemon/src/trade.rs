@@ -698,17 +698,7 @@ impl Trade {
         prices: &PriceDb,
     ) -> Result<TradeResult, String> {
         self.ensure_data()?;
-        let data = &self.data.as_ref().unwrap().0;
-        let filters = build_filters(item, data, options.preset);
-        let chosen: Vec<Option<Bounds>> = filters
-            .iter()
-            .enumerate()
-            .map(|(i, f)| enabled.iter().find(|c| c.index == i).map(|c| (c.min.or(f.min), c.max)))
-            .collect();
-        let mut body = query(item, &filters, &chosen, options);
-        if let Some(t) = transfigured_type(item, data).or_else(|| warrant_type(item, data)) {
-            body["query"]["type"] = t;
-        }
+        let (filters, chosen, body) = search_body(&self.data.as_ref().unwrap().0, item, enabled, options);
         let body = body.to_string();
         let league_path = ninja::encode(league);
 
@@ -739,6 +729,21 @@ impl Trade {
             singles = parse_fetch(&resp.body, data, prices, unix_now(), &columns)?;
         }
         Ok(trade_result(singles, total, &id, &league_path))
+    }
+
+    /// The search for these filters on the trade site, without searching:
+    /// the query in the page's address ("?q="), so it needs no request to
+    /// the trade API and follows the filters as they are now.
+    pub fn site_url(
+        &mut self,
+        item: &Item,
+        enabled: &[Choice],
+        options: SearchOptions,
+        league: &str,
+    ) -> Result<String, String> {
+        self.ensure_data()?;
+        let (_, _, body) = search_body(&self.data.as_ref().unwrap().0, item, enabled, options);
+        Ok(site_url(&body, league))
     }
 
     /// A currency's icon (PNG), from web.poecdn.com (a plain CDN, no browser
@@ -2859,6 +2864,76 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
     json!({ "query": q, "sort": { "price": "asc" } })
 }
 
+/// The filters for an item, which of them are used (with their bounds),
+/// and the search's body: `enabled` ticked, the rest disabled.
+fn search_body(
+    data: &TradeData,
+    item: &Item,
+    enabled: &[Choice],
+    options: SearchOptions,
+) -> (Vec<Filter>, Vec<Option<Bounds>>, Value) {
+    let filters = build_filters(item, data, options.preset);
+    let chosen: Vec<Option<Bounds>> = filters
+        .iter()
+        .enumerate()
+        .map(|(i, f)| enabled.iter().find(|c| c.index == i).map(|c| (c.min.or(f.min), c.max)))
+        .collect();
+    let mut body = query(item, &filters, &chosen, options);
+    add_unticked(&mut body, &filters, &chosen);
+    if let Some(t) = transfigured_type(item, data).or_else(|| warrant_type(item, data)) {
+        body["query"]["type"] = t;
+    }
+    (filters, chosen, body)
+}
+
+/// The trade site's page for a search body, with the query in its address.
+fn site_url(body: &Value, league: &str) -> String {
+    format!("{}/{}?q={}", game::current().trade_site(), ninja::encode(league), ninja::encode(&body.to_string()))
+}
+
+/// Adds the unticked modifiers to `body` (a `query`) as disabled stat
+/// filters, with their default bounds: they don't change what's found, but
+/// "Open on trade site" shows every modifier, unticked ones unticked, for
+/// the user to tick there. Item properties (DPS, links) can't be disabled
+/// one by one, and the "no life" group says nothing on the trade site
+/// unticked, so those stay out.
+fn add_unticked(body: &mut Value, filters: &[Filter], chosen: &[Option<Bounds>]) {
+    let stat = |id: &str, bounds: Bounds| match bounds {
+        (None, None) => json!({ "id": id, "disabled": true }),
+        _ => json!({ "id": id, "value": bounds_json(bounds), "disabled": true }),
+    };
+    let stats = &mut body["query"]["stats"];
+    for (f, choice) in filters.iter().zip(chosen) {
+        if choice.is_some() {
+            continue;
+        }
+        let bounds = (f.min, f.max);
+        match &f.target {
+            Target::Stat(id) => push_json(&mut stats[0]["filters"], stat(id, bounds)),
+            Target::StatOption(id, option) => push_json(
+                &mut stats[0]["filters"],
+                json!({ "id": id, "value": { "option": option }, "disabled": true }),
+            ),
+            Target::AnyStat(ids) => push_json(
+                stats,
+                json!({
+                    "type": "count",
+                    "value": { "min": 1 },
+                    "filters": ids.iter().map(|id| stat(id, bounds)).collect::<Vec<_>>(),
+                    "disabled": true,
+                }),
+            ),
+            Target::Property(..) | Target::Flag(..) | Target::NoneOf(_) => {}
+        }
+    }
+}
+
+fn push_json(array: &mut Value, v: Value) {
+    if let Some(a) = array.as_array_mut() {
+        a.push(v);
+    }
+}
+
 /// PoE2's trade site has the filters of /api/trade2/data/filters: weapon
 /// and armour properties together in `equipment_filters`, item level and
 /// quality in `type_filters`, no links. Moves PoE1's filters where PoE2
@@ -4647,6 +4722,66 @@ mod tests {
             assert!(ids.contains(id), "{id} isn't a trade stat");
         }
         assert_eq!(searched[0], "pseudo.pseudo_total_life");
+    }
+
+    #[test]
+    fn unticked_modifiers_go_in_disabled() {
+        let data = real_data();
+        let item = crate::item::parse(RING).unwrap();
+        let filters = build_filters(&item, &data, Preset::Normal);
+        // Total life ticked, the rest not.
+        let chosen: Vec<Option<Bounds>> =
+            filters.iter().enumerate().map(|(i, f)| (i == 0).then_some((f.min, f.max))).collect();
+        let opts = SearchOptions {
+            six_link: false,
+            unidentified: false,
+            base_only: false,
+            corrupted: Corrupted::No,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
+        let mut q = query(&item, &filters, &chosen, opts);
+        add_unticked(&mut q, &filters, &chosen);
+        let stats = stat_ids(&q);
+        assert_eq!(stats.len(), filters.len());
+        assert_eq!(stats[0]["id"], "pseudo.pseudo_total_life");
+        assert!(stats[0].get("disabled").is_none());
+        for s in &stats[1..] {
+            assert_eq!(s["disabled"], true, "{s}");
+        }
+        // With the filter's default minimum, ready to tick.
+        let rarity = filters.iter().position(|f| f.label.contains("Rarity")).unwrap();
+        assert_eq!(stats[rarity]["value"]["min"], json!(filters[rarity].min.unwrap() as i64));
+
+        // The same query, in the trade site's address.
+        let url = site_url(&q, "Covens");
+        let (head, encoded) = url.split_once("?q=").unwrap();
+        assert_eq!(head, "https://www.pathofexile.com/trade/search/Covens");
+        assert!(!encoded.contains(['{', '"', ' ', '&', '#']));
+        let decoded = String::from_utf8(
+            encoded
+                .split('%')
+                .enumerate()
+                .flat_map(|(i, part)| {
+                    if i == 0 {
+                        part.bytes().collect::<Vec<_>>()
+                    } else {
+                        let mut v = vec![u8::from_str_radix(&part[..2], 16).unwrap()];
+                        v.extend(part[2..].bytes());
+                        v
+                    }
+                })
+                .collect(),
+        )
+        .unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&decoded).unwrap(), q);
+
+        // All ticked: nothing added.
+        let all: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, f.max))).collect();
+        let before = query(&item, &filters, &all, opts);
+        let mut after = before.clone();
+        add_unticked(&mut after, &filters, &all);
+        assert_eq!(before, after);
     }
 
     const SEARCH: &str = include_str!("../fixtures/trade-search.json");

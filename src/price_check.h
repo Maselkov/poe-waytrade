@@ -170,6 +170,8 @@ public:
     void switch_view();
 
 private:
+    // The filters ticked now, with their bounds.
+    std::vector<TradeFilter> enabled_filters() const;
     void request_copy(WaylandInput& input, Mode mode, Purpose purpose);
     void begin_wait(WaylandInput& input, Mode mode, Purpose purpose, Clock::time_point deadline);
     void wait_for_clipboard(WaylandInput& input, Clock::time_point now);
@@ -202,7 +204,7 @@ private:
     DaemonClient wake_;    // the start-up ping; see daemon_state()
     std::string daemon_state_, daemon_error_;
     Clock::time_point wake_at_;
-    DaemonClient opener_;  // "open on trade site"; reply ignored
+    DaemonClient opener_;  // "open on trade site"; only failures logged
     // One-off saves (map marks, profile) go out one at a time, in order.
     DaemonClient sender_;
     std::deque<std::string> outbox_;
