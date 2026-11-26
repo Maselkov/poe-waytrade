@@ -173,6 +173,11 @@ POE_WAYTRADE_UI_DIR=$PWD/assets POE_WAYTRADE_DEMO_ITEM=item.txt \
 | `POE_WAYTRADE_DEBUG=1` | A debug window: focus, last key, clipboard state |
 | `POE_WAYTRADE_LOG=<file>` | Also write the layer's log to this file |
 
+`tests/ui-snapshot.sh <item.txt> <out.png> [ui dir]` renders the panel for
+an item to an image, in a nested, invisible KWin with its own daemon, using
+`POE_WAYTRADE_DEMO_ITEM` and `POE_WAYTRADE_SNAPSHOT`. Pass a copy of an older
+`assets/` as `ui dir` for a before/after comparison.
+
 `tests/clipboard-kwin.sh [text|image]` uses `POE_WAYTRADE_TEST_COPY` in a
 nested, invisible KWin to check that the clipboard is restored.
 
