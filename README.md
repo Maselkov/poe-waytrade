@@ -368,8 +368,11 @@ Ways to adjust a filter:
   pointer one step. Stepping the maximum to the top of the range leaves no
   maximum.
 - **Click a half to type into it.** The overlay takes the keyboard from the
-  game while you type, so digits don't drink flasks. Tab switches halves.
-  Enter applies and ticks the filter. Esc or a click in the game cancels. Typing needs a compositor with layer-shell (KDE Plasma, Sway,
+  game while you type, so digits don't drink flasks. Tab moves to the next
+  value (the maximum, then the next filter's minimum), Shift+Tab back. A
+  typed value ticks its filter. Enter applies it and searches; clicking
+  anywhere else in the panel, Search included, applies it too. Esc or a
+  click in the game cancels. Typing needs a compositor with layer-shell (KDE Plasma, Sway,
   Hyprland and other wlroots ones, COSMIC). On GNOME and gamescope, use the
   wheel and sliders.
 

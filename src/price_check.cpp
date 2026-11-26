@@ -458,9 +458,6 @@ void PriceCheck::set_bounds(int index, double min, double max) {
 
 void PriceCheck::edit_bounds(int index, int field) {
     if (!reply_ || reply_->status != "trade") return;
-    auto f = std::find_if(reply_->filters.begin(), reply_->filters.end(),
-                          [&](const TradeFilter& f) { return f.index == index; });
-    if (f == reply_->filters.end() || f->min.empty()) return;  // a yes/no filter
     field = field == 1 ? 1 : 0;
     if (edit_ && edit_->index == index) {  // the other half of the same filter
         if (edit_->field != field) {
@@ -475,12 +472,51 @@ void PriceCheck::edit_bounds(int index, int field) {
         changed();
         return;
     }
-    if (edit_) end_edit(true);  // moving to another filter keeps what was typed
-    lock();
-    edit_ = BoundsEdit{index, field, f->min, f->max, true};
+    // Moving to another filter keeps what was typed, and the keyboard.
+    if (edit_) {
+        BoundsEdit old = *edit_;
+        if (!begin_edit(index, field)) return;
+        if (old.typed) apply_typed(old);
+        return;
+    }
+    if (!begin_edit(index, field)) return;
     grab_.take();
     status_.clear();
+}
+
+bool PriceCheck::begin_edit(int index, int field) {
+    auto f = std::find_if(reply_->filters.begin(), reply_->filters.end(),
+                          [&](const TradeFilter& f) { return f.index == index; });
+    if (f == reply_->filters.end() || f->min.empty()) return false;  // a yes/no filter
+    lock();
+    edit_ = BoundsEdit{index, field, f->min, f->max, true, false};
     changed();
+    return true;
+}
+
+void PriceCheck::apply_edit() {
+    if (edit_) end_edit(edit_->typed);
+}
+
+void PriceCheck::tab_edit(int dir) {
+    // Within the filter: minimum -> maximum, or back.
+    if ((dir > 0) == (edit_->field == 0)) {
+        edit_->field = 1 - edit_->field;
+        edit_->fresh = true;
+        return;
+    }
+    auto at = std::find(tab_order_.begin(), tab_order_.end(), edit_->index);
+    if (at == tab_order_.end() || tab_order_.size() < 2) {
+        edit_->field = 1 - edit_->field;  // nowhere else to go
+        edit_->fresh = true;
+        return;
+    }
+    // On to the next filter (or the previous one's maximum), round the ends.
+    int n = (int)tab_order_.size();
+    int next = tab_order_[((at - tab_order_.begin()) + dir + n) % n];
+    BoundsEdit old = *edit_;
+    if (!begin_edit(next, dir > 0 ? 0 : 1)) return;
+    if (old.typed) apply_typed(old);
 }
 
 // Number keys only, so the keyboard layout doesn't matter: the top row
@@ -512,18 +548,21 @@ void PriceCheck::handle_edit_keys() {
             edit_->fresh = false;
             bool ok = c != '.' || text.find('.') == std::string::npos;
             if (ok && text.size() < 9) text += c;
+            edit_->typed = true;
         } else if (k.code == KEY_BACKSPACE) {
             if (edit_->fresh) text.clear();
             else if (!text.empty()) text.pop_back();
             edit_->fresh = false;
+            edit_->typed = true;
         } else if (k.code == KEY_DELETE) {
             text.clear();
             edit_->fresh = false;
+            edit_->typed = true;
         } else if (k.code == KEY_TAB) {
-            edit_->field = 1 - edit_->field;
-            edit_->fresh = true;
+            tab_edit(k.shift ? -1 : 1);
         } else if (k.code == KEY_ENTER || k.code == KEY_KPENTER) {
             end_edit(true);
+            search();
             return;
         } else if (k.code == KEY_ESC) {
             end_edit(false);
@@ -542,22 +581,27 @@ void PriceCheck::end_edit(bool apply) {
     changed();
     if (edit) poe_log("bounds edit: filter %d %s, typed \"%s\" / \"%s\"", edit->index, apply ? "applied" : "cancelled",
                       edit->min.c_str(), edit->max.c_str());
-    if (!apply || !edit || !reply_ || reply_->status != "trade") return;
+    if (apply && edit) apply_typed(*edit);
+}
+
+void PriceCheck::apply_typed(const BoundsEdit& edit) {
+    if (!reply_ || reply_->status != "trade") return;
     for (TradeFilter& f : reply_->filters) {
-        if (f.index != edit->index) continue;
+        if (f.index != edit.index) continue;
         auto number = [](const std::string& s, double fallback) {
             char* end = nullptr;
             double v = strtod(s.c_str(), &end);
             return (s.empty() || end == s.c_str()) ? fallback : v;
         };
-        double min = number(edit->min, atof(f.min.c_str()));
-        double max = number(edit->max, -1);
+        double min = number(edit.min, atof(f.min.c_str()));
+        double max = number(edit.max, -1);
         if (max >= 0 && max < min) std::swap(min, max);
         if (!f.enabled) {
             f.enabled = true;
             stale_ = reply_->searched;
         }
-        set_bounds(edit->index, min, max);
+        set_bounds(edit.index, min, max);
+        changed();
     }
 }
 
@@ -718,6 +762,7 @@ std::vector<TradeFilter> PriceCheck::enabled_filters() const {
 }
 
 void PriceCheck::search() {
+    apply_edit();
     if (!reply_ || reply_->status != "trade" || daemon_.busy()) return;
     std::vector<TradeFilter> enabled = enabled_filters();
     status_.clear();
@@ -749,6 +794,7 @@ void PriceCheck::set_profile(int profile) {
 
 // The filters as they are now, searched or not.
 void PriceCheck::open_trade() {
+    apply_edit();
     if (!reply_ || reply_->status != "trade") return;
     opener_.open_trade(enabled_filters(), reply_->base_only, reply_->corrupted, reply_->preset, reply_->listing_status,
                        reply_->six_link, reply_->unidentified, item_text_);
