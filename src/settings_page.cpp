@@ -64,7 +64,6 @@ SettingsPage::SettingsPage() {
     if (const char* tab = getenv("POE_WAYTRADE_DEMO_SETTINGS")) {
         tab_ = (Tab)std::clamp(atoi(tab), 0, 4);
         visible_ = true;
-        send("ACCOUNT\n");
     }
 }
 
@@ -73,15 +72,7 @@ void SettingsPage::send(const std::string& body) { outbox_.push_back(body); }
 void SettingsPage::update(WaylandInput& input, int game_clicks) {
     PriceReply reply;
     if (client_.poll(&reply)) {
-        bool account_request = in_flight_ == "ACCOUNT\n" || in_flight_ == "LOGIN\n" || in_flight_ == "LOGOUT\n";
-        if (account_request) {
-            if (reply.status == "ok" && !reply.account.empty()) {
-                set_account(reply.account);
-            } else {
-                poe_log("settings: %s: %s", in_flight_.substr(0, in_flight_.size() - 1).c_str(), reply.message.c_str());
-                if (in_flight_ != "ACCOUNT\n") set_note(reply.message.empty() ? "Couldn't reach the daemon" : reply.message, true);
-            }
-        } else if (reply.status == "ok") {
+        if (reply.status == "ok") {
             apply_reply(reply);
             // A change is saved once its reply is in.
             if (in_flight_.rfind("SET\n", 0) == 0 && outbox_.empty() && !note_error_ && note_.empty()) set_note("Saved");
@@ -94,13 +85,6 @@ void SettingsPage::update(WaylandInput& input, int game_clicks) {
             poe_log("settings: %s", reply.message.c_str());
         }
         in_flight_.clear();
-    }
-    // While the login window is open: whether it's closed yet, and with
-    // what (the daemon reads the cookie it left).
-    if (account_ == "logging_in" && Clock::now() - account_asked_ > std::chrono::seconds(1) &&
-        std::find(outbox_.begin(), outbox_.end(), "ACCOUNT\n") == outbox_.end() && in_flight_ != "ACCOUNT\n") {
-        account_asked_ = Clock::now();
-        send("ACCOUNT\n");
     }
     if (!client_.busy() && in_flight_.empty() && !outbox_.empty()) {
         in_flight_ = outbox_.front();
@@ -194,7 +178,6 @@ void SettingsPage::open() {
     if (visible_) return;
     visible_ = true;
     if (outbox_.empty() && in_flight_.empty()) send("SETTINGS\n");  // the league list may be new
-    send("ACCOUNT\n");
     set_note("");
     changed();
 }
@@ -372,24 +355,6 @@ std::vector<SettingsPage::LeagueChoice> SettingsPage::league_choices() const {
     auto saved = [&](const LeagueChoice& c) { return c.value == values_.league; };
     if (std::none_of(out.begin(), out.end(), saved)) out.push_back({values_.league, values_.league, ""});
     return out;
-}
-
-void SettingsPage::set_account(const std::string& account) {
-    if (account == account_) return;
-    account_ = account;
-    changed();
-}
-
-void SettingsPage::login() {
-    send("LOGIN\n");
-    set_account("logging_in");
-    account_asked_ = Clock::now();
-    set_note("");
-}
-
-void SettingsPage::logout() {
-    send("LOGOUT\n");
-    set_note("");
 }
 
 void SettingsPage::set_league(const std::string& league) {
