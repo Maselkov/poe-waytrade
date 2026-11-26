@@ -147,6 +147,10 @@ pub struct ModLine {
     pub corruption: bool,
     /// The mod's tags from its advanced-copy header ("Life", "Defences").
     pub tags: Vec<String>,
+    /// How much quality raises the mod, from its advanced-copy header ("— 20%
+    /// Increased": a catalyst on jewellery). `text` and `ranges` already
+    /// include it: they're what the game shows and the trade site indexes.
+    pub increased: Option<u32>,
     /// Lines with the same group come from one advanced-copy header, or
     /// one section of plain copy. The game wraps a long mod onto two lines
     /// ("…Ailments for" / "each type of Elemental Ailment on Enemy"), which
@@ -161,12 +165,59 @@ fn header_tier(header: &str) -> Option<u32> {
     rest[..rest.find(')')?].trim().parse().ok()
 }
 
-/// `{ Prefix Modifier "Virile" (Tier: 3) — Life, Defences }` -> ["Life",
-/// "Defences"]. A header without tags has no " — ".
-fn header_tags(header: &str) -> Vec<String> {
-    let Some(inner) = header.strip_prefix("{ ").and_then(|h| h.strip_suffix(" }")) else { return Vec::new() };
-    let Some((_, tags)) = inner.rsplit_once(" — ") else { return Vec::new() };
-    tags.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect()
+/// `{ Prefix Modifier "Virile" (Tier: 3) — Life, Defences }` -> (["Life",
+/// "Defences"], None). A catalysed mod's header ends in its increase:
+/// `{ Unique Modifier — Damage, Elemental  — 20% Increased }` -> (["Damage",
+/// "Elemental"], Some(20)). A header without tags or increase has no " — ".
+fn header_tags(header: &str) -> (Vec<String>, Option<u32>) {
+    let Some(inner) = header.strip_prefix("{ ").and_then(|h| h.strip_suffix(" }")) else { return (Vec::new(), None) };
+    let mut tags = Vec::new();
+    let mut increased = None;
+    for part in inner.split('\u{2014}').skip(1).map(str::trim) {
+        match part.strip_suffix("% Increased").and_then(|n| n.parse().ok()) {
+            Some(n) => increased = Some(n),
+            None => tags.extend(part.split(',').map(|t| t.trim().to_string()).filter(|t| !t.is_empty())),
+        }
+    }
+    (tags, increased)
+}
+
+/// A catalysed mod's numbers as the game shows them: each raised by `pct`%
+/// and truncated, like the game (34 at 20% is 40.8, shown as 40). The roll
+/// ranges are raised the same way. Numbers without a range aren't touched.
+fn apply_increase(text: &str, ranges: &mut [Option<(f64, f64)>], pct: u32) -> String {
+    let raise = |v: f64, decimals: bool| {
+        let scale = if decimals { 100.0 } else { 1.0 };
+        (v * (100.0 + f64::from(pct)) / 100.0 * scale + 1e-9).trunc() / scale
+    };
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut n = 0;
+    let mut i = 0;
+    while i < chars.len() {
+        if !chars[i].is_ascii_digit() {
+            out.push(chars[i]);
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < chars.len()
+            && (chars[i].is_ascii_digit() || (chars[i] == '.' && chars.get(i + 1).is_some_and(|c| c.is_ascii_digit())))
+        {
+            i += 1;
+        }
+        let num: String = chars[start..i].iter().collect();
+        let decimals = num.contains('.');
+        match (ranges.get_mut(n), num.parse::<f64>()) {
+            (Some(Some((lo, hi))), Ok(v)) => {
+                (*lo, *hi) = (raise(*lo, decimals), raise(*hi, decimals));
+                out.push_str(&crate::trade::trim_number(raise(v, decimals)));
+            }
+            _ => out.push_str(&num),
+        }
+        n += 1;
+    }
+    out
 }
 
 /// `{ Searing Exarch Implicit Modifier (Grand) — … }` -> (Exarch, Some(3)).
@@ -224,6 +275,7 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
                 eldritch: None,
                 corruption: false,
                 tags: Vec::new(),
+                increased: None,
                 group: 0,
             };
         }
@@ -237,6 +289,7 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
         eldritch: None,
         corruption: false,
         tags: Vec::new(),
+        increased: None,
         group: 0,
     }
 }
@@ -411,6 +464,7 @@ pub fn parse(text: &str) -> Option<Item> {
             let mut eldritch = None;
             let mut corruption = false;
             let mut tags = Vec::new();
+            let mut increased = None;
             for line in section {
                 // A property, wherever the game puts it. PoE2's granted
                 // skills come in a section of their own among the mods.
@@ -430,7 +484,7 @@ pub fn parse(text: &str) -> Option<Item> {
                     let header = eldritch_header(line);
                     eldritch = header.map(|(e, _)| e);
                     corruption = line.starts_with("{ Corruption Implicit Modifier");
-                    tags = header_tags(line);
+                    (tags, increased) = header_tags(line);
                     match header {
                         Some((Eldritch::Exarch, t)) => item.searing = Some(t),
                         Some((Eldritch::Eater, t)) => item.tangled = Some(t),
@@ -446,6 +500,7 @@ pub fn parse(text: &str) -> Option<Item> {
                     continue;
                 }
                 // Advanced copy notes mods that quality doesn't scale.
+                let unscalable = line.ends_with(" — Unscalable Value");
                 let line = line.trim_end_matches(" — Unscalable Value");
                 let (text, mut ranges) = split_roll_ranges(line);
                 let mut m = mod_line(&text);
@@ -459,6 +514,10 @@ pub fn parse(text: &str) -> Option<Item> {
                         }
                     }
                 }
+                let increased = increased.filter(|_| !unscalable);
+                if let Some(pct) = increased {
+                    m.text = apply_increase(&m.text, &mut ranges, pct);
+                }
                 if m.kind == ModKind::Explicit
                     && let Some(kind) = header_kind
                 {
@@ -470,6 +529,7 @@ pub fn parse(text: &str) -> Option<Item> {
                 m.eldritch = eldritch;
                 m.corruption = corruption;
                 m.tags = tags.clone();
+                m.increased = increased;
                 m.group = group;
                 item.mods.push(m);
             }
@@ -947,6 +1007,48 @@ pub(crate) mod tests {
         assert_eq!(crafted.mods[1].kind, ModKind::Crafted);
         let shaped = parse(&FRACTURED_CROWN.replace("Fractured Item", "Shaper Item\nElder Item")).unwrap();
         assert_eq!(shaped.influences, vec!["shaper", "elder"]);
+    }
+
+    #[test]
+    fn catalyst_increase() {
+        assert_eq!(
+            header_tags("{ Prefix Modifier \"Virile\" (Tier: 3) — Life, Defences }"),
+            (vec!["Life".into(), "Defences".into()], None)
+        );
+        assert_eq!(
+            header_tags("{ Unique Modifier — Damage, Elemental  — 20% Increased }"),
+            (vec!["Damage".into(), "Elemental".into()], Some(20))
+        );
+        assert_eq!(header_tags("{ Suffix Modifier \"of Ire\" (Tier: 1) — 10% Increased }"), (vec![], Some(10)));
+        assert_eq!(header_tags("{ Unique Modifier }"), (vec![], None));
+
+        let raise = |line: &str, pct| {
+            let (text, mut ranges) = split_roll_ranges(line);
+            (apply_increase(&text, &mut ranges, pct), ranges)
+        };
+        // 34 * 1.2 = 40.8: truncated like the game.
+        assert_eq!(raise("34(30-40)% increased Damage", 20), ("40% increased Damage".into(), vec![Some((36.0, 48.0))]));
+        assert_eq!(
+            raise("Adds 5(3-6) to 10(9-11) Damage", 20),
+            ("Adds 6 to 12 Damage".into(), vec![Some((3.0, 7.0)), Some((10.0, 13.0))])
+        );
+        assert_eq!(raise("+0.8(0.6-1)% Leech", 20), ("+0.96% Leech".into(), vec![Some((0.72, 1.2))]));
+        assert_eq!(raise("-12(-12--9)% to Resistances", 20), ("-14% to Resistances".into(), vec![Some((10.0, 14.0))]));
+        // A number without a range isn't touched.
+        assert_eq!(raise("10% chance", 20).0, "10% chance");
+    }
+
+    #[test]
+    fn catalyst_unscalable() {
+        let text = "Item Class: Amulets\nRarity: Rare\nFoo\nOnyx Amulet\n--------\nItem Level: 80\n--------\n\
+                    { Prefix Modifier \"Virile\" (Tier: 1) — Life  — 20% Increased }\n+50(45-54) to maximum Life\n\
+                    { Unique Modifier  — 20% Increased }\nGrants Level 20 Aspect \u{2014} Unscalable Value\n";
+        let item = parse(text).unwrap();
+        let mods: Vec<_> = item.mods.iter().map(|m| (m.text.as_str(), m.increased, m.tags.clone())).collect();
+        assert_eq!(
+            mods,
+            [("+60 to maximum Life", Some(20), vec!["Life".to_string()]), ("Grants Level 20 Aspect", None, vec![])]
+        );
     }
 }
 

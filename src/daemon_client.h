@@ -61,6 +61,7 @@ struct TradeFilter {
     std::string roll;     // the item's own value; empty if none
     std::string column;   // short name over the listings' values ("Ele res")
     bool draw_slider = true;  // else lo..hi only bounds the wheel's steps
+    int increased = 0;        // % a catalyst raised the mod by; 0: none
 };
 
 struct TradeListing {

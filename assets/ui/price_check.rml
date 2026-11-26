@@ -81,6 +81,7 @@
                             <div class="mod">{{f.label}}</div>
                             <div class="mod-full">{{f.label}}</div>
                         </div>
+                        <div class="increased" data-if="f.increased != ''">{{f.increased}}</div>
                         <div data-attr-class="'tier ' + f.tier">{{f.tier}}</div>
                         <div class="bounds" data-if="f.split">
                             <div class="bound" data-class-editing="f.edit_field == 0" data-event-click="edit_bounds(f.index, 0)" data-event-mousescroll="bounds_scroll(f.index, 0)"><span class="star" data-if="f.max_roll">★</span>{{f.lo}}</div>
