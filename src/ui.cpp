@@ -629,6 +629,12 @@ struct OverlayUi::Impl {
     int map_order_profile = 0;
     std::vector<int> map_order;
     // The panel document for the current check.
+    // The pointer is over a filter's value (a .bound) in a panel.
+    bool over_bound() const {
+        for (Rml::Element* e = context->GetHoverElement(); e; e = e->GetParentNode())
+            if (e->IsClassSet("bound")) return true;
+        return false;
+    }
     const char* panel_doc(const PriceCheck& pc) const {
         return pc.purpose() == PriceCheck::Purpose::Map ? kMapDoc : kPriceDoc;
     }
@@ -1064,6 +1070,10 @@ void OverlayUi::update(PriceCheck& pc, ScreenScan& scan, WaylandInput* input, Vk
             case PointerEvent::Button:
                 // Clicking the panel keeps it open (see PriceCheck::lock).
                 if (ev.down) pc.lock();
+                // A click anywhere but a filter's value (which moves the
+                // edit, see edit_bounds) applies what's typed, before the
+                // click does what it does (a search with it, say).
+                if (ev.down && pc.bounds_edit() && !d.over_bound()) pc.apply_edit();
                 ev.down ? d.context->ProcessMouseButtonDown(ev.button, 0)
                         : d.context->ProcessMouseButtonUp(ev.button, 0);
                 break;
@@ -1183,7 +1193,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         else if (const auto& e = pc.bounds_edit(); e && !pc.keyboard_taken())
             m.hint = "Taking the keyboard from the game…";
         else if (e)
-            m.hint = "Type a number · Tab: min/max · Enter: apply · Esc: cancel";
+            m.hint = "Type a number · Tab: next · Enter: search · Esc: cancel";
         else if (const auto& r = pc.reply(); r && r->status == "ok" && !r->prices.empty() && !r->prices[0].unique.empty())
             m.hint = "Click a unique to search for it";
         break;
@@ -1315,6 +1325,12 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.filter_groups.erase(std::remove_if(m.filter_groups.begin(), m.filter_groups.end(),
                                              [](const UiGroup& g) { return g.filters.empty(); }),
                               m.filter_groups.end());
+        // Tab goes through the values in the order they're shown.
+        std::vector<int> tab_order;
+        for (const UiGroup& g : m.filter_groups)
+            for (const UiFilter& f : g.filters)
+                if (f.split) tab_order.push_back(f.index);
+        pc.set_tab_order(std::move(tab_order));
         // Columns over the listings: a gem's level and quality, and what each
         // listing has of the searched filters, in panel order, three at most.
         // A column the same on every row (a gem level searched exactly, an

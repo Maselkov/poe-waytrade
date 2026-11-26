@@ -145,15 +145,24 @@ public:
     bool stale() const { return stale_; }
     // Typing a filter's minimum (field 0) or maximum (field 1). Clicking
     // either half of its value starts (or moves) the edit and takes the
-    // keyboard from the game (wl_grab.h); clicking the other half or Tab
-    // switches between minimum and maximum, Enter applies, Esc or a click in
-    // the game cancels. Without layer-shell, status() says so.
+    // keyboard from the game (wl_grab.h); clicking the other half switches
+    // between minimum and maximum. Tab moves on to the next value (the
+    // maximum, then the next filter's minimum), Shift+Tab back. Enter
+    // applies and searches; a click anywhere else in the panel (Search and
+    // "Open on trade site" included) applies; Esc or a click in the game
+    // cancels. Without layer-shell, status() says so.
     void edit_bounds(int index, int field = 0);
+    // Applies what's typed, if anything was (see end_edit).
+    void apply_edit();
+    // The filters that can be typed into, in panel order, for Tab. The UI
+    // sets it as it lays them out.
+    void set_tab_order(std::vector<int> order) { tab_order_ = std::move(order); }
     struct BoundsEdit {
         int index = -1;
         int field = 0;         // 0: minimum, 1: maximum
         std::string min, max;  // as typed
         bool fresh = true;     // the next digit replaces the field's text
+        bool typed = false;    // a key changed min or max
     };
     const std::optional<BoundsEdit>& bounds_edit() const { return edit_; }
     bool keyboard_taken() const { return grab_.focused(); }
@@ -274,6 +283,13 @@ private:
     KeyboardGrab grab_;
     bool grab_focused_ = false;  // as last shown
     std::optional<BoundsEdit> edit_;
+    std::vector<int> tab_order_;
     void handle_edit_keys();
+    // Tab (+1) or Shift+Tab (-1): the next or previous value to type into.
+    void tab_edit(int dir);
+    // Starts typing into a filter, the keyboard already ours or being taken.
+    bool begin_edit(int index, int field);
     void end_edit(bool apply);
+    // Writes an edit's text into its filter, and ticks it.
+    void apply_typed(const BoundsEdit& edit);
 };
