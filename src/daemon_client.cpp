@@ -93,6 +93,7 @@ PriceReply parse_reply(const std::string& body) {
             if (f.size() >= 13) t.roll = f[12];
             if (f.size() >= 14) t.column = f[13];
             if (f.size() >= 15) t.draw_slider = f[14] != "0";
+            if (f.size() >= 16) t.increased = atoi(f[15].c_str());
             reply.filters.push_back(t);
         } else if (f[0] == "listing" && f.size() >= 5) {
             TradeListing l{f[1], f[2], f[3].empty() ? -1 : strtod(f[3].c_str(), nullptr), f[4]};

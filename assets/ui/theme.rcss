@@ -134,6 +134,8 @@ body {
 .filter:hover .mod-cell.cut .mod-full { display: block; }
 .filter.off .mod-full { color: $text-muted; }
 .filter.off .mod { color: $text-muted; }
+/* A catalysed mod's increase ("+20%"), before the tier. */
+.filter-main .increased { flex-shrink: 0; font-size: 11dp; color: #8fb8d8; margin-left: 6dp; }
 .filter-main .tier { width: 22dp; flex-shrink: 0; text-align: right; font-size: 11dp; color: $text-faint; margin-left: 6dp; }
 /* A filter's bounds: one chip split into its minimum and its maximum ("max"
    in faint text when there's none). Each half is clicked to type into
@@ -465,6 +467,7 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .pv-meta { color: $text-muted; font-size: 11dp; margin-top: 2dp; }
 .pv-divider, .pv-line.divider { height: 1dp; background-color: $divider; margin: 6dp 20dp; }
 .pv-line { color: #8888ff; padding: 1dp 0; }
+.pv-line.quality { color: $text-muted; }
 .pv-line.enchant { color: #b8daf2; }
 .pv-line.crafted { color: #b4b4ff; }
 .pv-line.fractured { color: #a29162; }

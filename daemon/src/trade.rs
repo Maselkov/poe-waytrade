@@ -115,6 +115,9 @@ pub struct Filter {
     pub section: Section,
     /// The mod's affix tier (1 is best), for listed mods from advanced copy.
     pub tier: Option<u32>,
+    /// How much quality raises the mod (a catalyst), from advanced copy. The
+    /// value and range already include it.
+    pub increased: Option<u32>,
     /// The item's own value, marked on the slider.
     pub roll: Option<f64>,
     /// Default maximum. Only Viscera have one: their tiers share a trade
@@ -145,6 +148,7 @@ impl Filter {
             default_on: on,
             section,
             tier: None,
+            increased: None,
             roll: Some(value),
             max: None,
         }
@@ -1543,6 +1547,7 @@ fn weapon_filters(item: &Item, ticked: bool) -> Vec<Filter> {
                 default_on: false,
                 section: Section::Weapon,
                 tier: None,
+                increased: None,
                 max: None,
                 roll: Some(crit),
             });
@@ -1702,6 +1707,7 @@ fn map_filters(item: &Item) -> Vec<Filter> {
         default_on: true,
         section: Section::Map,
         tier: None,
+        increased: None,
         max: None,
         roll: None,
     };
@@ -1728,6 +1734,7 @@ fn stored_experience_filter(xp: u64) -> Filter {
         default_on: true,
         section: Section::Base,
         tier: None,
+        increased: None,
         max: None,
         roll: Some(xp),
     }
@@ -1760,6 +1767,7 @@ fn memory_strands_filter(item: &Item) -> Option<Filter> {
         default_on: strands >= 60.0,
         section: Section::Base,
         tier: None,
+        increased: None,
         max: None,
         roll: Some(strands),
     })
@@ -1780,12 +1788,21 @@ fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         let (template, values) = templatize(&m.text);
         let Some(found) = find_stat(data, m.kind, &template, &values, local) else { continue };
         let Some((value, Some((lo, hi)))) = found.roll(&values, &m.ranges) else { continue };
-        if hi <= lo {
-            continue;
-        }
         let section = mod_section(m, Section::Mod);
-        let mut filter = Filter::unique(m.text.clone(), found.target, value * found.sign, (lo, hi), section);
+        let mut filter = if hi > lo {
+            Filter::unique(m.text.clone(), found.target, value * found.sign, (lo, hi), section)
+        } else if m.increased.is_some() {
+            // A fixed mod a catalyst raised: copies differ by their quality,
+            // so it's listed, searched at its value.
+            Filter {
+                draw_slider: false,
+                ..Filter::new(m.text.clone(), found.target, value * found.sign, Some((lo, hi)), false, section)
+            }
+        } else {
+            continue;
+        };
         filter.tier = m.tier;
+        filter.increased = m.increased;
         filters.push(filter);
     }
     filters
@@ -1819,6 +1836,7 @@ fn option_filters(item: &Item, data: &TradeData) -> (Vec<Filter>, Vec<usize>) {
         default_on: true,
         section: kind_section(kind, Section::Mod),
         tier: None,
+        increased: None,
         max: None,
         roll: None,
     };
@@ -1878,6 +1896,7 @@ fn eldritch_filters(item: &Item, data: &TradeData, on: bool) -> Vec<Filter> {
             default_on: on,
             section,
             tier: None,
+            increased: None,
             max: None,
             roll: tier.map(|t| t as f64),
         });
@@ -1968,11 +1987,13 @@ fn mod_filter(m: &ModLine, data: &TradeData, local: Local, on: bool, section: Se
             default_on: on,
             section,
             tier: None,
+            increased: None,
             max: None,
             roll: None,
         },
     };
     filter.tier = m.tier;
+    filter.increased = m.increased;
     Some(filter)
 }
 
@@ -2021,6 +2042,7 @@ fn gem_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         default_on: on,
         section: Section::Gem,
         tier: None,
+        increased: None,
         max: None,
         roll: Some(value as f64),
     };
@@ -2050,6 +2072,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         default_on: true,
         section: Section::Base,
         tier: None,
+        increased: None,
         max: None,
         roll: None,
     };
@@ -2068,6 +2091,7 @@ fn base_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
             default_on: crafting_value(item),
             section: Section::Base,
             tier: None,
+            increased: None,
             max: None,
             roll: Some(ilvl as f64),
         });
@@ -2135,6 +2159,7 @@ fn influence_filters(item: &Item, on: bool) -> Vec<Filter> {
                 default_on: on,
                 section: Section::Influence(influence),
                 tier: None,
+                increased: None,
                 max: None,
                 roll: None,
             }
@@ -2375,6 +2400,7 @@ fn no_life_filter(item: &Item, data: &TradeData) -> Option<Filter> {
         default_on: false,
         section: Section::Total,
         tier: None,
+        increased: None,
         max: None,
         roll: None,
     })
@@ -2587,6 +2613,9 @@ fn item_preview(item: &Value) -> Preview {
             out.push(("influence", name.clone(), None));
         }
     }
+    if let Some(quality) = quality_line(item) {
+        out.push(("quality", quality, None));
+    }
     let ext = &item["extended"];
     let dps: Vec<String> = [("pDPS", "pdps"), ("eDPS", "edps")]
         .iter()
@@ -2644,6 +2673,21 @@ fn item_preview(item: &Value) -> Preview {
 
 /// A listed gem's level and quality: "Level 20 · 23%" (shown on its row,
 /// like APT's columns).
+/// A listing's quality as the game shows it: "Quality: +20%", or a
+/// catalyst's on jewellery, "Quality (Resistance Modifiers): +20%". That
+/// tells a mod the catalyst raised past its range from a better roll. Gems
+/// show theirs in `gem_tag`.
+fn quality_line(item: &Value) -> Option<String> {
+    if item["frameType"].as_u64() == Some(4) {
+        return None;
+    }
+    let prop = item["properties"].as_array()?.iter().find(|p| {
+        p["name"].as_str().is_some_and(|n| strip_markup(n) == "Quality" || strip_markup(n).starts_with("Quality ("))
+    })?;
+    let value = prop["values"][0][0].as_str().filter(|v| !v.is_empty() && *v != "+0%")?;
+    Some(format!("{}: {value}", strip_markup(prop["name"].as_str()?)))
+}
+
 fn gem_tag(item: &Value) -> Option<String> {
     if item["frameType"].as_u64() != Some(4) {
         return None;
@@ -3830,14 +3874,55 @@ mod tests {
             got,
             vec![
                 // The fixed 10% chance isn't listed, like Kaom's Heart's life.
+                // 33 raised 20% by the header's catalyst: 39.6, shown as 39.
                 (
-                    "33% increased Elemental Damage with Hits and Ailments for each type of Elemental Ailment on Enemy",
+                    "39% increased Elemental Damage with Hits and Ailments for each type of Elemental Ailment on Enemy",
                     &Target::Stat("explicit.ele_per_ailment".into())
                 ),
                 ("+25% to all Elemental Resistances", &Target::Stat("explicit.all_res".into())),
             ]
         );
-        assert_eq!(filters[0].slider, Some((30.0, 40.0)));
+        assert_eq!(filters[0].slider, Some((36.0, 48.0)));
+    }
+
+    #[test]
+    fn catalysed_unique() {
+        // A 34(30-40) roll under 20% catalyst quality shows, and is listed on
+        // the trade site, as 40: searched as 40 within 36-48, not a perfect
+        // roll. The resistances aren't raised, so +30 is.
+        let text = "Item Class: Rings\nRarity: Unique\nThe Taming\nPrismatic Ring\n--------\n\
+                    Quality (Elemental Damage Modifiers): +20% (augmented)\n--------\nItem Level: 70\n--------\n\
+                    { Implicit Modifier — Elemental, Resistance }\n+10(8-10)% to all Elemental Resistances\n--------\n\
+                    { Unique Modifier — Elemental, Fire, Cold, Lightning, Ailment  — 20% Increased }\n\
+                    10% chance to Freeze, Shock and Ignite\n\
+                    { Unique Modifier — Damage, Elemental  — 20% Increased }\n\
+                    34(30-40)% increased Elemental Damage with Hits and Ailments for\n\
+                    each type of Elemental Ailment on Enemy\n\
+                    { Unique Modifier — Elemental, Resistance }\n+30(20-30)% to all Elemental Resistances\n";
+        let item = crate::item::parse(text).unwrap();
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> = filters
+            .iter()
+            .filter(|f| f.section == Section::Mod)
+            .map(|f| (f.label.as_str(), f.min, f.slider, f.draw_slider, f.max_roll, f.increased))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                // Fixed, but raised: copies differ by their quality, so it's
+                // listed, at its value, with nothing to slide.
+                ("12% chance to Freeze, Shock and Ignite", Some(12.0), None, false, false, Some(20)),
+                (
+                    "40% increased Elemental Damage with Hits and Ailments for each type of Elemental Ailment on Enemy",
+                    Some(38.0),
+                    Some((36.0, 48.0)),
+                    true,
+                    false,
+                    Some(20)
+                ),
+                ("+30% to all Elemental Resistances", Some(30.0), Some((20.0, 30.0)), true, true, None),
+            ]
+        );
     }
 
     #[test]
@@ -3871,6 +3956,35 @@ mod tests {
         let tiers: Vec<_> = got.iter().filter(|l| l.0 == "explicit").map(|l| l.2).collect();
         assert_eq!(tiers, vec![Some(2), None]);
         assert_eq!(affix_tier("R1"), None);
+    }
+
+    #[test]
+    fn listing_preview_quality() {
+        // A catalyst raised the resistances past their 20-30 range: the
+        // quality line says why.
+        let ring = serde_json::json!({
+            "frameType": 3, "name": "The Taming", "typeLine": "Prismatic Ring", "ilvl": 70, "identified": true,
+            "properties": [{ "name": "Quality (Resistance Modifiers)", "values": [["+20%", 1]], "displayMode": 0, "type": 6 }],
+            "explicitMods": [{ "description": "+33% to all Elemental Resistances", "domain": "explicit",
+                               "mods": [{ "magnitudes": [{ "min": "20", "max": "30" }] }] }]
+        });
+        let got: Vec<_> = item_preview(&ring).into_iter().map(|(k, t, _)| (k, t)).collect();
+        assert_eq!(
+            got[4..],
+            [
+                ("quality", "Quality (Resistance Modifiers): +20%".to_string()),
+                ("explicit", "+33% to all Elemental Resistances".to_string()),
+            ]
+        );
+        let armour = serde_json::json!({ "frameType": 2, "typeLine": "Glorious Plate",
+            "properties": [{ "name": "[Quality]", "values": [["+20%", 1]] }, { "name": "[Armour]", "values": [["900", 1]] }] });
+        assert!(item_preview(&armour).contains(&("quality", "Quality: +20%".to_string(), None)));
+        let gem = serde_json::json!({ "frameType": 4, "typeLine": "Fireball",
+            "properties": [{ "name": "Quality", "values": [["+20%", 1]] }] });
+        assert!(!item_preview(&gem).iter().any(|l| l.0 == "quality"));
+        let plain = serde_json::json!({ "frameType": 2, "typeLine": "Glorious Plate",
+            "properties": [{ "name": "Quality", "values": [["+0%", 1]] }] });
+        assert!(!item_preview(&plain).iter().any(|l| l.0 == "quality"));
     }
 
     #[test]

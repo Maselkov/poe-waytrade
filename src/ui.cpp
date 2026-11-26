@@ -205,6 +205,7 @@ struct UiFilter {
     bool has_slider = false, max_roll = false;
     bool has_max = false;  // a maximum is set: its handle shows; else the fill runs open to the end
     Rml::String tier;     // "T1"; empty: none
+    Rml::String increased;  // "+20%": what a catalyst raised the mod by; empty: none
     Rml::String section;  // weapon | base | armour | total | enchant | implicit | exarch | eater | corruption | mod | fractured | crafted | map | shaper, elder, ... (influence)
 };
 struct UiGroup {
@@ -736,6 +737,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("has_max", &UiFilter::has_max);
         h.RegisterMember("max_roll", &UiFilter::max_roll);
         h.RegisterMember("tier", &UiFilter::tier);
+        h.RegisterMember("increased", &UiFilter::increased);
         h.RegisterMember("section", &UiFilter::section);
     }
     if (auto h = c.RegisterStruct<UiPreviewLine>()) {
@@ -1306,6 +1308,7 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             if (u.hi_empty) u.hi = "max";
             u.max_roll = f.max_roll;
             if (f.tier > 0) u.tier = "T" + std::to_string(f.tier);
+            if (f.increased > 0) u.increased = "+" + std::to_string(f.increased) + "%";
             u.section = f.section;
             const std::string& sec = f.section;
             size_t group = sec == "enchant"                                         ? 1
@@ -1736,7 +1739,11 @@ void OverlayUi::Impl::fill_preview(const TradeListing& l, UiListing& u) {
         else if (kind == "gem") ilvl = text;  // "Level 20 · 23%"
         else if (kind == "dps") dps = text;
         else if (kind == "sockets") sockets = text;
-        else if (kind == "icon") {
+        else if (kind == "quality") {
+            // Like PoE's tooltip: the properties, then a divider before the mods.
+            u.lines.push_back({kind, text, ""});
+            u.lines.push_back({"divider", "", ""});
+        } else if (kind == "icon") {
             if (Rml::String id = item_icon_id(text); icons_get(id)) u.item_icon = id;
         } else if (kind == "cells") {
             // PoE's inventory cells, a little smaller.
