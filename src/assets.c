@@ -33,6 +33,9 @@ static const unsigned char scan_labels_rml[] = {
 static const unsigned char gear_png[] = {
 #embed "ui/gear.png"
 };
+static const unsigned char door_png[] = {
+#embed "ui/door.png"
+};
 
 const struct EmbeddedFile embedded_files[] = {
     {"fonts/Inter-Regular.ttf", inter_regular, sizeof inter_regular},
@@ -46,5 +49,6 @@ const struct EmbeddedFile embedded_files[] = {
     {"ui/toast.rml", toast_rml, sizeof toast_rml},
     {"ui/scan_labels.rml", scan_labels_rml, sizeof scan_labels_rml},
     {"ui/gear.png", gear_png, sizeof gear_png},
+    {"ui/door.png", door_png, sizeof door_png},
 };
 const size_t embedded_file_count = sizeof embedded_files / sizeof embedded_files[0];

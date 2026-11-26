@@ -10,13 +10,14 @@
 #   ui dir    a directory holding ui/*, default assets/ (to compare against
 #             another version: git archive HEAD assets/ui | tar -x -C dir
 #             --strip-components=1)
-# Other POE_WAYTRADE_DEMO_* variables (docs/DEVELOPMENT.md) pass through.
+# Other POE_WAYTRADE_DEMO_* variables (docs/DEVELOPMENT.md) pass through, and
+# so does POE_WAYTRADE_SNAPSHOT_FRAMES, to wait for a trade search.
 # A .png needs ImageMagick (magick).
 set -eu
 if [ -z "${WAYTRADE_IN_DBUS:-}" ]; then
     WAYTRADE_IN_DBUS=1 exec dbus-run-session -- "$0" "$@"
 fi
-[ $# -ge 2 ] || { sed -n 's/^# \{0,1\}//; 2,14p' "$0"; exit 2; }
+[ $# -ge 2 ] || { sed -n 's/^# \{0,1\}//; 2,15p' "$0"; exit 2; }
 repo=$(cd "$(dirname "$0")/.." && pwd)
 item=$(realpath "$1")
 out=$(realpath -m "$2")
@@ -50,6 +51,14 @@ cleanup() {
 }
 trap cleanup EXIT
 sleep 3
+# The panel asks the daemon once: wait until its prices are in (a minute at
+# most), or it shows "Loading prices". A currency's price needs them.
+printf 'Item Class: Stackable Currency\nRarity: Currency\nDivine Orb\n' >"$tmp/probe.txt"
+for _ in $(seq 60); do
+    POE_WAYTRADE_SOCKET=$daemon_sock "$repo/daemon/target/debug/poe-waytrade-daemon" query "$tmp/probe.txt" 2>/dev/null |
+        grep -q "^status.loading" || break
+    sleep 1
+done
 
 # The layer saves a frame after 300 frames, then the app keeps running.
 WAYLAND_DISPLAY=$sock POE_WAYTRADE_SOCKET=$daemon_sock POE_WAYTRADE_UI_DIR="$ui" POE_WAYTRADE_DEMO_ITEM="$item" \
@@ -57,7 +66,8 @@ WAYLAND_DISPLAY=$sock POE_WAYTRADE_SOCKET=$daemon_sock POE_WAYTRADE_UI_DIR="$ui"
     VK_ADD_IMPLICIT_LAYER_PATH="$repo/build/layer" ENABLE_POE_WAYTRADE=1 \
     vkcube --wsi wayland >/dev/null 2>&1 &
 cube=$!
-for _ in $(seq 100); do
+# 20 s, or longer with POE_WAYTRADE_SNAPSHOT_FRAMES (60 fps or more).
+for _ in $(seq $((100 + ${POE_WAYTRADE_SNAPSHOT_FRAMES:-0} / 12))); do
     grep -q "snapshot saved" "$tmp/layer.log" 2>/dev/null && break
     kill -0 "$cube" 2>/dev/null || break
     sleep 0.2

@@ -115,7 +115,10 @@ struct OverlayDevice {
 
     // POE_WAYTRADE_SNAPSHOT=<file.ppm>: save one rendered frame (the app's own
     // image, game plus overlay) a few seconds in, for checking the UI.
+    // POE_WAYTRADE_SNAPSHOT_FRAMES: after how many frames (300), for a slow
+    // daemon reply such as a trade search.
     const char* snapshot_path = getenv("POE_WAYTRADE_SNAPSHOT");
+    int snapshot_frames = getenv("POE_WAYTRADE_SNAPSHOT_FRAMES") ? atoi(getenv("POE_WAYTRADE_SNAPSHOT_FRAMES")) : 300;
     int frames = 0;
 
     // POE_WAYTRADE_TRACK_LOG: how long our part of each present takes (the
@@ -823,7 +826,7 @@ bool record_and_submit(DeviceData* dev, OverlayDevice& ov, OverlaySwapchain& sc,
     si.pSignalSemaphores = &img.done;
     VK_CHECK(dev->QueueSubmit(queue, 1, &si, img.fence));
 
-    if (ov.snapshot_path && ++ov.frames == 300) {
+    if (ov.snapshot_path && ++ov.frames == ov.snapshot_frames) {
         VK_CHECK(dev->WaitForFences(dev->device, 1, &img.fence, VK_TRUE, UINT64_MAX));
         save_snapshot(dev, sc, img, queue, ov.snapshot_path);
     }

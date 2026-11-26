@@ -112,6 +112,15 @@ public:
     void set_compact_graph(bool on);
 
     // Price check
+    // pathofexile.com, for travelling to sellers' hideouts: in, out,
+    // logging_in (the daemon's login window is open), or "" until the
+    // daemon says. Asked again each time the page opens, and every second
+    // while the login window is open.
+    const std::string& account() const { return account_; }
+    void login();
+    void logout();
+    // What a travel found out (logged_out: the session ended).
+    void set_account(const std::string& account);
     void set_league(const std::string& league);
     void set_status(const std::string& status);
     void step_min(int delta);  // percent
@@ -156,4 +165,6 @@ private:
     std::deque<std::string> outbox_;
     std::string in_flight_;
     bool bindings_dirty_ = true;
+    std::string account_;
+    Clock::time_point account_asked_{};
 };

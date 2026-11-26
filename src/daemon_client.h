@@ -83,6 +83,11 @@ struct TradeListing {
     // What the listing has of the search's enabled filters: (filter index,
     // "158" / "81%").
     std::vector<std::pair<int, std::string>> values;
+    // An instant buyout (a merchant tab): TRAVEL with `travel` takes the
+    // player to the seller's hideout. Empty when the daemon isn't logged in
+    // to pathofexile.com, which gives no token.
+    bool instant = false;
+    std::string travel;
 };
 
 // The median of the fetched listings.
@@ -149,6 +154,8 @@ struct PriceReply {
     std::vector<std::pair<std::string, std::string>> league_current;
     std::string league_pinned;  // POE_LEAGUE overrides the setting
     std::string version;        // the daemon's
+    // ACCOUNT / LOGIN / LOGOUT: in | out | logging_in (pathofexile.com)
+    std::string account;
     std::string log;            // where the daemon logs
     // SCANFIND: title plates, each x y w h then its crop's x y w h (full-size pixels)
     std::vector<std::array<float, 8>> plates;

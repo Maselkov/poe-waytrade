@@ -103,6 +103,9 @@ PriceReply parse_reply(const std::string& body) {
             reply.listings.back().preview.push_back({f[1], f[2], f.size() >= 4 ? atoi(f[3].c_str()) : 0});
         } else if (f[0] == "value" && f.size() >= 3 && !reply.listings.empty()) {
             reply.listings.back().values.push_back({atoi(f[1].c_str()), f[2]});
+        } else if (f[0] == "travel" && !reply.listings.empty()) {
+            reply.listings.back().instant = true;
+            reply.listings.back().travel = f[1];
         } else if (f[0] == "summary" && f.size() >= 6) {
             reply.summary = TradeSummary{f[1], f[2], f[3], f[5], f[4].empty() ? -1 : strtod(f[4].c_str(), nullptr)};
             reply.summary->capped = f.size() >= 7 && f[6] == "1";
@@ -134,6 +137,7 @@ PriceReply parse_reply(const std::string& body) {
         else if (f[0] == "league_pinned") reply.league_pinned = f[1];
         else if (f[0] == "map_profile") reply.profile = atoi(f[1].c_str());
         else if (f[0] == "version") reply.version = f[1];
+        else if (f[0] == "account") reply.account = f[1];
         else if (f[0] == "log") reply.log = f[1];
         else if (f[0] == "plate" && f.size() >= 9) {
             std::array<float, 8> p;

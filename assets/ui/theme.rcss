@@ -345,6 +345,24 @@ sparkline { display: block; color: $mod; }
 .count { background-color: $chip; border-radius: 6dp; padding: 1dp 6dp; font-size: 11dp; color: $text; }
 .age { flex-shrink: 0; width: 58dp; text-align: right; color: $text-faint; }
 .listing .age.old { color: #41464f; }
+
+/* Instant buyouts' door: travel to the seller's hideout, shown on the
+   hovered row (and while a travel is sent and answered). Logged out, it's
+   faint and leads to the settings. */
+.travel-cell { flex-shrink: 0; width: 26dp; display: flex; justify-content: flex-end; }
+.door { width: 20dp; height: 20dp; border-radius: 6dp; cursor: pointer; }
+.door img { width: 14dp; height: 14dp; margin: 3dp; image-color: $text-muted; }
+.door.go:hover, .door.pending { background-color: $accent; }
+.door.go:hover img, .door.pending img { image-color: $accent-text; }
+.door.ok { background-color: $good-bg; }
+.door.ok img { image-color: $good; }
+.door.error { background-color: $danger-bg; }
+.door.error img { image-color: $danger; }
+.door.go, .door.login { visibility: hidden; }
+.listing:hover .door.go, .listing:hover .door.login { visibility: visible; }
+.door.login img { image-color: #41464f; }
+.door.login:hover { background-color: $chip; }
+.door.login:hover img { image-color: $text-muted; }
 .empty { color: $text-muted; padding: 6dp 0; }
 
 .actions { display: flex; margin-top: 8dp; }
@@ -482,6 +500,7 @@ body.preview-right .preview { right: auto; left: 100%; margin-right: 0; margin-l
 .pv-art img { display: block; }
 .pv-socket { position: absolute; }
 .pv-more { color: $text-faint; font-size: 11dp; margin-top: 6dp; }
+.pv-hint { color: $text-faint; font-size: 11dp; margin-top: 8dp; }
 
 /* Affix tiers: T1 a subtle gold, T2 silver, T3 bronze, lower ones grey. */
 .tier.T1 { color: #c9a85a; }

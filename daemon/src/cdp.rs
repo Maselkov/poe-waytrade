@@ -90,10 +90,48 @@ fn pipe() -> io::Result<(OwnedFd, OwnedFd)> {
     Ok(unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) })
 }
 
+/// The profile holds the pathofexile.com session once the user logs in: ours
+/// only.
+fn private_profile(profile: &Path) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(profile)?;
+    std::fs::set_permissions(profile, std::fs::Permissions::from_mode(0o700))
+}
+
+/// A plain Chromium window on the profile, at `url`, for the user to log in
+/// to pathofexile.com. Nothing drives it: Cloudflare's challenge on the
+/// login page keeps asking again in a browser controlled over DevTools. The
+/// session cookie it leaves in the profile is what `Browser` then sends.
+/// The headless browser must be closed first: two can't share a profile.
+pub fn launch_window(binary: &str, profile: &Path, url: &str) -> Result<Child, String> {
+    private_profile(profile).map_err(|e| format!("profile dir: {e}"))?;
+    let mut command = Command::new(binary);
+    command
+        .args([
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-extensions",
+            "--disable-background-networking",
+        ])
+        .arg(format!("--user-data-dir={}", profile.display()))
+        .arg(url)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    // SAFETY: only async-signal-safe calls between fork and exec.
+    unsafe {
+        command.pre_exec(|| {
+            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+            Ok(())
+        });
+    }
+    spawn_lasting(command).map_err(|e| format!("{binary}: {e}"))
+}
+
 impl Browser {
     pub fn launch(binary: &str, profile: &Path) -> Result<Browser, String> {
         let err = |what: &str, e: io::Error| format!("{what}: {e}");
-        std::fs::create_dir_all(profile).map_err(|e| err("profile dir", e))?;
+        private_profile(profile).map_err(|e| err("profile dir", e))?;
         let (cmd_read, cmd_write) = pipe().map_err(|e| err("pipe", e))?;
         let (res_read, res_write) = pipe().map_err(|e| err("pipe", e))?;
 
@@ -170,6 +208,22 @@ impl Browser {
         }
     }
 
+    /// Whether the profile has a pathofexile.com session cookie (its value
+    /// never leaves the browser).
+    pub fn has_session(&mut self) -> Result<bool, String> {
+        let res = self.command("Storage.getCookies", json!({}), false)?;
+        Ok(res["cookies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|c| c["name"] == "POESESSID" && c["domain"].as_str().is_some_and(|d| d.ends_with("pathofexile.com"))))
+    }
+
+    /// Logs out here: forgets every cookie in the profile.
+    pub fn clear_cookies(&mut self) -> Result<(), String> {
+        self.command("Storage.clearCookies", json!({}), false).map(|_| ())
+    }
+
     /// Evaluates a JS expression (awaiting promises) in the page.
     pub fn evaluate(&mut self, expression: &str) -> Result<Value, String> {
         let res = self.command(
@@ -190,7 +244,7 @@ impl Browser {
             "(async () => {{
                 const r = await fetch({path}, {{
                     method: {method},
-                    headers: {{ 'Content-Type': 'application/json' }},
+                    headers: {{ 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }},
                     body: {body},
                 }});
                 const headers = {{}};

@@ -167,6 +167,14 @@ public:
     const std::optional<BoundsEdit>& bounds_edit() const { return edit_; }
     bool keyboard_taken() const { return grab_.focused(); }
     void open_trade();
+    // A listing's door (an instant buyout): the trade site sends the player
+    // to its seller's hideout. Without a login (no token), opens the
+    // settings at the pathofexile.com account instead.
+    void travel(int listing);
+    // The listing a travel was sent for, and how it's going: pending, ok or
+    // error, shown on its door for a moment; -1 for none.
+    int travel_listing() const { return travel_listing_; }
+    const std::string& travel_state() const { return travel_state_; }
     // Map check: cycle the mod at this index in reply().map_mods through
     // unmarked -> deadly -> warning -> good (or backward) in the active
     // profile, and
@@ -214,6 +222,12 @@ private:
     std::string daemon_state_, daemon_error_;
     Clock::time_point wake_at_;
     DaemonClient opener_;  // "open on trade site"; only failures logged
+    DaemonClient travel_client_;
+    int travel_listing_ = -1;
+    std::string travel_state_;
+    uint64_t travel_check_ = 0;  // the check_id_ it was sent for
+    Clock::time_point travel_until_;  // when an ok or error stops showing
+    void poll_travel(Clock::time_point now);
     // One-off saves (map marks, profile) go out one at a time, in order.
     DaemonClient sender_;
     std::deque<std::string> outbox_;
