@@ -403,6 +403,9 @@ struct TradeData {
     /// Transfigured gems: name ("Arc of Oscillating") -> the base gem
     /// ("Arc") and the trade site's discriminator ("alt_y").
     transfigured: HashMap<String, (String, String)>,
+    /// Mercenary Warrants: build ("Chaplain of the Well") -> its type
+    /// ("AbyssalTemplar") and discriminator ("mercenary_warrant").
+    warrants: HashMap<String, (String, String)>,
     /// Every item the trade site knows by name, for reading names off the
     /// screen.
     names: Arc<Vec<NamedItem>>,
@@ -445,6 +448,7 @@ impl TradeData {
             currencies: HashMap::new(),
             images: HashMap::new(),
             transfigured: HashMap::new(),
+            warrants: HashMap::new(),
             names: Arc::new(Vec::new()),
             lower_stats: HashMap::new(),
         };
@@ -471,6 +475,16 @@ impl TradeData {
                 {
                     data.transfigured.insert(text.to_string(), (base.to_string(), disc.to_string()));
                 }
+            }
+        }
+        for e in
+            items["result"].as_array().into_iter().flatten().flat_map(|g| g["entries"].as_array().into_iter().flatten())
+        {
+            if let (Some(base), Some(text), Some(disc @ "mercenary_warrant")) =
+                (e["type"].as_str(), e["text"].as_str(), e["disc"].as_str())
+                && let Some(build) = text.strip_prefix("Mercenary Warrant (").and_then(|t| t.strip_suffix(')'))
+            {
+                data.warrants.insert(build.to_string(), (base.to_string(), disc.to_string()));
             }
         }
         for group in stats["result"].as_array().into_iter().flatten() {
@@ -558,12 +572,19 @@ pub struct Trade {
 pub fn searchable(item: &Item) -> bool {
     match item.rarity.as_str() {
         "Rare" | "Magic" => !item.mods.is_empty() || item.links >= 5,
-        "Normal" => !item.mods.is_empty() || base_preset_available(item) || crate::mapcheck::is_map_like(item),
+        "Normal" => {
+            item.warrant.is_some()
+                || !item.mods.is_empty()
+                || base_preset_available(item)
+                || crate::mapcheck::is_map_like(item)
+        }
         // Identified uniques: searched by name, with their rolls. Also
         // unidentified ones once their art says which unique they are.
         "Unique" => item.name.is_some() && (!item.mods.is_empty() || item.unidentified),
         // Gems by name, level and quality.
         "Gem" => true,
+        // Mercenary Warrants: by build, skills and supports.
+        _ if item.warrant.is_some() => true,
         // Facetor's Lens: by its stored experience.
         _ if item.stored_experience.is_some() => true,
         // Wickerman limbs have no rarity: searched by base and implicits.
@@ -685,7 +706,7 @@ impl Trade {
             .map(|(i, f)| enabled.iter().find(|c| c.index == i).map(|c| (c.min.or(f.min), c.max)))
             .collect();
         let mut body = query(item, &filters, &chosen, options);
-        if let Some(t) = transfigured_type(item, data) {
+        if let Some(t) = transfigured_type(item, data).or_else(|| warrant_type(item, data)) {
             body["query"]["type"] = t;
         }
         let body = body.to_string();
@@ -2144,6 +2165,9 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     if let Some(xp) = item.stored_experience {
         return vec![stored_experience_filter(xp)];
     }
+    if item.warrant.is_some() {
+        return warrant_filters(item, data);
+    }
     if preset == Preset::Base {
         return base_filters(item, data);
     }
@@ -2742,6 +2766,39 @@ fn transfigured_type(item: &Item, data: &TradeData) -> Option<Value> {
     Some(json!({ "option": base, "discriminator": disc }))
 }
 
+/// A Mercenary Warrant's type for the query: the trade site knows each
+/// build as its own warrant, "Mercenary Warrant (Chaplain of the Well)".
+fn warrant_type(item: &Item, data: &TradeData) -> Option<Value> {
+    let (base, disc) = data.warrants.get(&item.warrant.as_ref()?.build)?;
+    Some(json!({ "option": base, "discriminator": disc }))
+}
+
+/// A Mercenary Warrant's skills and supports, unticked: the warrant's build
+/// alone is the search, and each one ticked narrows it.
+fn warrant_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
+    let Some(warrant) = &item.warrant else { return Vec::new() };
+    let mut seen = Vec::new();
+    warrant
+        .skills
+        .iter()
+        .filter_map(|skill| {
+            let id = data.stats.get(&("mercenary".to_string(), skill.clone()))?;
+            // A support on two skills is one stat.
+            if seen.contains(&id) {
+                return None;
+            }
+            seen.push(id);
+            Some(Filter {
+                draw_slider: false,
+                min: None,
+                slider: None,
+                roll: None,
+                ..Filter::new(skill.clone(), Target::Stat(id.clone()), 0.0, None, false, Section::Mod)
+            })
+        })
+        .collect()
+}
+
 /// `chosen[i]`: whether filter i is used, and its bounds.
 fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: SearchOptions) -> Value {
     let mut stats = Vec::new();
@@ -3100,6 +3157,7 @@ mod tests {
             currencies: HashMap::new(),
             images: HashMap::new(),
             transfigured,
+            warrants: HashMap::new(),
             names: Arc::new(Vec::new()),
             lower_stats: HashMap::new(),
         }
@@ -3212,6 +3270,54 @@ mod tests {
         let exert = &filters[3];
         assert_eq!(exert.target, Target::Stat("crafted.exert".into()));
         assert_eq!((exert.min, exert.slider, exert.roll), (None, None, None));
+    }
+
+    const WARRANT: &str = "Item Class: Map Fragments\nRarity: Normal\nMercenary Warrant\n--------\n\
+        Tiberius, Champion of Kulemak\n--------\nBuild: Chaplain of the Well\nMercenary Level: 83\n--------\n\
+        Abyssal Spray\nGreater Pierce (Tier: 3)\nCritical Chance (Tier: 2)\n--------\nPower of the Depths\n\
+        --------\nVaal Smite\nGreater Cooldown Recovery (Tier: 3)\n--------\nFlame Dash\n\
+        Greater Cooldown Recovery (Tier: 3)\n--------\nRight click this item to view Mercenary details.\n\
+        Open a portal to the Proving Grounds by using this item in a personal Map Device.\n";
+
+    #[test]
+    fn warrant_by_build_skills_and_supports() {
+        let data = real_data();
+        let item = crate::item::parse(WARRANT).unwrap();
+        let warrant = item.warrant.as_ref().unwrap();
+        assert_eq!((warrant.build.as_str(), warrant.level), ("Chaplain of the Well", Some(83)));
+        assert_eq!(warrant.skills[1], "Greater Pierce (Tier 3)");
+        assert!(searchable(&item));
+        let filters = build_filters(&item, &data, Preset::Normal);
+        // Only what the trade site lists (the fixture's subset), each once,
+        // unticked.
+        let shown: Vec<(&str, bool)> = filters.iter().map(|f| (f.label.as_str(), f.default_on)).collect();
+        assert_eq!(
+            shown,
+            vec![
+                ("Abyssal Spray", false),
+                ("Greater Pierce (Tier 3)", false),
+                ("Critical Chance (Tier 2)", false),
+                ("Greater Cooldown Recovery (Tier 3)", false),
+                ("Flame Dash", false),
+            ]
+        );
+        assert!(filters.iter().all(|f| matches!(&f.target, Target::Stat(id) if id.starts_with("mercenary."))));
+        assert_eq!(
+            warrant_type(&item, &data),
+            Some(json!({ "option": "AbyssalTemplar", "discriminator": "mercenary_warrant" }))
+        );
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| Some((f.min, f.max))).collect();
+        let opts = SearchOptions {
+            six_link: false,
+            unidentified: false,
+            base_only: false,
+            corrupted: Corrupted::No,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
+        let q = query(&item, &filters, &chosen, opts);
+        let Target::Stat(pierce) = &filters[1].target else { unreachable!() };
+        assert_eq!(q["query"]["stats"][0]["filters"][1], json!({ "id": pierce }));
     }
 
     fn gem(name: &str, level: &str, quality: u32, corrupted: bool) -> Item {

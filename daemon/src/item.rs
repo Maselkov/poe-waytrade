@@ -34,6 +34,10 @@ pub struct Item {
     pub memory_strands: Option<u32>,
     /// "Stored Experience: 750,000,000" on a Facetor's Lens.
     pub stored_experience: Option<u64>,
+    /// A Mercenary Warrant's build ("Chaplain of the Well"), level, and its
+    /// skills and supports as the trade site words them ("Abyssal Spray",
+    /// "Greater Pierce (Tier 3)").
+    pub warrant: Option<Warrant>,
     /// Lines after the "Item Level:" section: enchants, implicits, explicits,
     /// plus some non-mod lines that simply won't match any trade stat.
     /// Roll ranges from advanced copy are stripped.
@@ -552,6 +556,7 @@ pub fn parse(text: &str) -> Option<Item> {
             item.map_props.push((label.to_string(), value));
         }
     }
+    item.warrant = warrant(&item, &sections);
     // PoE2's waystones name their tier in the base: "Waystone (Tier 14)".
     if item.map_tier.is_none()
         && item.class == "Waystones"
@@ -932,4 +937,33 @@ pub(crate) mod tests {
         let shaped = parse(&FRACTURED_CROWN.replace("Fractured Item", "Shaper Item\nElder Item")).unwrap();
         assert_eq!(shaped.influences, vec!["shaper", "elder"]);
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Warrant {
+    pub build: String,
+    pub level: Option<u32>,
+    pub skills: Vec<String>,
+}
+
+/// A Mercenary Warrant: "Build:" and "Mercenary Level:" lines, then a
+/// section per skill (the skill, then its supports, "Return (Tier: 3)"),
+/// then its usage text.
+fn warrant(item: &Item, sections: &[Vec<&str>]) -> Option<Warrant> {
+    if item.base != "Mercenary Warrant" {
+        return None;
+    }
+    let at = sections.iter().position(|s| s.iter().any(|l| l.starts_with("Build: ")))?;
+    let mut warrant = Warrant::default();
+    for line in &sections[at] {
+        if let Some(v) = line.strip_prefix("Build: ") {
+            warrant.build = v.to_string();
+        } else if let Some(v) = line.strip_prefix("Mercenary Level: ") {
+            warrant.level = leading_number(v);
+        }
+    }
+    // Usage text and notes are sentences; skill names aren't.
+    let skills = sections[at + 1..].iter().filter(|s| !s.iter().any(|l| l.ends_with('.')));
+    warrant.skills = skills.flatten().map(|l| l.replace("(Tier: ", "(Tier ")).collect();
+    Some(warrant)
 }
