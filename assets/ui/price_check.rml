@@ -124,8 +124,9 @@
                         </div>
                         <div class="count-cell">{{list_more}}</div>
                         <div class="age">Listed</div>
+                        <div class="travel-cell" data-if="travel_col"/>
                     </div>
-                    <div class="listing" data-for="l : listings">
+                    <div class="listing" data-for="l, i : listings">
                         <div class="amount">
                             <div class="amount-value">{{l.price}}</div>
                             <img class="cur-icon" data-if="l.icon != ''" data-attr-src="'icon:' + l.icon"/>
@@ -136,6 +137,9 @@
                         <div class="col value" data-for="v : l.cols">{{v}}</div>
                         <div class="count-cell"><div class="count" data-if="l.count != ''">{{l.count}}</div></div>
                         <div class="age" data-class-old="l.old">{{l.age}}</div>
+                        <div class="travel-cell" data-if="travel_col">
+                            <div data-if="l.travel != ''" data-attr-class="'door ' + l.travel" data-event-click="travel(i)"><img src="icon:door"/></div>
+                        </div>
                         <div class="preview" data-if="l.has_preview">
                             <div class="pv-art" data-if="l.item_icon != ''"
                                  data-style-width="l.icon_w + 'dp'" data-style-height="l.icon_h + 'dp'">
@@ -151,6 +155,7 @@
                             <div class="pv-divider"/>
                             <div data-for="p : l.lines" data-attr-class="'pv-line ' + p.kind">{{p.text}}<span data-if="p.tier != ''" data-attr-class="'tier ' + p.tier"> [{{p.tier}}]</span></div>
                             <div class="pv-more" data-if="l.more != ''">{{l.more}}</div>
+                            <div class="pv-hint" data-if="l.travel == 'login'">Log in to pathofexile.com in Settings to travel to hideouts</div>
                         </div>
                     </div>
                     <div class="empty" data-if="listings.size == 0">No listings. Turn off a filter to widen the search.</div>

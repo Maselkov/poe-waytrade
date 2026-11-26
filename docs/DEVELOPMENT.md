@@ -168,6 +168,7 @@ POE_WAYTRADE_UI_DIR=$PWD/assets POE_WAYTRADE_DEMO_ITEM=item.txt \
 | `POE_WAYTRADE_DEMO_SETTINGS=<0-4>` | Open the settings page on that tab |
 | `POE_WAYTRADE_ART_DUMP=<file.ppm>` | Save the pixels each art match sends the daemon (the cursor and cell size in a comment), to see what it compares |
 | `POE_WAYTRADE_SNAPSHOT=<file.ppm>` | Save one of the app's rendered frames (after 300 frames), for checking the UI without screenshots |
+| `POE_WAYTRADE_SNAPSHOT_FRAMES=<n>` | Save it after `n` frames instead, to wait for a slow reply (a trade search) |
 | `POE_WAYTRADE_TEST_COPY=1` | Do a Ctrl+D two seconds in, without sending keys |
 | `POE_WAYTRADE_SOCKET=<name>` | Talk to a daemon on another abstract socket (the layer and `poe-waytrade-daemon query`), to test a new daemon next to the installed one |
 | `POE_WAYTRADE_DEBUG=1` | A debug window: focus, last key, clipboard state |

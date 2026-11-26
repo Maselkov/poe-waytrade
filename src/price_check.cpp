@@ -155,6 +155,8 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_he
             if (edit_) end_edit(false);
             reply_ = std::move(reply);
             stale_ = false;
+            travel_listing_ = -1;  // the listings it was for are gone
+            travel_state_.clear();
             request_icons();
             // POE_WAYTRADE_DEMO_SEARCH=1: a demo item searches by itself, so
             // the searched state can be checked without clicking.
@@ -198,6 +200,7 @@ void PriceCheck::update(WaylandInput& input, Clock::time_point now, int frame_he
         }
     }
     if (opener_.poll(&reply) && reply.status != "ok") poe_log("open trade site: %s", reply.message.c_str());
+    poll_travel(now);
     if (sender_.poll(&reply) && reply.status != "ok") poe_log("daemon: %s", reply.message.c_str());
     if (!sender_.busy() && !outbox_.empty()) {
         sender_.send_raw(outbox_.front());
@@ -790,6 +793,56 @@ void PriceCheck::set_profile(int profile) {
     reply_->profile = profile;
     outbox_.push_back("MAPPROFILE\n" + std::to_string(profile));
     changed();
+}
+
+void PriceCheck::travel(int listing) {
+    lock();
+    if (!reply_ || listing < 0 || listing >= (int)reply_->listings.size()) return;
+    const TradeListing& l = reply_->listings[listing];
+    if (!l.instant) return;
+    if (l.travel.empty()) {
+        open_settings();
+        settings_.set_tab(SettingsPage::Tab::Price);
+        return;
+    }
+    if (travel_client_.busy()) return;
+    travel_client_.send_raw("TRAVEL\n" + l.travel);
+    travel_listing_ = listing;
+    travel_state_ = "pending";
+    travel_check_ = check_id_;
+    status_.clear();
+    changed();
+}
+
+void PriceCheck::poll_travel(Clock::time_point now) {
+    PriceReply reply;
+    if (travel_client_.poll(&reply)) {
+        bool same_check = travel_check_ == check_id_;
+        if (reply.status == "ok") {
+            travel_state_ = "ok";
+        } else if (reply.status == "logged_out") {
+            // The session ended: every door asks for a login again.
+            travel_state_.clear();
+            settings_.set_account("out");
+            if (same_check && reply_)
+                for (TradeListing& l : reply_->listings) l.travel.clear();
+            if (same_check) status_ = "Log in to pathofexile.com again (Settings) to travel to hideouts";
+        } else {
+            poe_log("travel: %s", reply.message.c_str());
+            travel_state_ = "error";
+            if (same_check) status_ = reply.message.empty() ? "Couldn't travel to the hideout" : reply.message;
+        }
+        travel_until_ = now + std::chrono::seconds(2);
+        if (!same_check || travel_state_.empty()) travel_listing_ = -1;
+        changed();
+    }
+    // A new check, or the result has shown long enough.
+    if (travel_listing_ >= 0 &&
+        (travel_check_ != check_id_ || (travel_state_ != "pending" && now > travel_until_))) {
+        travel_listing_ = -1;
+        travel_state_.clear();
+        changed();
+    }
 }
 
 // The filters as they are now, searched or not.

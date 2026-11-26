@@ -151,6 +151,24 @@
             <div data-attr-class="s_status == 'any' ? 'button on' : 'button'" data-event-click="settings_status('any')">Any seller</div>
         </div>
 
+        <div class="group-label spaced">pathofexile.com account</div>
+        <div class="setting-row">
+            <div class="setting-text" data-if="s_account == 'in'">
+                <div class="setting-name">Logged in</div>
+                <div class="setting-desc">Instant buyout listings have a door that takes you to the seller's hideout</div>
+            </div>
+            <div class="setting-text" data-if="s_account == 'logging_in'">
+                <div class="setting-name">Logging in…</div>
+                <div class="setting-desc">Log in in the browser window, then close it. Trade searches wait until then.</div>
+            </div>
+            <div class="setting-text" data-if="s_account != 'in' &amp;&amp; s_account != 'logging_in'">
+                <div class="setting-name">{{s_account == 'out' ? 'Not logged in' : 'Checking…'}}</div>
+                <div class="setting-desc">Log in to travel to sellers' hideouts from instant buyout listings. Opens a browser window.</div>
+            </div>
+            <div class="button primary" data-if="s_account == 'out'" data-event-click="account_login">Log in</div>
+            <div class="button" data-if="s_account == 'in'" data-event-click="account_logout">Log out</div>
+        </div>
+
         <div class="group-label spaced">Filters</div>
         <div class="setting-row">
             <div class="setting-text">

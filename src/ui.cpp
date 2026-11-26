@@ -226,6 +226,10 @@ struct UiListing {
     Rml::String gem_level, gem_quality;  // a gem's, in their own columns
     Rml::Vector<Rml::String> cols;       // its values for the filters' columns
     bool old = false;                    // listed a day or more ago
+    // An instant buyout's door: go (travel to the seller's hideout), login
+    // (no token: opens the settings' account row), or a travel's pending,
+    // ok, error; empty: not an instant buyout.
+    Rml::String travel;
     // Hover preview of the first listed item.
     bool has_preview = false;
     Rml::String rarity, name, base, meta, more;
@@ -292,6 +296,7 @@ struct Model {
     bool gem_level_col = false, gem_quality_col = false;
     Rml::Vector<UiColumn> list_cols;
     Rml::String list_more;
+    bool travel_col = false;  // some listing is an instant buyout: the doors' column
     Rml::Vector<Rml::String> debug_lines;
     // Map check
     Rml::String verdict, verdict_kind;  // kind: deadly | warning | clean
@@ -310,6 +315,7 @@ struct Model {
     Rml::String s_warning_title, s_warning_text, s_warning_key;
     Rml::Vector<UiLeague> s_leagues;
     Rml::String s_league_pinned, s_status, s_min, s_scale;
+    Rml::String s_account;  // in | out | logging_in | "" (not known yet)
     bool s_scale_env = false;
     bool s_stash_scroll = true;
     bool s_desktop_cursor = false;
@@ -677,10 +683,13 @@ bool OverlayUi::Impl::init(RmlRenderer* renderer) {
         }
     }
 
-    // The panels' settings button.
-    for (size_t i = 0; i < embedded_file_count; i++)
+    // The panels' settings button, and the listings' travel to hideout.
+    for (size_t i = 0; i < embedded_file_count; i++) {
         if (strcmp(embedded_files[i].path, "ui/gear.png") == 0)
             icons_put("gear", std::string((const char*)embedded_files[i].data, embedded_files[i].size));
+        if (strcmp(embedded_files[i].path, "ui/door.png") == 0)
+            icons_put("door", std::string((const char*)embedded_files[i].data, embedded_files[i].size));
+    }
 
     context = Rml::CreateContext("overlay", Rml::Vector2i(1920, 1080));
     scan_context = Rml::CreateContext("labels", Rml::Vector2i(1920, 1080));
@@ -774,6 +783,7 @@ void OverlayUi::Impl::bind_model() {
         h.RegisterMember("gem_quality", &UiListing::gem_quality);
         h.RegisterMember("cols", &UiListing::cols);
         h.RegisterMember("old", &UiListing::old);
+        h.RegisterMember("travel", &UiListing::travel);
     }
     if (auto h = c.RegisterStruct<UiColumn>()) {
         h.RegisterMember("name", &UiColumn::name);
@@ -862,6 +872,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("gem_quality_col", &model.gem_quality_col);
     c.Bind("list_cols", &model.list_cols);
     c.Bind("list_more", &model.list_more);
+    c.Bind("travel_col", &model.travel_col);
     c.Bind("debug_lines", &model.debug_lines);
     c.Bind("can_switch", &model.can_switch);
     c.Bind("map_price", &model.map_price);
@@ -878,6 +889,7 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("s_leagues", &model.s_leagues);
     c.Bind("s_league_pinned", &model.s_league_pinned);
     c.Bind("s_status", &model.s_status);
+    c.Bind("s_account", &model.s_account);
     c.Bind("s_min", &model.s_min);
     c.Bind("s_scale", &model.s_scale);
     c.Bind("s_scale_env", &model.s_scale_env);
@@ -971,6 +983,10 @@ void OverlayUi::Impl::bind_model() {
     c.BindEventCallback("open_trade", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->open_trade();
     });
+    c.BindEventCallback("travel", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
+        if (price_check && !args.empty()) price_check->travel(args[0].Get<int>());
+        ev.StopPropagation();
+    });
 
     // Settings page
     auto settings_event = [this, &c](const char* name, auto fn) {
@@ -1006,6 +1022,8 @@ void OverlayUi::Impl::bind_model() {
         if (!a.empty()) s.set_status(a[0].Get<Rml::String>());
     });
     settings_event("min_step", [arg](SettingsPage& s, Args a) { s.step_min(arg(a)); });
+    settings_event("account_login", [](SettingsPage& s, Args) { s.login(); });
+    settings_event("account_logout", [](SettingsPage& s, Args) { s.logout(); });
     settings_event("scale_step", [arg](SettingsPage& s, Args a) { s.step_scale(arg(a)); });
     settings_event("settings_profile", [arg](SettingsPage& s, Args a) { s.set_map_profile(arg(a)); });
     settings_event("map_reset", [](SettingsPage& s, Args) { s.reset_map_marks(); });
@@ -1391,6 +1409,12 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
             char u_unit = unit == std::string::npos ? 0 : l.age[unit];
             u.old = u_unit == 'd' || (u_unit == 'h' && age >= 24);
             fill_preview(l, u);
+            if (l.instant) {
+                int i = (int)m.listings.size();
+                if (pc.travel_listing() == i) u.travel = pc.travel_state();
+                else u.travel = l.travel.empty() ? "login" : "go";
+                m.travel_col = true;
+            }
             m.listings.push_back(u);
         }
         // A gem's level and quality columns, unless they're the same on every row.
@@ -1513,6 +1537,7 @@ void OverlayUi::Impl::sync_settings(PriceCheck& pc, Model& m) {
     for (const auto& c : s.league_choices()) m.s_leagues.push_back({c.value, c.label, c.now, c.value == v.league});
     m.s_league_pinned = s.league_pinned();
     m.s_status = v.status;
+    m.s_account = s.account();
     m.s_min = std::to_string(100 - v.min_percent) + "%";
     m.s_scale = std::to_string((int)std::lround(v.ui_scale * 100)) + "%";
     m.s_scale_env = ui_scale_env;
