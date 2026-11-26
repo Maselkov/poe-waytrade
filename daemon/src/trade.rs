@@ -134,7 +134,8 @@ impl Filter {
     ) -> Filter {
         let (min, slider, step, max_roll) = defaults(value, bounds, false);
         Filter {
-            label,
+            // A mod the game wraps onto two lines reads as one.
+            label: label.replace('\n', " "),
             target,
             min,
             slider,
@@ -1931,7 +1932,7 @@ fn mod_filter(m: &ModLine, data: &TradeData, local: Local, on: bool, section: Se
         // No number ("Warcries cannot Exert Travel Skills"), or only fixed
         // ones: searched by whether the item has it, with nothing to slide.
         None => Filter {
-            label: m.text.clone(),
+            label: m.text.replace('\n', " "),
             target,
             min: None,
             slider: None,
@@ -2129,6 +2130,7 @@ fn listed_filter(m: &ModLine, data: &TradeData, local: Local) -> Option<Filter> 
 }
 
 fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
+    let item = &join_wrapped(item, data);
     if (item.class == "Maps" || item.class == "Waystones") && item.rarity != "Unique" {
         return map_filters(item);
     }
@@ -2256,6 +2258,37 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     drop_covered_eldritch(&mut filters);
     exact_cluster_counts(&mut filters);
     filters
+}
+
+/// The item with each mod the game wrapped onto more than one line made one
+/// mod again, its lines joined by "\n" as the trade site's stat has them
+/// ("#% increased Elemental Damage with Hits and Ailments for\neach type of
+/// Elemental Ailment on Enemy"). A line is joined with the next of its group
+/// only when it matches no stat by itself and the two together do.
+fn join_wrapped(item: &Item, data: &TradeData) -> Item {
+    let local = Local::of(item);
+    let matches = |m: &ModLine| {
+        let (template, values) = templatize(&m.text);
+        find_stat(data, m.kind, &template, &values, local).is_some()
+    };
+    let mut mods: Vec<ModLine> = Vec::with_capacity(item.mods.len());
+    for m in &item.mods {
+        if let Some(last) = mods.last_mut()
+            && last.group == m.group
+            && last.kind == m.kind
+            && !matches(last)
+        {
+            let mut joined = last.clone();
+            joined.text = format!("{}\n{}", last.text, m.text);
+            joined.ranges.extend(m.ranges.iter().copied());
+            if matches(&joined) {
+                *last = joined;
+                continue;
+            }
+        }
+        mods.push(m.clone());
+    }
+    Item { mods, ..item.clone() }
 }
 
 /// Stats of the mods tagged Life that body armour can have (RePoE's mod
@@ -3076,6 +3109,12 @@ mod tests {
             ("#% increased Fire Damage", "explicit.fire_damage"),
             ("+#% to Fire Resistance", "explicit.fire_res"),
             ("+# to Intelligence", "explicit.int"),
+            ("+#% to all Elemental Resistances", "explicit.all_res"),
+            ("#% chance to Freeze, Shock and Ignite", "explicit.fsi"),
+            (
+                "#% increased Elemental Damage with Hits and Ailments for\neach type of Elemental Ailment on Enemy",
+                "explicit.ele_per_ailment",
+            ),
         ] {
             stats.insert(("explicit".to_string(), text.to_string()), id.to_string());
         }
@@ -3590,6 +3629,34 @@ mod tests {
         assert_eq!(q["query"]["filters"]["type_filters"]["filters"]["rarity"]["option"], "unique");
         assert!(q["query"]["filters"]["type_filters"]["filters"]["category"].is_null());
         assert_eq!(q["query"]["stats"][0]["filters"][0]["value"]["min"], 33.0);
+    }
+
+    #[test]
+    fn unique_wrapped_mod() {
+        // The Taming: the game wraps its second mod onto two lines.
+        let text = "Item Class: Rings\nRarity: Unique\nThe Taming\nPrismatic Ring\n--------\nItem Level: 71\n--------\n\
+                    { Unique Modifier — Elemental, Fire, Cold, Lightning, Ailment }\n\
+                    10% chance to Freeze, Shock and Ignite\n\
+                    (Freeze lowers Enemy Action Speed to zero, preventing them from acting.)\n\
+                    { Unique Modifier — Damage, Elemental  — 20% Increased }\n\
+                    33(30-40)% increased Elemental Damage with Hits and Ailments for\n\
+                    each type of Elemental Ailment on Enemy\n\
+                    { Unique Modifier — Elemental, Resistance }\n+25(20-30)% to all Elemental Resistances\n";
+        let item = crate::item::parse(text).unwrap();
+        let filters = build_filters(&item, &test_data(), Preset::Normal);
+        let got: Vec<_> = filters.iter().map(|f| (f.label.as_str(), &f.target)).collect();
+        assert_eq!(
+            got,
+            vec![
+                // The fixed 10% chance isn't listed, like Kaom's Heart's life.
+                (
+                    "33% increased Elemental Damage with Hits and Ailments for each type of Elemental Ailment on Enemy",
+                    &Target::Stat("explicit.ele_per_ailment".into())
+                ),
+                ("+25% to all Elemental Resistances", &Target::Stat("explicit.all_res".into())),
+            ]
+        );
+        assert_eq!(filters[0].slider, Some((30.0, 40.0)));
     }
 
     #[test]

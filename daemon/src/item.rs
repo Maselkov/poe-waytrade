@@ -143,6 +143,11 @@ pub struct ModLine {
     pub corruption: bool,
     /// The mod's tags from its advanced-copy header ("Life", "Defences").
     pub tags: Vec<String>,
+    /// Lines with the same group come from one advanced-copy header, or
+    /// one section of plain copy. The game wraps a long mod onto two lines
+    /// ("…Ailments for" / "each type of Elemental Ailment on Enemy"), which
+    /// come as two lines of one group.
+    pub group: usize,
 }
 
 /// `{ Prefix Modifier "Virile" (Tier: 3) — Life }` -> 3. Crafted mods have
@@ -215,6 +220,7 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
                 eldritch: None,
                 corruption: false,
                 tags: Vec::new(),
+                group: 0,
             };
         }
     }
@@ -227,6 +233,7 @@ pub(crate) fn mod_line(line: &str) -> ModLine {
         eldritch: None,
         corruption: false,
         tags: Vec::new(),
+        group: 0,
     }
 }
 
@@ -382,7 +389,9 @@ pub fn parse(text: &str) -> Option<Item> {
     let mut after_item_level = false;
     // Magic items' affix names from advanced copy, to find their base.
     let mut affixes: Vec<(bool, String)> = Vec::new();
+    let mut group = 0;
     for section in sections.iter().skip(1) {
+        group += 1;
         if after_item_level {
             // In advanced copy every mod has a "{ … }" header, so a later
             // section without one is flavour text or a note ("Take this to
@@ -411,6 +420,7 @@ pub fn parse(text: &str) -> Option<Item> {
                 if line.starts_with("{ ") && line.ends_with(" }") {
                     item.advanced = true;
                     headed = true;
+                    group += 1;
                     tier = header_tier(line);
                     header_kind = kind_from_header(line);
                     let header = eldritch_header(line);
@@ -456,6 +466,7 @@ pub fn parse(text: &str) -> Option<Item> {
                 m.eldritch = eldritch;
                 m.corruption = corruption;
                 m.tags = tags.clone();
+                m.group = group;
                 item.mods.push(m);
             }
         } else if let Some(v) = section.iter().find_map(|l| l.strip_prefix("Item Level: ")) {
