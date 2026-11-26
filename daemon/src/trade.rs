@@ -593,6 +593,8 @@ pub enum Account {
     LoggingIn,
     LoggedIn,
     LoggedOut,
+    /// `TRAVEL` is off: no login is offered.
+    Disabled,
 }
 
 impl Account {
@@ -601,6 +603,7 @@ impl Account {
             Account::LoggingIn => "logging_in",
             Account::LoggedIn => "in",
             Account::LoggedOut => "out",
+            Account::Disabled => "disabled",
         }
     }
 }
@@ -612,6 +615,14 @@ pub enum TravelError {
     LoggedOut,
     Failed(String),
 }
+
+/// Travelling to hideouts, and the pathofexile.com login it needs. Off: an
+/// account was locked (2026-11-27) after its session was used like this,
+/// from headless Chromium, possibly looking like a stolen session cookie.
+/// While off, no login is offered, searches report no travel tokens, and a
+/// session an earlier version left in the profile is deleted, so it's never
+/// sent from here.
+pub const TRAVEL: bool = false;
 
 /// Where the login window opens.
 const LOGIN_URL: &str = "https://www.pathofexile.com/login";
@@ -678,6 +689,9 @@ impl Trade {
     /// page, closing the headless browser that uses the profile; searches
     /// wait until the user closes it. Already open: nothing to do.
     pub fn login(&mut self) -> Result<(), String> {
+        if !TRAVEL {
+            return Err("Logging in to pathofexile.com is turned off in this version".into());
+        }
         if self.login_window_open() {
             return Ok(());
         }
@@ -704,6 +718,9 @@ impl Trade {
 
     /// Logged in to pathofexile.com, out, or logging in now.
     pub fn account(&mut self) -> Result<Account, String> {
+        if !TRAVEL {
+            return Ok(Account::Disabled);
+        }
         if self.login_window_open() {
             return Ok(Account::LoggingIn);
         }
@@ -734,6 +751,9 @@ impl Trade {
     /// Sends the player to the hideout of a listing's seller (an instant
     /// buyout's token, `Listing::travel`): the trade site tells the game.
     pub fn travel(&mut self, token: &str) -> Result<(), TravelError> {
+        if !TRAVEL {
+            return Err(TravelError::Failed("Travelling to hideouts is turned off in this version".into()));
+        }
         self.last_used = Instant::now();
         let body = json!({ "token": token }).to_string();
         let path = format!("{}/whisper", game::current().trade_api());
@@ -921,7 +941,7 @@ impl Trade {
         if !self.browser.as_mut().is_some_and(|b| b.alive()) {
             let binary = cdp::find_binary().ok_or("Trade search needs Chromium or Chrome installed")?;
             eprintln!("trade: starting {binary}");
-            self.browser = Some(Browser::launch(&binary, &profile_dir())?);
+            self.browser = Some(Browser::launch(&binary, &profile_dir(), !TRAVEL)?);
         }
         Ok(self.browser.as_mut().unwrap())
     }
@@ -5294,6 +5314,21 @@ mod tests {
         // buyout (a whisper is for someone online in person).
         assert_eq!(travels, vec![Some("eyJ0eXAi.token"), Some(""), None]);
         assert!(singles[3..].iter().all(|s| s.7.is_none()));
+    }
+
+    /// While travel is off, nothing logs in or sends a session (no browser
+    /// starts for these either).
+    #[test]
+    fn travel_off_offers_no_login() {
+        if TRAVEL {
+            return;
+        }
+        let mut trade = Trade::new();
+        assert_eq!(trade.account(), Ok(Account::Disabled));
+        assert!(trade.login().is_err());
+        assert!(trade.login_window.is_none());
+        assert!(matches!(trade.travel("token"), Err(TravelError::Failed(_))));
+        assert!(trade.browser.is_none());
     }
 
     #[test]

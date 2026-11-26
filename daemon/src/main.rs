@@ -109,7 +109,8 @@
 //!              when these match)
 //!     travel   <token|"">   (the listing above is an instant buyout: the
 //!              token for TRAVEL to its seller's hideout, or empty when
-//!              we're not logged in to pathofexile.com)
+//!              we're not logged in to pathofexile.com; none while
+//!              trade::TRAVEL is off)
 //!     total    <number of matches>
 //!     url      <the search on pathofexile.com>
 //!   request:  "TRADE\n" + comma-separated enabled filters, each "index",
@@ -157,7 +158,8 @@
 //!
 //!   request:  "ACCOUNT\n": whether we're logged in to pathofexile.com
 //!   response: status ok (or error)
-//!     account  <in|out|logging_in>   (logging_in: the login window is open)
+//!     account  <in|out|logging_in|disabled>   (logging_in: the login
+//!              window is open; disabled: trade::TRAVEL is off, so no login)
 //!   request:  "LOGIN\n": opens a browser window at pathofexile.com's login
 //!             page; trade searches wait until the user closes it. Replies
 //!             like ACCOUNT, at once.
@@ -905,7 +907,9 @@ fn trade_response(
                 for (index, text) in &l.values {
                     let _ = writeln!(out, "value\t{index}\t{}", clean(text));
                 }
-                if let Some(token) = &l.travel {
+                if trade::TRAVEL
+                    && let Some(token) = &l.travel
+                {
                     let _ = writeln!(out, "travel\t{}", clean(token));
                 }
             }

@@ -397,10 +397,6 @@ add in-person sellers, or any listing. The results show:
 - An estimate: the median of the 10 cheapest listings, with the price range.
 - The listings, grouped by price, with how long ago they were listed.
   Hovering a listing shows the item.
-- On the instant buyout listing under the mouse, a door that takes you to
-  the seller's hideout, the way the trade site's "Travel to Hideout" does.
-  It needs you logged in to pathofexile.com (Settings, Price check). Until
-  then the door is faint and opens the settings.
 - A button to open the same search in your browser.
 
 If you change a filter afterwards, the results are marked out of date until
@@ -425,12 +421,6 @@ Ctrl+Alt+S, or the gear on a panel. Changes apply at once.
   - The league. "Current" (or "Current hardcore") follows poe.ninja into
     each new league.
   - Which listings a search starts with.
-  - The pathofexile.com account, for travelling to hideouts. **Log in** opens
-    a browser window at the site's login page. Log in there and close the
-    window; searches wait until it's closed. The session is kept in the
-    daemon's browser profile (`~/.cache/poe-waytrade/chromium`, only
-    readable by you), and **Log out** deletes it. PoE1 and PoE2 have separate
-    profiles, so each needs its own login.
   - How far below your roll a ticked filter starts.
   - Compact graph: a single price's week as a small graph in its row, rather
     than a large one under it (off by default).
