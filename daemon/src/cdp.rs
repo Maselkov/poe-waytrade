@@ -28,6 +28,21 @@ use std::time::{Duration, Instant};
 const ORIGIN_PAGE: &str = "https://www.pathofexile.com/api/trade/data/leagues";
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// The user agent we send: Chromium's own, naming Waytrade and its version
+/// where it says "HeadlessChrome" ("... waytrade/2.4.1 Chrome/158.0.0.0
+/// ...").
+fn user_agent(chromium: &str) -> String {
+    let ours = concat!("waytrade/", env!("WAYTRADE_VERSION"), " ");
+    if chromium.contains("HeadlessChrome/") {
+        chromium.replacen("HeadlessChrome/", &format!("{ours}Chrome/"), 1)
+    } else if let Some(at) = chromium.find("Chrome/") {
+        format!("{}{ours}{}", &chromium[..at], &chromium[at..])
+    } else {
+        format!("Mozilla/5.0 (X11; Linux x86_64) {}", ours.trim_end())
+    }
+}
+
+#[derive(Clone)]
 pub struct HttpResponse {
     pub status: u16,
     /// Lower-cased names.
@@ -154,14 +169,25 @@ impl Browser {
     }
 
     fn open_origin_page(&mut self) -> Result<(), String> {
-        let target = self.command("Target.createTarget", json!({ "url": ORIGIN_PAGE }), false)?;
+        let target = self.command("Target.createTarget", json!({ "url": "about:blank" }), false)?;
         let target_id = target["targetId"].as_str().ok_or("no targetId")?.to_string();
         let attached =
             self.command("Target.attachToTarget", json!({ "targetId": target_id, "flatten": true }), false)?;
         self.session = attached["sessionId"].as_str().ok_or("no sessionId")?.to_string();
 
+        // Say who we are before the page loads anything, like Awakened PoE
+        // Trade's "awakened-poe-trade/<version>": the browser's own user
+        // agent with Waytrade's name in place of "HeadlessChrome". Without
+        // client hint metadata, Chromium sends no Sec-CH-UA headers either
+        // (APT strips them).
+        let version = self.command("Browser.getVersion", json!({}), false)?;
+        let user_agent = user_agent(version["userAgent"].as_str().unwrap_or(""));
+        self.command("Emulation.setUserAgentOverride", json!({ "userAgent": user_agent }), true)?;
+        self.command("Page.navigate", json!({ "url": ORIGIN_PAGE }), true)?;
+
         let deadline = Instant::now() + COMMAND_TIMEOUT;
         loop {
+            // about:blank until the navigation commits.
             let state = self.evaluate("[document.readyState, location.host]")?;
             if state[0] == "complete" && state[1] == "www.pathofexile.com" {
                 return Ok(());
@@ -207,8 +233,9 @@ impl Browser {
             "(async () => {{
                 const r = await fetch({path}, {{
                     method: {method},
-                    headers: {{ 'Content-Type': 'application/json' }},
+                    headers: {{ 'Accept': 'application/json', 'Content-Type': 'application/json' }},
                     body: {body},
+                    referrerPolicy: 'no-referrer',
                 }});
                 const headers = {{}};
                 r.headers.forEach((v, k) => headers[k] = v);
@@ -291,5 +318,28 @@ impl Drop for Browser {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_agent_names_waytrade() {
+        let ours = concat!("waytrade/", env!("WAYTRADE_VERSION"));
+        let headless = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) \
+                        HeadlessChrome/158.0.0.0 Safari/537.36";
+        assert_eq!(
+            user_agent(headless),
+            format!(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) {ours} \
+                 Chrome/158.0.0.0 Safari/537.36"
+            )
+        );
+        let chrome =
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36";
+        assert!(user_agent(chrome).contains(&format!("{ours} Chrome/158")));
+        assert!(!user_agent(headless).contains("Headless"));
     }
 }

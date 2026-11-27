@@ -17,6 +17,9 @@ use std::time::{Duration, Instant, SystemTime};
 const DATA_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
 /// The browser is closed after this long without a search.
 pub const BROWSER_IDLE: Duration = Duration::from_secs(10 * 60);
+/// How long a search's or fetch's reply is reused for the same request
+/// (Awakened PoE Trade's cache lifetime).
+const REUSE_REPLIES: Duration = Duration::from_secs(300);
 /// Listings fetched per search (one fetch request allows up to 10).
 const LISTINGS: usize = 10;
 
@@ -570,6 +573,8 @@ pub struct Trade {
     data: Option<(TradeData, Instant)>,
     limiter: RateLimiter,
     last_used: Instant,
+    /// Recent search and fetch replies, by request (see `request`).
+    recent: HashMap<String, (Instant, HttpResponse)>,
 }
 
 /// Items worth a trade search: anything non-unique with mods, white gear
@@ -620,7 +625,13 @@ fn default_corrupted(item: &Item) -> Corrupted {
 
 impl Trade {
     pub fn new() -> Trade {
-        Trade { browser: None, data: None, limiter: RateLimiter::default(), last_used: Instant::now() }
+        Trade {
+            browser: None,
+            data: None,
+            limiter: RateLimiter::default(),
+            last_used: Instant::now(),
+            recent: HashMap::new(),
+        }
     }
 
     pub fn close_if_idle(&mut self) {
@@ -792,6 +803,31 @@ impl Trade {
 
     /// A rate-limited request; non-2xx replies become errors.
     fn request(
+        &mut self,
+        endpoint: &'static str,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+    ) -> Result<HttpResponse, String> {
+        // The same search or fetch again soon (Search pressed twice, a
+        // check repeated) is answered from what came back, like APT does.
+        let cached = matches!(endpoint, "search" | "fetch");
+        let key = format!("{method} {path} {}", body.unwrap_or(""));
+        if cached
+            && let Some((at, resp)) = self.recent.get(&key)
+            && at.elapsed() < REUSE_REPLIES
+        {
+            return Ok(resp.clone());
+        }
+        let resp = self.request_uncached(endpoint, method, path, body)?;
+        if cached {
+            self.recent.retain(|_, (at, _)| at.elapsed() < REUSE_REPLIES);
+            self.recent.insert(key, (Instant::now(), resp.clone()));
+        }
+        Ok(resp)
+    }
+
+    fn request_uncached(
         &mut self,
         endpoint: &'static str,
         method: &str,
@@ -3120,9 +3156,16 @@ impl RateLimiter {
         if let Some(until) = self.blocked_until.filter(|t| *t > now) {
             return Err(format!("Trade API rate limit: try again in {}s", (until - now).as_secs() + 1));
         }
-        let (Some(rules), Some(history)) = (self.rules.get(endpoint), self.history.get(endpoint)) else {
-            return Ok(()); // limits not known yet: the first request reveals them
+        // Until a reply says what the limits are: a search or a fetch every
+        // 5 s, like Awakened PoE Trade. The first reply reveals the rest.
+        let cautious = [(2, Duration::from_secs(5))];
+        let rules: &[(u32, Duration)] = match self.rules.get(endpoint) {
+            Some(rules) => rules,
+            None if matches!(endpoint, "search" | "fetch") => &cautious,
+            None => return Ok(()),
         };
+        let none = VecDeque::new();
+        let history = self.history.get(endpoint).unwrap_or(&none);
         for &(max, window) in rules {
             let recent: Vec<&Instant> = history.iter().filter(|t| now.duration_since(**t) < window).collect();
             // Keep one request of headroom.
@@ -5144,8 +5187,15 @@ mod tests {
                 ("x-rate-limit-ip-state", "1:10:0,1:60:0,1:300:0,1:21600:0"),
             ],
         );
+        // Limits unknown: a search (or fetch) every 5 s, like APT; reference
+        // data isn't limited.
         let mut limiter = RateLimiter::default();
-        assert!(limiter.check("search").is_ok(), "limits unknown: allowed");
+        assert!(limiter.check("search").is_ok(), "limits unknown: the first is allowed");
+        limiter.record("search", &reply(200, &[]));
+        assert!(limiter.check("search").is_err(), "limits unknown: one every 5 s");
+        assert!(limiter.check("fetch").is_ok() && limiter.check("data").is_ok());
+
+        let mut limiter = RateLimiter::default();
         // 5 per 10s, one kept spare: the fifth request is refused.
         for n in 1..=4 {
             limiter.record("search", &fresh);
