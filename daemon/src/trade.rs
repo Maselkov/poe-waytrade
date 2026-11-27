@@ -1809,12 +1809,37 @@ fn memory_strands_filter(item: &Item) -> Option<Filter> {
     })
 }
 
+/// A flask's quality, ticked above 20%: that much is rare and can be worth
+/// paying for. Only a minimum, like a gem's quality.
+fn flask_quality_filter(item: &Item) -> Option<Filter> {
+    if !item.class.ends_with("Flasks") || item.quality == 0 {
+        return None;
+    }
+    let quality = item.quality as f64;
+    Some(Filter {
+        label: format!("Quality {}%", item.quality),
+        target: Target::Property("misc_filters", "quality"),
+        min: Some(quality),
+        slider: Some((0.0, quality.max(30.0))),
+        draw_slider: true,
+        step: 1.0,
+        max_roll: false,
+        default_on: item.quality > 20,
+        section: Section::Base,
+        tier: None,
+        increased: None,
+        max: None,
+        roll: Some(quality),
+    })
+}
+
 /// Like APT for uniques: no totals, only the mods that roll (fixed ones
 /// don't tell copies apart), all unticked.
 fn unique_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
     let local = Local::of(item);
     let mut filters = weapon_filters(item, false);
     filters.extend(memory_strands_filter(item));
+    filters.extend(flask_quality_filter(item));
     let (options, picked) = option_filters(item, data);
     filters.extend(options);
     for (i, m) in item.mods.iter().enumerate() {
@@ -2305,6 +2330,7 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     filters.extend(influence_filters(item, false));
     filters.extend(eldritch_filters(item, data, false));
     filters.extend(memory_strands_filter(item));
+    filters.extend(flask_quality_filter(item));
     filters.extend(options);
 
     // Strength gives 1 life per 2, intelligence 1 mana per 2.
@@ -3562,6 +3588,40 @@ mod tests {
         let filters = build_filters(&gem("Arc", "18", 16, false), &data, Preset::Normal);
         assert_eq!(filters.iter().map(|f| f.default_on).collect::<Vec<_>>(), vec![false, true]);
         assert!(filters.iter().all(|f| f.max.is_none()));
+    }
+
+    #[test]
+    fn flask_quality() {
+        let data = test_data();
+        let flask = |quality: u32| {
+            let text = format!(
+                "Item Class: Utility Flasks\nRarity: Magic\nGranite Flask of the Armadillo\n--------\n\
+                 Quality: +{quality}% (augmented)\n--------\nItem Level: 84\n--------\n\
+                 +40% to Armour during Effect\n"
+            );
+            crate::item::parse(&text).unwrap()
+        };
+        let quality = |item: &Item| {
+            let filters = build_filters(item, &data, Preset::Normal);
+            filters.into_iter().find(|f| f.label.starts_with("Quality")).map(|f| (f.label, f.default_on, f.min))
+        };
+        // Up to 20% is what anyone gets with a bauble: listed, unticked.
+        assert_eq!(quality(&flask(20)), Some(("Quality 20%".to_string(), false, Some(20.0))));
+        // Above it is rare, and worth searching for.
+        let item = flask(28);
+        assert_eq!(quality(&item), Some(("Quality 28%".to_string(), true, Some(28.0))));
+        let filters = build_filters(&item, &data, Preset::Normal);
+        let chosen: Vec<Option<Bounds>> = filters.iter().map(|f| f.default_on.then_some((f.min, f.max))).collect();
+        let opts = SearchOptions {
+            six_link: false,
+            unidentified: false,
+            base_only: false,
+            corrupted: Corrupted::Any,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
+        let q = query(&item, &filters, &chosen, opts);
+        assert_eq!(q["query"]["filters"]["misc_filters"]["filters"]["quality"], json!({ "min": 28 }));
     }
 
     #[test]
