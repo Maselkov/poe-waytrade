@@ -276,23 +276,14 @@ fn valdo_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
     prices
 }
 
-/// Every temple's last room: its line is what any temple goes for.
-const APEX: &str = "Apex of Atzoatl";
-
 /// A Chronicle of Atzoatl: poe.ninja prices a temple by each room it has
-/// open, so it's worth about what its best room is. Its most valuable open
-/// rooms, best first, then the Apex's line (every temple has it) as what
-/// any temple goes for.
+/// open (the Apex of Atzoatl among them, when it isn't obstructed), so it's
+/// worth about what its best room is. Its most valuable open rooms, best
+/// first.
 fn temple_prices(db: &PriceDb, item: &Item) -> Vec<Price> {
-    let mut rooms: Vec<&ItemLine> =
-        item.open_rooms.iter().filter(|r| *r != APEX).filter_map(|r| db.temple_rooms.get(r)).collect();
+    let mut rooms: Vec<&ItemLine> = item.open_rooms.iter().filter_map(|r| db.temple_rooms.get(r)).collect();
     rooms.sort_by(|a, b| b.chaos_value.total_cmp(&a.chaos_value));
-    let priced = |line: &ItemLine, label: String| Price { label, ..line_price(db, line) };
-    let mut prices: Vec<Price> = rooms.iter().take(MAX_PRICES - 1).map(|l| priced(l, l.name.clone())).collect();
-    if let Some(apex) = db.temple_rooms.get(APEX) {
-        prices.push(priced(apex, "any temple".into()));
-    }
-    prices
+    rooms.iter().take(MAX_PRICES).map(|l| Price { label: l.name.clone(), ..line_price(db, l) }).collect()
 }
 
 /// A Wombgift's line for its item level: the highest bracket at or below it.
@@ -1091,19 +1082,24 @@ mod tests {
         assert_eq!(item.open_rooms.len(), 10);
         assert_eq!(item.open_rooms.first().map(String::as_str), Some("Royal Forge (Tier 2)"));
         assert_eq!(item.open_rooms.last().map(String::as_str), Some("Halls"));
-        // Its open rooms poe.ninja has, best first (not the obstructed
-        // Breach Containment Chamber, nor the Apex among them), then the
-        // Apex as any temple's price.
+        // Its open rooms poe.ninja has, best first: not the obstructed
+        // Breach Containment Chamber or Apex of Atzoatl.
         let mut want: Vec<(String, f64)> = item
             .open_rooms
             .iter()
             .flat_map(|r| fixture_lines("IncursionTemple", r))
             .map(|l| (l["name"].as_str().unwrap().to_string(), chaos(&l)))
             .collect();
-        assert!(want.len() >= MAX_PRICES, "the fixture has too few of its rooms: {want:?}");
+        assert!(want.len() > MAX_PRICES, "the fixture has too few of its rooms: {want:?}");
         want.sort_by(|a, b| b.1.total_cmp(&a.1));
-        want.truncate(MAX_PRICES - 1);
-        want.push(("any temple".into(), chaos(&line("IncursionTemple", "Apex of Atzoatl", |_| true))));
+        want.truncate(MAX_PRICES);
+        let got = look(CHRONICLE);
+        assert!(got.iter().all(|(room, _)| room != "Apex of Atzoatl"));
+        // An open Apex is a room like the others.
+        let open = CHRONICLE.replace("Halls\nObstructed Rooms:", "Apex of Atzoatl\nObstructed Rooms:");
+        assert_ne!(open, CHRONICLE);
+        let apex = chaos(&line("IncursionTemple", "Apex of Atzoatl", |_| true));
+        assert_eq!(look(&open).iter().any(|(room, _)| room == "Apex of Atzoatl"), apex >= want[MAX_PRICES - 1].1);
         assert_eq!(look(CHRONICLE), want);
     }
 
