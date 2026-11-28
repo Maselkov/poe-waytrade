@@ -109,6 +109,210 @@
        }
       ]
      }
+    },
+    {
+     "id": "pseudo.pseudo_temple_boss_fire_2",
+     "text": "Has Room: Royal Forge (Tier 2)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_poison_room_3",
+     "text": "Has Room: Toxic Grove (Tier 3)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_weapon_room_3",
+     "text": "Has Room: Hall of Champions (Tier 3)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_currency_vault_2",
+     "text": "Has Room: Treasury (Tier 2)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_trinket_room_1",
+     "text": "Has Room: Jeweller's Workshop (Tier 1)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_boss_minions_2",
+     "text": "Has Room: Automaton Lab (Tier 2)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_chests_3",
+     "text": "Has Room: Museum of Artefacts (Tier 3)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_sacrifice_room_2",
+     "text": "Has Room: Hall of Offerings (Tier 2)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_workshop_2",
+     "text": "Has Room: Engineering Department (Tier 2)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_halls",
+     "text": "Has Room: Halls",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_breach_room_2",
+     "text": "Has Room: Breach Containment Chamber (Tier 2)",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
+    },
+    {
+     "id": "pseudo.pseudo_temple_apex",
+     "text": "Has Room: Apex of Atzoatl",
+     "type": "pseudo",
+     "option": {
+      "options": [
+       {
+        "id": 1,
+        "text": "Open"
+       },
+       {
+        "id": 2,
+        "text": "Obstructed"
+       }
+      ]
+     }
     }
    ]
   },

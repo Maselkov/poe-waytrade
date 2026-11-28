@@ -601,6 +601,8 @@ pub fn searchable(item: &Item) -> bool {
         _ if item.warrant.is_some() => true,
         // Facetor's Lens: by its stored experience.
         _ if item.stored_experience.is_some() => true,
+        // Chronicles of Atzoatl: by their open rooms.
+        _ if is_temple(item) => !item.open_rooms.is_empty(),
         // Wickerman limbs have no rarity: searched by base and implicits.
         _ => item.class == "Viscera" && !item.mods.is_empty(),
     }
@@ -2266,6 +2268,9 @@ fn build_filters(item: &Item, data: &TradeData, preset: Preset) -> Vec<Filter> {
     if item.warrant.is_some() {
         return warrant_filters(item, data);
     }
+    if is_temple(item) {
+        return temple_filters(item, data);
+    }
     if preset == Preset::Base {
         return base_filters(item, data);
     }
@@ -2948,6 +2953,40 @@ fn warrant_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
         .collect()
 }
 
+pub fn is_temple(item: &Item) -> bool {
+    item.base == "Chronicle of Atzoatl"
+}
+
+/// "Has Room: …" is open, not obstructed (the trade site's option 1).
+const ROOM_OPEN: u64 = 1;
+
+/// A Chronicle of Atzoatl's open rooms, the Apex among them when it's open,
+/// unticked: any temple is the search, and each room ticked narrows it.
+/// The panel ticks the most valuable one (`tick_room`), which poe.ninja
+/// knows.
+fn temple_filters(item: &Item, data: &TradeData) -> Vec<Filter> {
+    item.open_rooms
+        .iter()
+        .filter_map(|room| {
+            let id = data.stats.get(&("pseudo".to_string(), format!("Has Room: {room}")))?;
+            Some(Filter {
+                draw_slider: false,
+                min: None,
+                slider: None,
+                roll: None,
+                ..Filter::new(room.clone(), Target::StatOption(id.clone(), ROOM_OPEN), 0.0, None, false, Section::Mod)
+            })
+        })
+        .collect()
+}
+
+/// Ticks a Chronicle's room filter, by the room's name.
+pub fn tick_room(filters: &mut [Filter], room: &str) {
+    for f in filters.iter_mut().filter(|f| f.label == room && matches!(f.target, Target::StatOption(..))) {
+        f.default_on = true;
+    }
+}
+
 /// `chosen[i]`: whether filter i is used, and its bounds.
 fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: SearchOptions) -> Value {
     let mut stats = Vec::new();
@@ -3556,6 +3595,50 @@ mod tests {
         let q = query(&item, &filters, &chosen, opts);
         let Target::Stat(pierce) = &filters[1].target else { unreachable!() };
         assert_eq!(q["query"]["stats"][0]["filters"][1], json!({ "id": pierce }));
+    }
+
+    #[test]
+    fn temple_by_its_open_rooms() {
+        let data = real_data();
+        let item = crate::item::parse(crate::lookup::tests::CHRONICLE).unwrap();
+        assert!(searchable(&item));
+        let filters = build_filters(&item, &data, Preset::Normal);
+        // Each open room, unticked; not the obstructed Breach Containment
+        // Chamber or Apex of Atzoatl.
+        let shown: Vec<(&str, bool)> = filters.iter().map(|f| (f.label.as_str(), f.default_on)).collect();
+        let want: Vec<(&str, bool)> = item.open_rooms.iter().map(|r| (r.as_str(), false)).collect();
+        assert_eq!(shown, want);
+        // The panel ticks the most valuable by poe.ninja, and only it.
+        let mut ticked = build_filters(&item, &data, Preset::Normal);
+        let db = crate::ninja::tests::fixture_db();
+        let best = crate::lookup::best_temple_room(&db, &item).unwrap();
+        tick_room(&mut ticked, best);
+        let on: Vec<&str> = ticked.iter().filter(|f| f.default_on).map(|f| f.label.as_str()).collect();
+        assert_eq!(on, vec![best]);
+        assert_eq!(filters[1].target, Target::StatOption("pseudo.pseudo_temple_poison_room_3".into(), ROOM_OPEN));
+        // An open Apex is searched like the others.
+        let open = crate::lookup::tests::CHRONICLE.replace("Halls\nObstructed", "Apex of Atzoatl\nObstructed");
+        let apex = build_filters(&crate::item::parse(&open).unwrap(), &data, Preset::Normal);
+        assert_eq!(apex.last().unwrap().target, Target::StatOption("pseudo.pseudo_temple_apex".into(), ROOM_OPEN));
+
+        // By its base, the ticked rooms open.
+        let mut chosen: Vec<Option<Bounds>> = vec![None; filters.len()];
+        chosen[1] = Some((None, None));
+        let opts = SearchOptions {
+            six_link: false,
+            unidentified: false,
+            orbs_only: false,
+            base_only: false,
+            corrupted: Corrupted::No,
+            preset: Preset::Normal,
+            status: Status::Instant,
+        };
+        let q = query(&item, &filters, &chosen, opts);
+        assert_eq!(q["query"]["type"], "Chronicle of Atzoatl");
+        assert_eq!(
+            q["query"]["stats"][0]["filters"],
+            json!([{ "id": "pseudo.pseudo_temple_poison_room_3", "value": { "option": 1 } }])
+        );
     }
 
     fn gem(name: &str, level: &str, quality: u32, corrupted: bool) -> Item {

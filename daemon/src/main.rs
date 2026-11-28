@@ -782,10 +782,14 @@ fn trade_response(
         eprintln!("trade: {e}");
         format!("status\terror\ntitle\t{}\nmessage\t{}\n", clean(&title), clean(&e))
     };
-    let prepared = match trade.prepare(item, preset) {
+    let mut prepared = match trade.prepare(item, preset) {
         Ok(p) => p,
         Err(e) => return fail(e),
     };
+    // A Chronicle of Atzoatl is searched by its most valuable room.
+    if let Some(best) = db.and_then(|db| lookup::best_temple_room(db, item)) {
+        trade::tick_room(&mut prepared.filters, best);
+    }
     let options = search.map_or(prepared.defaults, |s| s.options);
 
     let _ = writeln!(out, "status\ttrade\ntitle\t{}", clean(&title));
@@ -914,13 +918,17 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
     };
 
     let white_map = item.rarity == "Normal" && mapcheck::is_map_like(&item);
-    if (item.rarity == "Unique" || item.rarity == "Gem" || item.class == "Viscera" || white_map)
-        && trade::searchable(&item)
-    {
+    let priced_and_searched = item.rarity == "Unique"
+        || item.rarity == "Gem"
+        || item.class == "Viscera"
+        || white_map
+        || trade::is_temple(&item);
+    if priced_and_searched && trade::searchable(&item) {
         // Identified uniques, gems and Viscera limbs: trade filters for
         // their rolls (a gem's level and quality), with the poe.ninja price
         // alongside. White maps and invitations: their listings by type,
-        // with the poe.ninja price alongside.
+        // with the poe.ninja price alongside. Chronicles of Atzoatl: their
+        // open rooms, with the best rooms' poe.ninja prices alongside.
         out = trade_response(state, &item, trade_search, preset, Some(&db));
         if out.starts_with("status\ttrade")
             && let lookup::Outcome::Found { prices, .. } = lookup::lookup(&db, &item)

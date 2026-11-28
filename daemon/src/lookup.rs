@@ -140,6 +140,15 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
         };
     }
 
+    if crate::trade::is_temple(item) {
+        let prices = temple_prices(db, item);
+        return if prices.is_empty() {
+            Outcome::NotFound("No poe.ninja price for this temple".into())
+        } else {
+            found(title, prices)
+        };
+    }
+
     // Wombgifts: a line per item level bracket.
     if item.class == "Wombgifts" {
         return match db.items.get(&item.base).map(|lines| wombgift_prices(db, lines, item)) {
@@ -265,6 +274,27 @@ fn valdo_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
         }
     }
     prices
+}
+
+/// A Chronicle of Atzoatl: poe.ninja prices a temple by each room it has
+/// open (the Apex of Atzoatl among them, when it isn't obstructed), so it's
+/// worth about what its best room is. Its most valuable open rooms, best
+/// first.
+fn temple_prices(db: &PriceDb, item: &Item) -> Vec<Price> {
+    let rooms = temple_rooms(db, item);
+    rooms.iter().take(MAX_PRICES).map(|l| Price { label: l.name.clone(), ..line_price(db, l) }).collect()
+}
+
+/// A Chronicle's open rooms poe.ninja has, the most valuable first.
+fn temple_rooms<'a>(db: &'a PriceDb, item: &Item) -> Vec<&'a ItemLine> {
+    let mut rooms: Vec<&ItemLine> = item.open_rooms.iter().filter_map(|r| db.temple_rooms.get(r)).collect();
+    rooms.sort_by(|a, b| b.chaos_value.total_cmp(&a.chaos_value));
+    rooms
+}
+
+/// A Chronicle's most valuable open room by poe.ninja, as its text has it.
+pub fn best_temple_room<'a>(db: &'a PriceDb, item: &Item) -> Option<&'a str> {
+    temple_rooms(db, item).first().map(|l| l.name.as_str())
 }
 
 /// A Wombgift's line for its item level: the highest bracket at or below it.
@@ -605,7 +635,7 @@ fn best_gem<'a>(lines: &'a [ItemLine], item: &Item) -> Option<&'a ItemLine> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::item::parse;
     use crate::ninja::tests::{fixture_db, fixture_lines};
@@ -1047,6 +1077,42 @@ mod tests {
         );
         let l = line("BlightRavagedMap", "Blight-ravaged Map (Tier 16)", |_| true);
         assert_eq!(got, vec![(l["variant"].as_str().unwrap().to_string(), chaos(&l))]);
+    }
+
+    pub(crate) const CHRONICLE: &str = "Item Class: Misc Map Items\nRarity: Currency\nChronicle of Atzoatl\n--------\n\
+        Area Level: 83\n--------\nOpen Rooms:\nRoyal Forge (Tier 2)\nToxic Grove (Tier 3)\n\
+        Hall of Champions (Tier 3)\nTreasury (Tier 2)\nJeweller's Workshop (Tier 1)\nAutomaton Lab (Tier 2)\n\
+        Museum of Artefacts (Tier 3)\nHall of Offerings (Tier 2)\nEngineering Department (Tier 2)\nHalls\n\
+        Obstructed Rooms:\nBreach Containment Chamber (Tier 2)\nApex of Atzoatl\n--------\n\
+        \"The Vaal had little concern for the externalities of their engineering.\" - Icius Perandus\n--------\n\
+        Right click this item to view the Temple of Atzoatl.\n";
+
+    #[test]
+    fn temple_by_its_best_rooms() {
+        let item = parse(CHRONICLE).unwrap();
+        assert_eq!(item.open_rooms.len(), 10);
+        assert_eq!(item.open_rooms.first().map(String::as_str), Some("Royal Forge (Tier 2)"));
+        assert_eq!(item.open_rooms.last().map(String::as_str), Some("Halls"));
+        // Its open rooms poe.ninja has, best first: not the obstructed
+        // Breach Containment Chamber or Apex of Atzoatl.
+        let mut want: Vec<(String, f64)> = item
+            .open_rooms
+            .iter()
+            .flat_map(|r| fixture_lines("IncursionTemple", r))
+            .map(|l| (l["name"].as_str().unwrap().to_string(), chaos(&l)))
+            .collect();
+        assert!(want.len() > MAX_PRICES, "the fixture has too few of its rooms: {want:?}");
+        want.sort_by(|a, b| b.1.total_cmp(&a.1));
+        want.truncate(MAX_PRICES);
+        let got = look(CHRONICLE);
+        assert!(got.iter().all(|(room, _)| room != "Apex of Atzoatl"));
+        // An open Apex is a room like the others.
+        let open = CHRONICLE.replace("Halls\nObstructed Rooms:", "Apex of Atzoatl\nObstructed Rooms:");
+        assert_ne!(open, CHRONICLE);
+        let apex = chaos(&line("IncursionTemple", "Apex of Atzoatl", |_| true));
+        assert_eq!(look(&open).iter().any(|(room, _)| room == "Apex of Atzoatl"), apex >= want[MAX_PRICES - 1].1);
+        assert_eq!(look(CHRONICLE), want);
+        assert_eq!(best_temple_room(&fixture_db(), &item), Some(want[0].0.as_str()));
     }
 
     fn crown(implicit: &str) -> String {

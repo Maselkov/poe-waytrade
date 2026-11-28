@@ -211,6 +211,10 @@ From poe.ninja:
   where items show no art, say), you get every unique on that base.
 - Skill gems, by level, quality and corruption.
 - Maps, invitations and beasts.
+- Chronicles of Atzoatl, by their open rooms (not obstructed ones, the Apex
+  included): the best rooms' prices, as poe.ninja prices a temple by each room
+  it has open. The panel also lists the open rooms as trade filters, with
+  the most valuable one ticked, to search for temples with them open.
 - Wickerman limbs (Viscera), matched by their implicits.
 - White and magic cluster jewels, by enchant, passive count and item level
   bracket.
