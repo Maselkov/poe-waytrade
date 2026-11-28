@@ -782,10 +782,14 @@ fn trade_response(
         eprintln!("trade: {e}");
         format!("status\terror\ntitle\t{}\nmessage\t{}\n", clean(&title), clean(&e))
     };
-    let prepared = match trade.prepare(item, preset) {
+    let mut prepared = match trade.prepare(item, preset) {
         Ok(p) => p,
         Err(e) => return fail(e),
     };
+    // A Chronicle of Atzoatl is searched by its most valuable room.
+    if let Some(best) = db.and_then(|db| lookup::best_temple_room(db, item)) {
+        trade::tick_room(&mut prepared.filters, best);
+    }
     let options = search.map_or(prepared.defaults, |s| s.options);
 
     let _ = writeln!(out, "status\ttrade\ntitle\t{}", clean(&title));

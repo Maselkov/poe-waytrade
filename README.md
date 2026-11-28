@@ -213,8 +213,8 @@ From poe.ninja:
 - Maps, invitations and beasts.
 - Chronicles of Atzoatl, by their open rooms (not obstructed ones, the Apex
   included): the best rooms' prices, as poe.ninja prices a temple by each room
-  it has open. The panel also lists the open rooms as trade filters, unticked:
-  tick the ones that matter and search for temples with them open.
+  it has open. The panel also lists the open rooms as trade filters, with
+  the most valuable one ticked, to search for temples with them open.
 - Wickerman limbs (Viscera), matched by their implicits.
 - White and magic cluster jewels, by enchant, passive count and item level
   bracket.

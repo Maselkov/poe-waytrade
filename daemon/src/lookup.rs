@@ -281,9 +281,20 @@ fn valdo_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
 /// worth about what its best room is. Its most valuable open rooms, best
 /// first.
 fn temple_prices(db: &PriceDb, item: &Item) -> Vec<Price> {
+    let rooms = temple_rooms(db, item);
+    rooms.iter().take(MAX_PRICES).map(|l| Price { label: l.name.clone(), ..line_price(db, l) }).collect()
+}
+
+/// A Chronicle's open rooms poe.ninja has, the most valuable first.
+fn temple_rooms<'a>(db: &'a PriceDb, item: &Item) -> Vec<&'a ItemLine> {
     let mut rooms: Vec<&ItemLine> = item.open_rooms.iter().filter_map(|r| db.temple_rooms.get(r)).collect();
     rooms.sort_by(|a, b| b.chaos_value.total_cmp(&a.chaos_value));
-    rooms.iter().take(MAX_PRICES).map(|l| Price { label: l.name.clone(), ..line_price(db, l) }).collect()
+    rooms
+}
+
+/// A Chronicle's most valuable open room by poe.ninja, as its text has it.
+pub fn best_temple_room<'a>(db: &'a PriceDb, item: &Item) -> Option<&'a str> {
+    temple_rooms(db, item).first().map(|l| l.name.as_str())
 }
 
 /// A Wombgift's line for its item level: the highest bracket at or below it.
@@ -1101,6 +1112,7 @@ pub(crate) mod tests {
         let apex = chaos(&line("IncursionTemple", "Apex of Atzoatl", |_| true));
         assert_eq!(look(&open).iter().any(|(room, _)| room == "Apex of Atzoatl"), apex >= want[MAX_PRICES - 1].1);
         assert_eq!(look(CHRONICLE), want);
+        assert_eq!(best_temple_room(&fixture_db(), &item), Some(want[0].0.as_str()));
     }
 
     fn crown(implicit: &str) -> String {
