@@ -140,7 +140,7 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
         };
     }
 
-    if item.base == "Chronicle of Atzoatl" {
+    if crate::trade::is_temple(item) {
         let prices = temple_prices(db, item);
         return if prices.is_empty() {
             Outcome::NotFound("No poe.ninja price for this temple".into())
@@ -624,7 +624,7 @@ fn best_gem<'a>(lines: &'a [ItemLine], item: &Item) -> Option<&'a ItemLine> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::item::parse;
     use crate::ninja::tests::{fixture_db, fixture_lines};
@@ -1068,7 +1068,7 @@ mod tests {
         assert_eq!(got, vec![(l["variant"].as_str().unwrap().to_string(), chaos(&l))]);
     }
 
-    const CHRONICLE: &str = "Item Class: Misc Map Items\nRarity: Currency\nChronicle of Atzoatl\n--------\n\
+    pub(crate) const CHRONICLE: &str = "Item Class: Misc Map Items\nRarity: Currency\nChronicle of Atzoatl\n--------\n\
         Area Level: 83\n--------\nOpen Rooms:\nRoyal Forge (Tier 2)\nToxic Grove (Tier 3)\n\
         Hall of Champions (Tier 3)\nTreasury (Tier 2)\nJeweller's Workshop (Tier 1)\nAutomaton Lab (Tier 2)\n\
         Museum of Artefacts (Tier 3)\nHall of Offerings (Tier 2)\nEngineering Department (Tier 2)\nHalls\n\

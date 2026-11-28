@@ -179,9 +179,12 @@ def main():
     save("ninja-valdo-map.json", {"lines": [slim(line) for line in ov["lines"] if line["variant"] == reward]})
 
     stats = get(f"{TRADE}/data/stats")
+    # Chronicles of Atzoatl: every room ("Has Room: Halls"), open or obstructed.
     save("trade-stats.json", {"result": [
-        {"id": g["id"], "label": g["label"], "entries": [e for e in g["entries"]
-                                                if e["text"] in (MERCENARY_TEXTS if g["id"] == "mercenary" else STAT_TEXTS)]}
+        {"id": g["id"], "label": g["label"], "entries": [
+            e for e in g["entries"]
+            if e["text"] in (MERCENARY_TEXTS if g["id"] == "mercenary" else STAT_TEXTS)
+            or (g["id"] == "pseudo" and e["text"].startswith("Has Room: "))]}
         for g in stats["result"]
     ]})
     items = get(f"{TRADE}/data/items")

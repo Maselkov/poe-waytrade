@@ -914,13 +914,17 @@ fn respond(state: &State, text: &str, trade_search: Option<&TradeRequest>, prese
     };
 
     let white_map = item.rarity == "Normal" && mapcheck::is_map_like(&item);
-    if (item.rarity == "Unique" || item.rarity == "Gem" || item.class == "Viscera" || white_map)
-        && trade::searchable(&item)
-    {
+    let priced_and_searched = item.rarity == "Unique"
+        || item.rarity == "Gem"
+        || item.class == "Viscera"
+        || white_map
+        || trade::is_temple(&item);
+    if priced_and_searched && trade::searchable(&item) {
         // Identified uniques, gems and Viscera limbs: trade filters for
         // their rolls (a gem's level and quality), with the poe.ninja price
         // alongside. White maps and invitations: their listings by type,
-        // with the poe.ninja price alongside.
+        // with the poe.ninja price alongside. Chronicles of Atzoatl: their
+        // open rooms, with the best rooms' poe.ninja prices alongside.
         out = trade_response(state, &item, trade_search, preset, Some(&db));
         if out.starts_with("status\ttrade")
             && let lookup::Outcome::Found { prices, .. } = lookup::lookup(&db, &item)
