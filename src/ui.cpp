@@ -281,6 +281,10 @@ struct Model {
     bool has_base = false, corrupted_on = false;
     bool six_link_offered = false, six_link_on = false;  // the 6-link chip
     bool unid_offered = false, unid_on = false;          // the unidentified chip
+    // Listings in the small unit or divines only: the "Price" header shows
+    // their icons (small_unit: the small unit's icon id).
+    bool orbs_only = false;
+    Rml::String small_unit;
     bool base_preset = false, preset_base = false;  // offered / active
     bool base_only = false, searched = false, stale = false;
     // The price card, and its source line when poe.ninja alone prices the item
@@ -864,6 +868,8 @@ void OverlayUi::Impl::bind_model() {
     c.Bind("gem_quality_col", &model.gem_quality_col);
     c.Bind("list_cols", &model.list_cols);
     c.Bind("list_more", &model.list_more);
+    c.Bind("orbs_only", &model.orbs_only);
+    c.Bind("small_unit", &model.small_unit);
     c.Bind("debug_lines", &model.debug_lines);
     c.Bind("can_switch", &model.can_switch);
     c.Bind("map_price", &model.map_price);
@@ -921,6 +927,9 @@ void OverlayUi::Impl::bind_model() {
     });
     c.BindEventCallback("toggle_unidentified", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
         if (price_check) price_check->toggle_unidentified();
+    });
+    c.BindEventCallback("toggle_orbs_only", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList&) {
+        if (price_check) price_check->toggle_orbs_only();
     });
     c.BindEventCallback("week_range", [this](Rml::DataModelHandle, Rml::Event& ev, const Rml::VariantList& args) {
         if (price_check && !args.empty()) price_check->cycle_week_range(args[0].Get<Rml::String>());
@@ -1257,6 +1266,8 @@ void OverlayUi::Impl::sync(PriceCheck& pc) {
         m.six_link_on = reply->six_link;
         m.unid_offered = reply->unidentified_offered;
         m.unid_on = reply->unidentified;
+        m.orbs_only = reply->orbs_only;
+        m.small_unit = small_unit_id();
         m.corrupted_kind = reply->item_corrupted ? "yes" : "no";
         m.corrupted_label = reply->item_corrupted ? "Corrupted" : "Uncorrupted";
         // A unique's poe.ninja price, which doesn't know its rolls, above the

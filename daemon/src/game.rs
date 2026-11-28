@@ -78,6 +78,15 @@ impl Game {
         }
     }
 
+    /// The trade site's price option for listings in the small unit or
+    /// Divine Orbs, nothing else.
+    pub fn orbs_option(self) -> &'static str {
+        match self {
+            Game::Poe1 => "chaos_divine",
+            Game::Poe2 => "exalted_divine",
+        }
+    }
+
     pub fn small_suffix(self) -> &'static str {
         match self {
             Game::Poe1 => "c",

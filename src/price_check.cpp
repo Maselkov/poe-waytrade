@@ -638,6 +638,9 @@ void PriceCheck::request_icons() {
     // poe.ninja prices: their own card, or the one on a unique's trade panel
     for (const PriceLine& p : reply_->prices) want(price_icon(p), price_icon(p));
     for (const TradeListing& l : reply_->listings) want(l.currency_id, l.currency_id);
+    // The listings' "Price" header names the two currencies it keeps to.
+    if (reply_->status == "trade" && reply_->searched)
+        for (const char* id : {small_unit_id(), "divine"}) want(id, id);
     // Listed items' images, and the socket sprite sheet, for their previews:
     // after the prices' icons.
     for (const TradeListing& l : reply_->listings)
@@ -754,6 +757,12 @@ void PriceCheck::toggle_unidentified() {
     changed();
 }
 
+void PriceCheck::toggle_orbs_only() {
+    if (!reply_ || reply_->status != "trade" || !reply_->searched || daemon_.busy()) return;
+    reply_->orbs_only = !reply_->orbs_only;
+    search();
+}
+
 std::vector<TradeFilter> PriceCheck::enabled_filters() const {
     std::vector<TradeFilter> enabled;
     for (const TradeFilter& f : reply_->filters)
@@ -767,7 +776,7 @@ void PriceCheck::search() {
     std::vector<TradeFilter> enabled = enabled_filters();
     status_.clear();
     daemon_.request_trade(enabled, reply_->base_only, reply_->corrupted, reply_->preset, reply_->listing_status,
-                          reply_->six_link, reply_->unidentified, item_text_);
+                          reply_->six_link, reply_->unidentified, reply_->orbs_only, item_text_);
     changed();
 }
 
@@ -797,5 +806,5 @@ void PriceCheck::open_trade() {
     apply_edit();
     if (!reply_ || reply_->status != "trade") return;
     opener_.open_trade(enabled_filters(), reply_->base_only, reply_->corrupted, reply_->preset, reply_->listing_status,
-                       reply_->six_link, reply_->unidentified, item_text_);
+                       reply_->six_link, reply_->unidentified, reply_->orbs_only, item_text_);
 }
