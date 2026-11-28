@@ -107,6 +107,7 @@ const ITEM_TYPES: &[&str] = &[
     "Wombgift",
     "ValdoMap",
     "Corpse",
+    "IncursionTemple",
 ];
 
 #[derive(Deserialize)]
@@ -270,6 +271,9 @@ pub struct PriceDb {
     /// Valdo maps by reward ("Foil Mageblood"), one line per map listed: the
     /// name is the map's own, and its mods make its price.
     pub valdo: HashMap<String, Vec<ItemLine>>,
+    /// Chronicles of Atzoatl by room ("Doryani's Institute (Tier 3)",
+    /// "Halls"): a line per room, the price of a temple with it open.
+    pub temple_rooms: HashMap<String, ItemLine>,
 }
 
 impl PriceDb {
@@ -286,6 +290,7 @@ impl PriceDb {
             bases: HashMap::new(),
             clusters: HashMap::new(),
             valdo: HashMap::new(),
+            temple_rooms: HashMap::new(),
         }
     }
 
@@ -365,6 +370,13 @@ impl PriceDb {
             "ClusterJewel" => Some(&mut self.clusters),
             _ => None,
         };
+        // Named by their rooms, which aren't items ("Vault", "Workshop").
+        if kind == "IncursionTemple" {
+            for line in ov.lines {
+                self.temple_rooms.insert(line.name.clone(), line);
+            }
+            return;
+        }
         if kind == "ValdoMap" {
             for line in ov.lines {
                 if let Some(reward) = line.variant.clone() {
@@ -525,6 +537,7 @@ pub(crate) mod tests {
         ("ValdoMap", include_str!("../fixtures/ninja-valdo-map.json")),
         ("Corpse", include_str!("../fixtures/ninja-corpse.json")),
         ("BlightRavagedMap", include_str!("../fixtures/ninja-blight-ravaged-map.json")),
+        ("IncursionTemple", include_str!("../fixtures/ninja-incursion-temple.json")),
     ];
 
     /// A price list built from the fixtures the way `fetch` builds it.
@@ -696,7 +709,8 @@ pub(crate) mod tests {
             .iter()
             .flat_map(|m| m.values())
             .map(Vec::len)
-            .sum::<usize>();
+            .sum::<usize>()
+            + db.temple_rooms.len();
         assert_eq!(kept, sent);
         let gem = &db.items["Arc"];
         assert!(gem.iter().all(|l| l.gem_level.is_some()), "gem lines without a level");

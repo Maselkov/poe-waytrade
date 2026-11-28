@@ -49,6 +49,9 @@ pub struct Item {
     pub map_props: Vec<(String, String)>,
     /// "Reward: Foil Mageblood" on a Valdo map.
     pub reward: Option<String>,
+    /// A Chronicle of Atzoatl's "Open Rooms:", as listed ("Toxic Grove
+    /// (Tier 3)", "Halls"). Its obstructed rooms aren't in the temple.
+    pub open_rooms: Vec<String>,
     /// Weapon properties: average damage per hit by type, attacks per second.
     pub physical_damage: Option<f64>,
     pub elemental_damage: f64,
@@ -628,6 +631,10 @@ pub fn parse(text: &str) -> Option<Item> {
         }
     }
     item.warrant = warrant(&item, &sections);
+    if let Some(section) = sections.iter().find(|s| s.first() == Some(&"Open Rooms:")) {
+        let rooms = section[1..].iter().take_while(|l| **l != "Obstructed Rooms:");
+        item.open_rooms = rooms.map(|l| l.to_string()).collect();
+    }
     // PoE2's waystones name their tier in the base: "Waystone (Tier 14)".
     if item.map_tier.is_none()
         && item.class == "Waystones"

@@ -140,6 +140,15 @@ pub fn lookup(db: &PriceDb, item: &Item) -> Outcome {
         };
     }
 
+    if item.base == "Chronicle of Atzoatl" {
+        let prices = temple_prices(db, item);
+        return if prices.is_empty() {
+            Outcome::NotFound("No poe.ninja price for this temple".into())
+        } else {
+            found(title, prices)
+        };
+    }
+
     // Wombgifts: a line per item level bracket.
     if item.class == "Wombgifts" {
         return match db.items.get(&item.base).map(|lines| wombgift_prices(db, lines, item)) {
@@ -263,6 +272,25 @@ fn valdo_prices(db: &PriceDb, lines: &[ItemLine], item: &Item) -> Vec<Price> {
             prices.push(summary(sorted[0], "lowest".into()));
             prices.push(summary(sorted[n - 1], "highest".into()));
         }
+    }
+    prices
+}
+
+/// Every temple's last room: its line is what any temple goes for.
+const APEX: &str = "Apex of Atzoatl";
+
+/// A Chronicle of Atzoatl: poe.ninja prices a temple by each room it has
+/// open, so it's worth about what its best room is. Its most valuable open
+/// rooms, best first, then the Apex's line (every temple has it) as what
+/// any temple goes for.
+fn temple_prices(db: &PriceDb, item: &Item) -> Vec<Price> {
+    let mut rooms: Vec<&ItemLine> =
+        item.open_rooms.iter().filter(|r| *r != APEX).filter_map(|r| db.temple_rooms.get(r)).collect();
+    rooms.sort_by(|a, b| b.chaos_value.total_cmp(&a.chaos_value));
+    let priced = |line: &ItemLine, label: String| Price { label, ..line_price(db, line) };
+    let mut prices: Vec<Price> = rooms.iter().take(MAX_PRICES - 1).map(|l| priced(l, l.name.clone())).collect();
+    if let Some(apex) = db.temple_rooms.get(APEX) {
+        prices.push(priced(apex, "any temple".into()));
     }
     prices
 }
@@ -1047,6 +1075,36 @@ mod tests {
         );
         let l = line("BlightRavagedMap", "Blight-ravaged Map (Tier 16)", |_| true);
         assert_eq!(got, vec![(l["variant"].as_str().unwrap().to_string(), chaos(&l))]);
+    }
+
+    const CHRONICLE: &str = "Item Class: Misc Map Items\nRarity: Currency\nChronicle of Atzoatl\n--------\n\
+        Area Level: 83\n--------\nOpen Rooms:\nRoyal Forge (Tier 2)\nToxic Grove (Tier 3)\n\
+        Hall of Champions (Tier 3)\nTreasury (Tier 2)\nJeweller's Workshop (Tier 1)\nAutomaton Lab (Tier 2)\n\
+        Museum of Artefacts (Tier 3)\nHall of Offerings (Tier 2)\nEngineering Department (Tier 2)\nHalls\n\
+        Obstructed Rooms:\nBreach Containment Chamber (Tier 2)\nApex of Atzoatl\n--------\n\
+        \"The Vaal had little concern for the externalities of their engineering.\" - Icius Perandus\n--------\n\
+        Right click this item to view the Temple of Atzoatl.\n";
+
+    #[test]
+    fn temple_by_its_best_rooms() {
+        let item = parse(CHRONICLE).unwrap();
+        assert_eq!(item.open_rooms.len(), 10);
+        assert_eq!(item.open_rooms.first().map(String::as_str), Some("Royal Forge (Tier 2)"));
+        assert_eq!(item.open_rooms.last().map(String::as_str), Some("Halls"));
+        // Its open rooms poe.ninja has, best first (not the obstructed
+        // Breach Containment Chamber, nor the Apex among them), then the
+        // Apex as any temple's price.
+        let mut want: Vec<(String, f64)> = item
+            .open_rooms
+            .iter()
+            .flat_map(|r| fixture_lines("IncursionTemple", r))
+            .map(|l| (l["name"].as_str().unwrap().to_string(), chaos(&l)))
+            .collect();
+        assert!(want.len() >= MAX_PRICES, "the fixture has too few of its rooms: {want:?}");
+        want.sort_by(|a, b| b.1.total_cmp(&a.1));
+        want.truncate(MAX_PRICES - 1);
+        want.push(("any temple".into(), chaos(&line("IncursionTemple", "Apex of Atzoatl", |_| true))));
+        assert_eq!(look(CHRONICLE), want);
     }
 
     fn crown(implicit: &str) -> String {
