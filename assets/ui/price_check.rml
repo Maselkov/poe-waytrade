@@ -115,8 +115,13 @@
             <div data-if="searched">
                 <div class="stale-note" data-if="stale">Filters changed. Search again to update.</div>
                 <div data-attr-class="stale ? 'listings stale' : 'listings'">
-                    <div class="list-head" data-if="listings.size > 0">
-                        <div class="amount"><div>Price</div></div>
+                    <div class="list-head" data-if="listings.size > 0 || orbs_only">
+                        <div class="amount"><div class="price-head" data-event-click="toggle_orbs_only">
+                            <div>Price</div>
+                            <img class="head-icon" data-if="orbs_only" data-attr-src="'icon:' + small_unit"/>
+                            <img class="head-icon" data-if="orbs_only" src="icon:divine"/>
+                            <div class="col-full">{{orbs_only ? 'Only ' + small_unit + ' and divine · click for any currency' : 'Any currency · click for ' + small_unit + ' and divine only'}}</div>
+                        </div></div>
                         <div class="col gem" data-if="gem_level_col">Level</div>
                         <div class="col gem" data-if="gem_quality_col">Quality</div>
                         <div class="col head-col" data-for="c : list_cols">

@@ -116,6 +116,10 @@ public:
     void toggle_corrupted();  // the item's own state <-> any
     void toggle_six_link();   // 6-linked only <-> any links
     void toggle_unidentified();  // unidentified only <-> any (an unidentified item's)
+    // Listings in chaos or divines only (PoE2: exalted) <-> any currency:
+    // the listings' "Price" header. Searches again; the daemon keeps it as
+    // the next searches' default.
+    void toggle_orbs_only();
     // An unidentified unique's list of candidates: check the item as the
     // unique of the price at this index (its trade search, like an
     // identified one's). Locks the panel, since you're using it.

@@ -277,6 +277,10 @@ pub struct SearchOptions {
     /// Only unidentified items (offered for an unidentified one; else any).
     /// Some uniques sell for a gamble on their rolls, Watcher's Eye say.
     pub unidentified: bool,
+    /// Only listings priced in the small unit or Divine Orbs (the trade
+    /// site's "Chaos Orb or Divine Orb"; PoE2's Exalted or Divine): odd
+    /// currencies are mostly bait, or hard to convert.
+    pub orbs_only: bool,
 }
 
 /// Which filters an item gets, like APT's presets.
@@ -683,6 +687,7 @@ impl Trade {
                 status: crate::settings::default_status(),
                 six_link: item.links >= 6,
                 unidentified: false,
+                orbs_only: crate::settings::default_orbs_only(),
             },
         })
     }
@@ -2997,6 +3002,9 @@ fn query(item: &Item, filters: &[Filter], chosen: &[Option<Bounds>], options: Se
         Corrupted::No => q["filters"]["misc_filters"]["filters"]["corrupted"] = json!({ "option": "false" }),
         Corrupted::Yes => q["filters"]["misc_filters"]["filters"]["corrupted"] = json!({ "option": "true" }),
     }
+    if options.orbs_only {
+        q["filters"]["trade_filters"]["filters"]["price"] = json!({ "option": game::current().orbs_option() });
+    }
     if game::current() == game::Game::Poe2 {
         poe2_filters(&mut q["filters"]);
     }
@@ -3279,6 +3287,7 @@ mod tests {
             "misc_filters": { "filters": { "ilvl": { "min": 82 }, "corrupted": { "option": "false" },
                 "synthesised_item": { "option": "true" } } },
             "socket_filters": { "filters": { "links": { "min": 6 } } },
+            "trade_filters": { "filters": { "price": { "option": "exalted_divine" } } },
         });
         poe2_filters(&mut f);
         assert_eq!(
@@ -3287,6 +3296,7 @@ mod tests {
                 "type_filters": { "filters": { "rarity": { "option": "nonunique" }, "ilvl": { "min": 82 } } },
                 "equipment_filters": { "filters": { "pdps": { "min": 300 }, "es": { "min": 100 } } },
                 "misc_filters": { "filters": { "corrupted": { "option": "false" } } },
+                "trade_filters": { "filters": { "price": { "option": "exalted_divine" } } },
             })
         );
     }
@@ -3537,6 +3547,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Normal,
@@ -3571,6 +3582,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::Yes,
             preset: Preset::Normal,
@@ -3615,6 +3627,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::Any,
             preset: Preset::Normal,
@@ -3671,6 +3684,7 @@ mod tests {
             let opts = SearchOptions {
                 six_link: false,
                 unidentified: false,
+                orbs_only: false,
                 base_only: true,
                 corrupted: Corrupted::No,
                 preset,
@@ -3796,6 +3810,7 @@ mod tests {
         let opts = |base_only, corrupted| SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only,
             corrupted,
             preset: Preset::Normal,
@@ -3819,6 +3834,10 @@ mod tests {
         let q =
             query(&item, &filters, &enabled, SearchOptions { status: Status::Available, ..opts(false, Corrupted::No) });
         assert_eq!(q["query"]["status"]["option"], "available");
+        // Any currency unless asked; then chaos or divine only.
+        assert!(q["query"]["filters"].get("trade_filters").is_none());
+        let q = query(&item, &filters, &enabled, SearchOptions { orbs_only: true, ..opts(false, Corrupted::No) });
+        assert_eq!(q["query"]["filters"]["trade_filters"]["filters"]["price"]["option"], "chaos_divine");
     }
 
     #[test]
@@ -3902,6 +3921,7 @@ mod tests {
         let opts = |unidentified| SearchOptions {
             six_link: false,
             unidentified,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Normal,
@@ -3946,6 +3966,7 @@ mod tests {
             SearchOptions {
                 six_link: false,
                 unidentified: false,
+                orbs_only: false,
                 base_only: false,
                 corrupted: Corrupted::No,
                 preset: Preset::Normal,
@@ -4187,6 +4208,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Base,
@@ -4236,6 +4258,7 @@ mod tests {
             let opts = SearchOptions {
                 six_link: false,
                 unidentified: false,
+                orbs_only: false,
                 base_only: false,
                 corrupted: Corrupted::No,
                 preset,
@@ -4271,6 +4294,7 @@ mod tests {
                 let opts = SearchOptions {
                     six_link: false,
                     unidentified: false,
+                    orbs_only: false,
                     base_only: false,
                     corrupted: Corrupted::No,
                     preset,
@@ -4298,6 +4322,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Normal,
@@ -4334,6 +4359,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: true,
             corrupted: Corrupted::Any,
             preset: Preset::Normal,
@@ -4367,6 +4393,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: true,
             unidentified: false,
+            orbs_only: false,
             base_only: true,
             corrupted: Corrupted::No,
             preset: Preset::Base,
@@ -4399,6 +4426,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: true,
             corrupted: Corrupted::No,
             preset: Preset::Base,
@@ -4476,6 +4504,7 @@ mod tests {
             SearchOptions {
                 six_link: false,
                 unidentified: false,
+                orbs_only: false,
                 base_only: false,
                 corrupted: Corrupted::Any,
                 preset: Preset::Normal,
@@ -4496,6 +4525,7 @@ mod tests {
             SearchOptions {
                 six_link: false,
                 unidentified: false,
+                orbs_only: false,
                 base_only: false,
                 corrupted: Corrupted::Any,
                 preset: Preset::Normal,
@@ -4679,6 +4709,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::Any,
             preset: Preset::Normal,
@@ -4824,6 +4855,7 @@ mod tests {
         let options = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Normal,
@@ -4930,6 +4962,7 @@ mod tests {
         let options = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Normal,
@@ -4989,6 +5022,7 @@ mod tests {
             SearchOptions {
                 six_link: false,
                 unidentified: false,
+                orbs_only: false,
                 base_only: false,
                 corrupted: Corrupted::No,
                 preset: Preset::Normal,
@@ -5019,6 +5053,7 @@ mod tests {
         let opts = SearchOptions {
             six_link: false,
             unidentified: false,
+            orbs_only: false,
             base_only: false,
             corrupted: Corrupted::No,
             preset: Preset::Normal,

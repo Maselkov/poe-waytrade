@@ -336,6 +336,13 @@ sparkline { display: block; color: $mod; }
     color: $text;
 }
 .head-col:hover .col-full { display: block; }
+/* The "Price" header switches the listings between the small unit and
+   divines only (their icons) and any currency. */
+.price-head { position: relative; display: flex; align-items: center; cursor: pointer; }
+.price-head:hover { color: $text-muted; }
+.price-head .col-full { right: auto; left: 0; }
+.price-head:hover .col-full { display: block; }
+.head-icon { width: 13dp; height: 13dp; margin-left: 3dp; }
 .count-cell { flex-shrink: 0; width: 34dp; display: flex; justify-content: flex-end; }
 .list-head .count-cell { color: $text-faint; }
 .amount-value { color: $price; font-weight: 500; }

@@ -96,6 +96,8 @@
 //!     option   six_link <1|0>   (only 6-linked items; sent for a 6-link only)
 //!     option   unidentified <1|0>   (only unidentified items; sent for an
 //!                                   unidentified item only)
+//!     option   orbs_only <1|0>   (only listings in chaos or divines; PoE2:
+//!                                exalted or divines)
 //!     searched <1|0>
 //!   and, once searched:
 //!     summary  <amount> <currency name> <currency id> <chaos|""> <range>
@@ -115,8 +117,9 @@
 //!             "base" or "category" + "\n" + any|no|yes + "\n" +
 //!             normal|base (preset) + "\n" + instant|available|any (status)
 //!             + "\n" + "6" (6-linked only) or "any" + "\n" + "unid"
-//!             (unidentified only) or "any" + "\n" + item text: search with
-//!             those filters and options.
+//!             (unidentified only) or "any" + "\n" + "orbs" (chaos or
+//!             divine listings only, kept as the next searches' default) or
+//!             "any" + "\n" + item text: search with those filters and options.
 //!   request:  "TRADEOPEN\n" + the same as "TRADE": opens that search on
 //!             the trade site in the browser (the query in its address,
 //!             unticked filters there unticked), without searching.
@@ -460,9 +463,11 @@ fn handle(state: &State, mut stream: UnixStream) -> io::Result<()> {
         respond(state, text, None, trade::Preset::parse(preset))
     } else if let Some(rest) = request.strip_prefix("TRADE\n") {
         let (search, text) = trade_request(rest);
+        remember_orbs_only(state, search.options.orbs_only);
         respond(state, text, Some(&search), search.options.preset)
     } else if let Some(rest) = request.strip_prefix("TRADEOPEN\n") {
         let (search, text) = trade_request(rest);
+        remember_orbs_only(state, search.options.orbs_only);
         open_trade_search(state, &search, text)
     } else if let Some(rest) = request.strip_prefix("MATCHART\n") {
         match_art(state, rest)
@@ -554,6 +559,13 @@ fn settings_reply(state: &State) -> String {
     };
     let _ = writeln!(out, "log\t{}", clean(&log));
     out
+}
+
+/// The listings' currency switch is kept as the next searches' default.
+fn remember_orbs_only(state: &State, on: bool) {
+    if state.settings.lock().unwrap().orbs_only != on {
+        change_settings(state, &format!("orbs_only\t{}\n", if on { "on" } else { "off" }));
+    }
 }
 
 /// "SET\n" + lines of `<key>\t<value>`, all or none; a "reset" line first
@@ -685,8 +697,9 @@ fn map_check(state: &State, text: &str) -> String {
 
 /// A "TRADE" or "TRADEOPEN" request's filters and options, and its item text.
 fn trade_request(rest: &str) -> (TradeRequest, &str) {
-    let mut parts = rest.splitn(8, '\n');
-    let (indices, base, corrupted, preset, status, links, identified, text) = (
+    let mut parts = rest.splitn(9, '\n');
+    let (indices, base, corrupted, preset, status, links, identified, orbs, text) = (
+        parts.next().unwrap_or(""),
         parts.next().unwrap_or(""),
         parts.next().unwrap_or(""),
         parts.next().unwrap_or(""),
@@ -714,6 +727,7 @@ fn trade_request(rest: &str) -> (TradeRequest, &str) {
             status: trade::Status::parse(status),
             six_link: links == "6",
             unidentified: identified == "unid",
+            orbs_only: orbs == "orbs",
         },
     };
     (search, text)
@@ -818,6 +832,7 @@ fn trade_response(
     if item.unidentified {
         let _ = writeln!(out, "option\tunidentified\t{}", options.unidentified as u8);
     }
+    let _ = writeln!(out, "option\torbs_only\t{}", options.orbs_only as u8);
 
     let Some(search) = search else {
         let _ = writeln!(out, "searched\t0");

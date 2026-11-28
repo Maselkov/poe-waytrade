@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use crate::trade::Status;
 
@@ -37,6 +37,7 @@ pub const KEYS: &[&str] = &[
     "startup_notice",
     "copy_check",
     "compact_graph",
+    "orbs_only",
 ];
 
 /// Areas where the display price check starts by itself: mob-free rooms of
@@ -79,6 +80,10 @@ pub struct Settings {
     /// The price panel draws a single price's week as a small graph in its
     /// row, as it does with several, instead of the large graph under it.
     pub compact_graph: bool,
+    /// Searches start with only listings in chaos or divines (PoE2:
+    /// exalted or divines). Not on the settings page: the price panel's
+    /// "Price" header switches it, and the last choice is kept.
+    pub orbs_only: bool,
 }
 
 /// Each a key combination as the layer matches it: modifiers and an evdev
@@ -114,6 +119,7 @@ impl Default for Settings {
             startup_notice: true,
             copy_check: false,
             compact_graph: false,
+            orbs_only: true,
         }
     }
 }
@@ -146,6 +152,7 @@ impl Default for Hotkeys {
 // What searches read: set from the loaded settings and on each change.
 static MIN_PERCENT: AtomicU32 = AtomicU32::new(90);
 static STATUS: AtomicU8 = AtomicU8::new(0);
+static ORBS_ONLY: AtomicBool = AtomicBool::new(true);
 
 /// The default filter minimum, as a fraction of the item's roll.
 pub fn min_fraction() -> f64 {
@@ -159,6 +166,11 @@ pub fn default_status() -> Status {
         2 => Status::Any,
         _ => Status::Instant,
     }
+}
+
+/// Whether a search starts with only chaos and divine listings.
+pub fn default_orbs_only() -> bool {
+    ORBS_ONLY.load(Ordering::Relaxed)
 }
 
 impl Settings {
@@ -202,6 +214,7 @@ impl Settings {
             Status::Any => 2,
         };
         STATUS.store(status, Ordering::Relaxed);
+        ORBS_ONLY.store(self.orbs_only, Ordering::Relaxed);
     }
 
     /// A hand-edited file's bad values replaced by the defaults.
@@ -237,6 +250,7 @@ impl Settings {
             "startup_notice" => if self.startup_notice { "on" } else { "off" }.to_string(),
             "copy_check" => if self.copy_check { "on" } else { "off" }.to_string(),
             "compact_graph" => if self.compact_graph { "on" } else { "off" }.to_string(),
+            "orbs_only" => if self.orbs_only { "on" } else { "off" }.to_string(),
             _ => String::new(),
         }
     }
@@ -314,6 +328,11 @@ impl Settings {
                 "on" => self.compact_graph = true,
                 "off" => self.compact_graph = false,
                 _ => return Err("The compact price graph is on or off".to_string()),
+            },
+            "orbs_only" => match value {
+                "on" => self.orbs_only = true,
+                "off" => self.orbs_only = false,
+                _ => return Err("Chaos and divine only is on or off".to_string()),
             },
             "tracking" => {
                 if !["gpu", "cpu"].contains(&value) {

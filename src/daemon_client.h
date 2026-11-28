@@ -136,6 +136,7 @@ struct PriceReply {
     bool six_link = false;          // search 6-linked items only
     bool unidentified_offered = false;  // an unidentified item: the panel shows its chip
     bool unidentified = false;          // search unidentified items only
+    bool orbs_only = true;  // only listings in the small unit or divines
     bool searched = false;
     // status "map"
     std::string subtitle;
@@ -191,18 +192,18 @@ public:
     // `enabled`: the filters to search with, by index, with their min/max.
     void request_trade(const std::vector<TradeFilter>& enabled, bool base_only,
                        const std::string& corrupted, const std::string& preset,
-                       const std::string& listing_status, bool six_link, bool unidentified,
+                       const std::string& listing_status, bool six_link, bool unidentified, bool orbs_only,
                        const std::string& item_text) {
         start("TRADE\n" + trade_body(enabled, base_only, corrupted, preset, listing_status, six_link, unidentified,
-                                     item_text));
+                                     orbs_only, item_text));
     }
     // Open the same search on the trade site in the user's browser, without
     // searching.
     void open_trade(const std::vector<TradeFilter>& enabled, bool base_only, const std::string& corrupted,
                     const std::string& preset, const std::string& listing_status, bool six_link, bool unidentified,
-                    const std::string& item_text) {
+                    bool orbs_only, const std::string& item_text) {
         start("TRADEOPEN\n" + trade_body(enabled, base_only, corrupted, preset, listing_status, six_link,
-                                         unidentified, item_text));
+                                         unidentified, orbs_only, item_text));
     }
     // Trade filters for a preset (normal | base), without searching.
     void request_prepare(const std::string& preset, const std::string& item_text) {
@@ -223,7 +224,7 @@ private:
     static std::string trade_body(const std::vector<TradeFilter>& enabled, bool base_only,
                                   const std::string& corrupted, const std::string& preset,
                                   const std::string& listing_status, bool six_link, bool unidentified,
-                                  const std::string& item_text);
+                                  bool orbs_only, const std::string& item_text);
     void start(const std::string& body);
     bool fail(PriceReply* out, const std::string& message);
     void close_socket();
